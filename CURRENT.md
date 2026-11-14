@@ -59,3 +59,21 @@ Outstanding dependencies:
 - No Next.js scaffold exists in the repo yet (origin/main and this branch). The handoff says Hamza pushes the bare scaffold first; it is not present. B1 does not depend on it. `lib/runner.ts` uses the standard Next worker pattern `new Worker(new URL("./runner.worker.ts", import.meta.url))` and drops into the scaffold unchanged.
 - To run the dev check: Node 22+ plus dev deps not yet in the repo (no `package.json` yet). After the scaffold lands: `npm i -D pyodide@0.29.5 esbuild`, then `node --experimental-strip-types dev/runner-check.mjs`.
 - Next on the schedule is B2 (`lib/live.ts`, `app/api/live-token/route.ts`); not started. Open it explicitly.
+
+### B2 • Gemini Live token route + browser Live client — Ismail (implemented; live check pending)
+
+Files added:
+- `app/api/live-token/route.ts` — `POST /api/live-token` (Node runtime). Validates `{sessionId}`, mints an ephemeral token with `@google/genai` `ai.authTokens.create` locked to `LIVE_MODEL` + an AUDIO Live session, returns 200 `{token, model, expiresAt}`. Returns 503 `provider_unavailable` on missing env/SDK failure, 400 `invalid_request` on a bad body. The permanent `GEMINI_API_KEY` never leaves the server.
+- `lib/live.ts` — client-only `BrowserLiveClient implements LiveClient`, plus `createLiveClient()`. `connect` opens `ai.live.connect` with the ephemeral token (AUDIO + input/output transcription + session resumption); `startMic`/`stopMic` capture mic audio as 16 kHz PCM via a `ScriptProcessorNode` and stream it with `sendRealtimeInput`; incoming audio (`message.data`, 24 kHz PCM) is decoded and played back gaplessly; transcripts come from `serverContent.{input,output}Transcription` and are emitted as `TranscriptTurn`s; state is mapped to connecting/listening/speaking/idle/error; `end()` tears everything down. `sendRunContext` sends the run as text (minimal inline format; B3 finalizes the wording in `lib/prompts.ts`).
+
+Check performed and outcome:
+- `tsc --noEmit --strict --skipLibCheck` against `@google/genai@3.3.0`: **clean** for both files (route with Node globals; client with DOM globals). Confirms the SDK calls and the `LiveClient` contract shape compile.
+- Route branch logic (bundled real route, SDK stubbed): happy path → 200 with `{token, model, expiresAt}` echoed; bad JSON / missing `sessionId` → 400 `invalid_request`; missing env / create throws / no `token.name` → 503 `provider_unavailable`. **All pass.**
+- NOT verified here: the B2 completion check ("a real spoken exchange works in the browser"). It needs the merged Next scaffold, a real `GEMINI_API_KEY` + `LIVE_MODEL`, HTTPS, and a microphone — none available in this environment. Real token issuance and the Live socket are therefore unverified.
+
+Outstanding dependencies / risks:
+- **v1alpha vs v1beta is unresolved.** SDK 3.3.0's own docstring says ephemeral tokens are "v1alpha only"; the current docs and README say v1beta. Server defaults to `v1beta` with a `LIVE_API_VERSION` env override; the browser client uses a `v1beta` constant. This is the top integration risk — verify against a live key and flip both if needed (they must match).
+- Needs dep `@google/genai` (tested against 3.3.0); not in the repo yet (no `package.json`). Add when the scaffold lands.
+- `.env`: `GEMINI_API_KEY` (server-only), `LIVE_MODEL` (a Gemini Live model id). Confirm the exact live model id with the current docs before the demo.
+- `lib/live.ts` is client-only (never import on the server) and uses a `ScriptProcessorNode` (self-contained, no served AudioWorklet asset); fine for a sub-10-minute demo, swap to an AudioWorklet later.
+- `lib/prompts.ts` not created (that is B3); the interviewer instruction and run-context wording in `lib/live.ts` are placeholders for B3 to finalize.
