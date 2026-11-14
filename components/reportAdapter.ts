@@ -108,6 +108,27 @@ function fixtureFor(session: Session): Report {
         ],
       };
     }
+    if (f.category === "approach") {
+      // Cite only a passing set-based run, and describe the code it shows.
+      const setRun = [...completed]
+        .reverse()
+        .find((r) => r.passed === r.total && detectApproach(sourceOf(r.codeVersion)) === "set");
+      if (setRun) {
+        const v = setRun.codeVersion;
+        const src = sourceOf(v);
+        const rows = src.split("\n");
+        const first = rows.findIndex((l) => l.includes("set(")) + 1;
+        const seenLine = rows.findIndex((l) => l.includes("in seen")) + 1;
+        const sizeCompare = src.includes("len(set(");
+        return {
+          ...f,
+          summary: sizeCompare
+            ? `Version ${v} compares the set size with the input length.`
+            : `Version ${v} keeps a set of numbers already seen, so each membership check is constant time on average.`,
+          evidence: [{ kind: "code", codeVersion: v, lines: [first || 1, Math.max(seenLine, first || 1)] }],
+        };
+      }
+    }
     const evidence = f.evidence.map(remap);
     if (evidence.some((e) => e === null)) {
       return {

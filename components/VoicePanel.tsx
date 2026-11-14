@@ -40,23 +40,9 @@ export function VoicePanel(p: Props) {
 
   return (
     <section className="flex h-[19rem] shrink-0 flex-col border-t border-zinc-800 2xl:h-[24rem]">
-      <header className="flex flex-wrap items-center gap-3 px-6 py-3">
+      <header className="flex items-center gap-3 px-6 pt-3">
         <h2 className="text-base font-semibold text-zinc-100">Interviewer</h2>
-        {p.voiceMode === "mock" && (
-          <span
-            className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300"
-            data-testid="mock-voice-badge"
-          >
-            MOCK VOICE{p.mockReason ? ` (${p.mockReason})` : ""}
-          </span>
-        )}
-        {s && (
-          <span className={`flex items-center gap-2 text-sm font-medium ${s.text}`} aria-live="polite">
-            <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} aria-hidden />
-            {s.label}
-          </span>
-        )}
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex shrink-0 gap-2">
           {!p.connected ? (
             <button
               onClick={p.onConnect}
@@ -86,6 +72,24 @@ export function VoicePanel(p: Props) {
           )}
         </div>
       </header>
+
+      {/* Fixed-height status row so the transcript does not jump when it fills. */}
+      <div className="flex h-9 items-center gap-3 px-6">
+        {p.voiceMode === "mock" && (
+          <span
+            className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300"
+            data-testid="mock-voice-badge"
+          >
+            MOCK VOICE{p.mockReason ? ` (${p.mockReason})` : ""}
+          </span>
+        )}
+        {s && (
+          <span className={`flex items-center gap-2 text-sm font-medium ${s.text}`} aria-live="polite">
+            <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} aria-hidden />
+            {s.label}
+          </span>
+        )}
+      </div>
 
       {p.error && (
         <div className="mx-6 mb-2 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300" role="alert">

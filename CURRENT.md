@@ -88,6 +88,37 @@ Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either o
 
 **Still mocked** — Voice: the token and LiveClient are scripted in components/liveAdapter.ts, labeled MOCK VOICE, until B2. Report: fixtures/report.json is remapped per attempt and labeled FIXTURE DATA, until B4; then set `DEFAULT_REPORT_MODE = "api"`. Run is real (B1 Pyodide). Not done: the real spoken F3 check (hearing the question change with the code), which needs B2 and B3.
 
+## F5 handoff • Hamza • November 14 • passed with zero keys
+
+- **Base** — The integration merge had not landed on main: main only had two docs commits that cancel out, and B2 is still on Ismail's branch. Branched `f5-polish` from `f3` and merged origin/main. No `lib/**` or `app/api/**` files were edited.
+- **No-key fallback, voice** — `openVoice()` in components/liveAdapter.ts POSTs `/api/live-token`. If the route is missing (404), returns an ApiError (Ismail's route returns 503 when `GEMINI_API_KEY` or `LIVE_MODEL` is unset), is unreachable, or the real client fails to connect, it uses the scripted MockLiveClient with the badge **MOCK VOICE (no API key)**. To use the real client once lib/live.ts is merged, set `REAL_CLIENT = createLiveClient` (one line, commented in the file).
+- **No-key fallback, report** — components/reportAdapter.ts defaults to `auto`. It POSTs `/api/report` and on any failure returns the fixture labeled **FIXTURE DATA (no API key)**. The Dev menu still offers fixture-only, simulated 503 (Retry report), and api-only.
+- **Demo-story mock** — On start: "Hi! Before you code, walk me through how you'd approach Contains Duplicate." A scripted student then claims two loops are linear. After a passing run, `detectApproach()` checks the source: two `for` lines mean a nested loop, which gets "All cases pass. You said this is linear. How many comparisons happen when every element is different?"; `set(` or `in seen` means a set, which gets "Nice. What's the space cost of the set, and when might that matter?" A failing run gets the case ID, input, expected, and actual. Errors get the error message.
+- **Fixture report fits the story** — When there's no failing run but a nested loop passed, the testing finding becomes a complexity finding. It cites the "linear" turn, the loop lines, and that run, and the next step matches. Approach cites only a passing set-based snapshot, with text and lines matching that code. Spoken reasoning cites the student turn that mentions a set.
+- **Start screen** — It shows Interviewlenz, the pitch "A coding interview that listens to how you explain your code", **Start practice**, and an optional "Test my microphone" (`getUserMedia`, then tracks stopped). If the mic is denied or unsupported, a friendly message appears, the room shows a note, and the mock interviewer still runs. Pyodide preloads while the start screen is up.
+- **Polish** — Fixed dark theme (no OS light mode, Geist font instead of the scaffold's Arial). Larger type for projectors: 17px prompt, 16px editor, 15–16px transcript and results. Skeletons for the editor, running tests, and the report. The results panel and voice status row have fixed heights. Pass/fail and ratings use an icon, a word, and color. Dev selectors moved into a "Dev" menu so the header fits at 1366px.
+- **README** — "Run locally" (zero keys) and "Deploy to Vercel" sections, with `GEMINI_API_KEY`, `LIVE_MODEL`, and `REPORT_MODEL` to add later. No keys committed; only `.env.example` is tracked.
+- **Files** — components/liveAdapter.ts, components/reportAdapter.ts, components/ProblemRoom.tsx, components/VoicePanel.tsx, components/ResultsPanel.tsx, components/ReportView.tsx, components/ProblemPanel.tsx, components/CodeEditor.tsx, components/StartScreen.tsx (new), components/Skeletons.tsx (new), app/globals.css, app/layout.tsx, README.md, CURRENT.md.
+
+### F5 check (fresh clone of `f5-polish`, no `.env.local`, `npm install && npm run dev`, Edge via Playwright)
+
+1. **Start screen** at 1366×768 shows the name, pitch, and Start practice. "Test my microphone" → ✓ Microphone ready.
+2. **Problem room** → Start interview → badge "MOCK VOICE (no API key)". Interviewer t1 gives the intro, and the scripted student t2 claims "That's linear".
+3. **Nested-loop solution** (real Pyodide) → ✓ 4/4. Interviewer t3: "All cases pass. You said this is linear. How many comparisons happen when every element is different?" The results panel and editor bounding boxes were identical before and after the run (no layout jump).
+4. **Set solution** → ✓ 4/4. Interviewer t5: "Nice. What's the space cost of the set, and when might that matter?" The session held 2 snapshots · 2 runs · 6 turns.
+5. **Finish** → report badge "FIXTURE DATA (no API key)", with a next step about quadratic vs set.
+   - Transcript t4 and t2 chips highlighted those turns, scrolled into view.
+   - Code v3 lines 2–4 highlighted `seen = set()` through `if n in seen:`.
+   - Code v2 lines 2–4 highlighted both `for` lines and the comparison.
+   - Run v2 showed 4/4.
+6. **Retry** → 0/0/0 and starter code restored. At 1920×1080: adjacent-only solution → interviewer t8: "c1 fails: for nums = [1, 2, 3, 1] the expected answer is True, but your code returned False…" Finish → two report cards side by side.
+7. **Layout** — No horizontal overflow at 1366×768 or 1920×1080.
+8. **Mic denied** (simulated `NotAllowedError`) → friendly message on the start screen and a note in the room. The mock interviewer still started.
+9. **Browser console** — Only the expected 404s for `POST /api/live-token` and `POST /api/report`, which aren't on this branch. With Ismail's routes merged and no key these become 503s; the browser logs them either way, and the app falls back as designed.
+10. **Lint and build** — `npm run lint`: 0 errors; the two warnings are in Ismail's dev/runner-check.mjs. `npm run build`: passes.
+
+**Still mocked** — Voice uses the scripted MockLiveClient, including the student's lines, since there is no mic audio. Report content is fixtures/report.json, remapped per attempt. Run is real. **Outstanding** — Merge B1/B2 (Ismail's branch) and set `REAL_CLIENT` in liveAdapter.ts for real voice with a key. B4 `/api/report` is not started; `auto` mode will pick it up automatically.
+
 ## Mocked for demo
 
 Label any shown preview as mocked. These features need no working integrations during the sprint.
