@@ -23,6 +23,31 @@ The demo uses Next.js, TypeScript, Tailwind, Monaco, browser-side Pyodide, Gemin
 
 Gemini Live ephemeral tokens are in preview and support only the v1beta Live API. Longer sessions must reconnect about every 10 minutes using session resumption. Keep the demo session under 10 minutes. [Google token guide](https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens)
 
+## Run locally
+
+```sh
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. No API keys or `.env.local` are needed. Without keys, the interviewer uses a scripted voice labeled **MOCK VOICE (no API key)**, and the report uses sample data labeled **FIXTURE DATA (no API key)**. Python runs for real in the browser.
+
+## Deploy to Vercel
+
+1. Push the branch to GitHub, then go to [vercel.com/new](https://vercel.com/new) and import the repository. Vercel detects Next.js, so keep the default build command (`npm run build`) and output settings.
+2. Deploy. The app works immediately in no-key mode, with mock voice and the fixture report.
+3. To use real voice and reports later, add these variables under **Project → Settings → Environment Variables**, then redeploy:
+
+   | Name | Purpose |
+   |---|---|
+   | `GEMINI_API_KEY` | Server-only Gemini key. Never prefix it with `NEXT_PUBLIC_`. |
+   | `LIVE_MODEL` | Gemini Live model used for the voice interviewer |
+   | `REPORT_MODEL` | Gemini model used for the end-of-session report |
+
+4. Open the deployed URL over HTTPS and check that the browser allows microphone access.
+
+Never commit keys. `.env.example` lists the names only, and `.env*` files are git-ignored.
+
 ## Morning of submission
 
 The team has an MLH / GoDaddy Registry free-domain voucher. Use the [event redemption page](https://mlh.link/godaddyregistry) and enter the code from the team's card privately. The card says the offer expires the Thursday after the event (November 19, 2026).

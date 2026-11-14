@@ -9,39 +9,119 @@ import type {
   TranscriptTurn,
 } from "@/lib/contract";
 
-// The only place the UI touches voice. When Ismail's lib/live.ts and
-// POST /api/live-token merge, replace these two bodies with the real client
-// and a fetch to /api/live-token, and set USING_MOCK_LIVE to false.
+// The only place the UI touches voice.
+//
+// openVoice() asks POST /api/live-token for an ephemeral token and connects the
+// real client. If the route is missing, returns an error (503 when
+// GEMINI_API_KEY is not set), or the real client fails to connect, it falls
+// back to the scripted MockLiveClient so the demo runs with zero keys.
+//
 // Agreed with Ismail: lib/live.ts exports a factory createLiveClient(), and
-// turn IDs stay unique across reconnects within a session.
-export const USING_MOCK_LIVE = true;
+// turn IDs stay unique across reconnects within a session. When lib/live.ts is
+// merged into this branch, set REAL_CLIENT to that factory:
+//   import { createLiveClient } from "@/lib/live";
+//   const REAL_CLIENT: (() => LiveClient) | null = createLiveClient;
+const REAL_CLIENT: (() => LiveClient) | null = null;
 
-export async function fetchLiveToken(sessionId: string): Promise<LiveTokenResponse | ApiError> {
-  void sessionId;
-  await delay(300);
-  return {
-    token: "mock-token",
-    model: "mock-live-model",
-    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-  };
+export type VoiceMode = "live" | "mock";
+
+export interface VoiceHandlers {
+  onState: (state: LiveState) => void;
+  onTurn: (turn: TranscriptTurn) => void;
+  onError: (error: ApiError) => void;
 }
 
-export function createLiveClient(): LiveClient {
-  return new MockLiveClient();
+export interface VoiceConnection {
+  client: LiveClient;
+  mode: VoiceMode;
+  // Why the mock is in use, for the badge ("no API key", "voice client not merged").
+  mockReason?: string;
 }
 
 export function isApiError(value: unknown): value is ApiError {
   return typeof value === "object" && value !== null && "code" in value && "retryable" in value;
 }
 
+async function fetchLiveToken(sessionId: string): Promise<LiveTokenResponse | ApiError> {
+  try {
+    const res = await fetch("/api/live-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    const body = await res.json().catch(() => null);
+    if (res.ok && body && typeof body.token === "string") return body as LiveTokenResponse;
+    if (isApiError(body)) return body;
+    return { code: "provider_unavailable", message: `Voice token route returned ${res.status}`, retryable: true };
+  } catch {
+    return { code: "provider_unavailable", message: "Voice token route unreachable", retryable: true };
+  }
+}
+
+function wire(client: LiveClient, h: VoiceHandlers) {
+  client.onState(h.onState);
+  client.onTurn(h.onTurn);
+  client.onError(h.onError);
+}
+
+export async function openVoice(sessionId: string, problem: Problem, h: VoiceHandlers): Promise<VoiceConnection> {
+  h.onState("connecting");
+  const token = await fetchLiveToken(sessionId);
+
+  if (!isApiError(token) && REAL_CLIENT) {
+    const real = REAL_CLIENT();
+    wire(real, h);
+    try {
+      await real.connect(token, problem);
+      return { client: real, mode: "live" };
+    } catch {
+      real.end();
+      return openMock(problem, h, "voice connection failed");
+    }
+  }
+
+  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged");
+}
+
+async function openMock(problem: Problem, h: VoiceHandlers, reason: string): Promise<VoiceConnection> {
+  const mock = new MockLiveClient();
+  wire(mock, h);
+  await mock.connect(MOCK_TOKEN, problem);
+  return { client: mock, mode: "mock", mockReason: reason };
+}
+
+const MOCK_TOKEN: LiveTokenResponse = { token: "mock-token", model: "mock", expiresAt: "2099-01-01T00:00:00Z" };
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ---------------------------------------------------------------------------
+// Scripted interviewer that follows the demo story. No audio; it emits the
+// same state and transcript events as the real client.
+
 let mockTurnCount = 0;
 
-// Scripted stand-in that follows the LiveClient contract: state events,
-// transcript turns with IDs t1, t2, ..., and no real audio.
+type Approach = "nested" | "set" | "other";
+
+// Simple source check: two "for" lines means a nested comparison; "set(" or
+// "in seen" means a set-based solution.
+export function detectApproach(source: string): Approach {
+  const forLines = source.split("\n").filter((l) => /^\s*for\s/.test(l)).length;
+  if (forLines >= 2) return "nested";
+  if (source.includes("set(") || source.includes("in seen")) return "set";
+  return "other";
+}
+
+// What the scripted student "says" after each interviewer question.
+const STUDENT_AFTER = {
+  intro:
+    "I'll take each number and compare it with every number after it using two loops. That's linear, so it should be fast enough.",
+  nested:
+    "Hmm, every pair gets compared, so that's about n squared over two comparisons. A set would let me check each number once.",
+  set: "The set can hold up to n numbers, so it's O(n) extra memory. That matters if the list is huge or memory is tight.",
+} as const;
+
 class MockLiveClient implements LiveClient {
   private stateCbs: ((s: LiveState) => void)[] = [];
   private turnCbs: ((t: TranscriptTurn) => void)[] = [];
@@ -49,64 +129,54 @@ class MockLiveClient implements LiveClient {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private connected = false;
   private micOn = false;
-  private script = [
-    "I'd keep a set of numbers I've seen and return True as soon as one repeats.",
-    "Since set lookups are constant time on average, it's linear overall.",
-  ];
-  private replies = [
-    "Before you code it, what does your approach return for an empty list?",
-    "What extra memory does the set use in the worst case, and could you avoid it?",
-  ];
+  private pendingStudent: string | null = null;
 
   async connect(token: LiveTokenResponse, problem: Problem) {
     void token;
-    void problem;
     this.emitState("connecting");
-    await delay(500);
+    await delay(400);
     this.connected = true;
-    this.emitState("idle");
+    this.say(`Hi! Before you code, walk me through how you'd approach ${problem.title}.`, STUDENT_AFTER.intro, 300);
   }
 
   async startMic() {
     this.micOn = true;
     this.emitState("listening");
-    this.scheduleExchange();
+    this.flushStudent();
   }
 
   stopMic() {
     this.micOn = false;
-    this.clearTimers();
     this.emitState("idle");
   }
 
-  // Scripted interviewer reply that reflects the run, standing in for Live's
-  // own question about the implementation and outcome.
   sendRunContext(snapshot: CodeSnapshot, result: RunResult) {
     if (!this.connected) return;
-    const v = snapshot.codeVersion;
     let text: string;
+    let reply: string | null = null;
     if (result.status === "error") {
       text =
         result.error.code === "syntax_error"
-          ? `Version ${v} didn't parse${result.error.line ? ` (line ${result.error.line})` : ""}: ${result.error.message}. What do you check first when Python rejects a function definition?`
-          : `Version ${v} couldn't run: ${result.error.message}. While that's sorted out, talk me through what your code should return for an empty list.`;
-    } else if (result.passed === result.total) {
-      text = `All ${result.passed}/${result.total} cases pass on version ${v}. What's the time and space complexity, and is there a version that uses less memory?`;
+          ? `That didn't parse${result.error.line ? ` — line ${result.error.line}` : ""}: ${result.error.message}. What do you check first when Python rejects your code?`
+          : `The run didn't complete: ${result.error.message}. While that's sorted out, what should your function return for an empty list?`;
+    } else if (result.passed < result.total) {
+      const c = result.cases.find((x) => !x.pass)!;
+      const got = c.actual ?? (c.error ? `an error (${c.error})` : "nothing");
+      text = `${c.caseId} fails: for ${c.input} the expected answer is ${c.expected}, but your code returned ${got}. What's different about that case?`;
     } else {
-      const failed = result.cases.filter((c) => !c.pass);
-      const first = failed[0];
-      text = `Version ${v} passes ${result.passed}/${result.total}. ${failed.map((c) => c.caseId).join(", ")} failed — for ${first.input} you returned ${first.actual ?? first.error} but expected ${first.expected}. Why does your approach miss that one?`;
+      const approach = detectApproach(snapshot.source);
+      if (approach === "nested") {
+        text = "All cases pass. You said this is linear. How many comparisons happen when every element is different?";
+        reply = STUDENT_AFTER.nested;
+      } else if (approach === "set") {
+        text = "Nice. What's the space cost of the set, and when might that matter?";
+        reply = STUDENT_AFTER.set;
+      } else {
+        text = `All ${result.total} cases pass. What's the time complexity, and how would you convince me?`;
+      }
     }
     this.clearTimers();
-    this.emitState("speaking");
-    this.timers.push(
-      setTimeout(() => {
-        if (!this.connected) return;
-        this.emitTurn("interviewer", text);
-        this.emitState(this.micOn ? "listening" : "idle");
-        if (this.micOn) this.scheduleExchange();
-      }, 900),
-    );
+    this.say(text, reply, 900);
   }
 
   end() {
@@ -126,21 +196,32 @@ class MockLiveClient implements LiveClient {
     this.errorCbs.push(cb);
   }
 
-  private scheduleExchange() {
-    const i = Math.floor(mockTurnCount / 2) % this.script.length;
+  // Interviewer speaks after `wait` ms, then the scripted student answers
+  // (only while the mic is on; otherwise it waits for the mic).
+  private say(text: string, studentReply: string | null, wait: number) {
+    this.emitState("speaking");
     this.timers.push(
       setTimeout(() => {
-        if (!this.micOn) return;
-        this.emitTurn("student", this.script[i]);
-        this.emitState("speaking");
-        this.timers.push(
-          setTimeout(() => {
-            if (!this.micOn) return;
-            this.emitTurn("interviewer", this.replies[i]);
-            this.emitState("listening");
-            this.scheduleExchange();
-          }, 2000),
-        );
+        if (!this.connected) return;
+        this.emitTurn("interviewer", text);
+        this.pendingStudent = studentReply;
+        this.emitState(this.micOn ? "listening" : "idle");
+        this.flushStudent();
+      }, wait),
+    );
+  }
+
+  private flushStudent() {
+    const line = this.pendingStudent;
+    if (!line || !this.micOn) return;
+    this.pendingStudent = null;
+    this.timers.push(
+      setTimeout(() => {
+        if (!this.connected || !this.micOn) {
+          this.pendingStudent = line;
+          return;
+        }
+        this.emitTurn("student", line);
       }, 2500),
     );
   }

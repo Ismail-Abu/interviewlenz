@@ -7,14 +7,16 @@ import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
 import { ReportView, type AttemptRecord } from "./ReportView";
+import { StartScreen, type MicStatus } from "./StartScreen";
+import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
-import { createLiveClient, fetchLiveToken, isApiError, USING_MOCK_LIVE } from "./liveAdapter";
+import { openVoice, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
-  loading: () => <div className="p-4 text-sm text-zinc-500">Loading editor…</div>,
+  loading: () => <EditorSkeleton />,
 });
 
 const DEV = process.env.NODE_ENV !== "production";
@@ -31,8 +33,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const ids = () => (idsRef.current ??= { sessionId: crypto.randomUUID(), attemptId: crypto.randomUUID() });
   const [attempt, setAttempt] = useState<AttemptData>(EMPTY_ATTEMPT);
   const fullSession = (): Session => ({ ...ids(), problemId: problem.id, ...attempt });
-  const [view, setView] = useState<"room" | "report">("room");
+  const [view, setView] = useState<"start" | "room" | "report">("start");
   const [records, setRecords] = useState<AttemptRecord[]>([]);
+  const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -42,7 +45,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [reportMode, setReportMode] = useState<ReportMode>(DEFAULT_REPORT_MODE);
   const [fromFixture, setFromFixture] = useState(false);
 
-  // Start loading Pyodide as soon as the page opens (CONTRACT.md).
+  // Start loading Pyodide as soon as the app opens (CONTRACT.md), so it is
+  // warm by the time the student leaves the start screen.
   useEffect(() => {
     void preloadRunner();
   }, []);
@@ -54,6 +58,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [connected, setConnected] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [liveError, setLiveError] = useState<ApiError | null>(null);
+  const [voiceMode, setVoiceMode] = useState<VoiceMode | null>(null);
+  const [mockReason, setMockReason] = useState<string | undefined>();
 
   useEffect(() => () => live.current?.end(), []);
 
@@ -61,24 +67,24 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setLiveError(null);
     setConnecting(true);
     try {
-      const token = await fetchLiveToken(ids().sessionId);
-      if (isApiError(token)) {
-        setLiveError(token);
-        setLiveState("error");
-        return;
-      }
-      const client = createLiveClient();
-      client.onState(setLiveState);
-      client.onTurn((t) => setAttempt((s) => ({ ...s, turns: [...s.turns, t] })));
-      client.onError((e) => {
-        setLiveError(e);
-        setMicOn(false);
+      const conn = await openVoice(ids().sessionId, problem, {
+        onState: setLiveState,
+        onTurn: (t) => setAttempt((s) => ({ ...s, turns: [...s.turns, t] })),
+        onError: (e) => {
+          setLiveError(e);
+          setMicOn(false);
+        },
       });
-      await client.connect(token, problem);
-      live.current = client;
+      live.current = conn.client;
+      setVoiceMode(conn.mode);
+      setMockReason(conn.mockReason);
       setConnected(true);
-      await client.startMic();
-      setMicOn(true);
+      try {
+        await conn.client.startMic();
+        setMicOn(true);
+      } catch {
+        setLiveError({ code: "provider_unavailable", message: "Microphone unavailable", retryable: true });
+      }
     } catch {
       setLiveError({ code: "provider_unavailable", message: "Could not start the voice session", retryable: true });
       setLiveState("error");
@@ -150,7 +156,13 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         r.session.attemptId !== target.attemptId
           ? r
           : outcome.ok
-            ? { session: target, status: "done", report: outcome.report, fromFixture: outcome.fromFixture }
+            ? {
+                session: target,
+                status: "done",
+                report: outcome.report,
+                fromFixture: outcome.fromFixture,
+                fallbackReason: outcome.fallbackReason,
+              }
             : { session: target, status: "error", error: outcome.error },
       ),
     );
@@ -181,6 +193,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setView("room");
   }
 
+  if (view === "start") {
+    return <StartScreen micStatus={micStatus} onMicStatus={setMicStatus} onStart={() => setView("room")} />;
+  }
+
   if (view === "report") {
     return <ReportView records={records} onRetryReport={handleRetryReport} onRetryAttempt={handleRetryAttempt} />;
   }
@@ -190,23 +206,27 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex flex-wrap items-center gap-4 border-b border-zinc-800 px-6 py-3">
-        <span className="text-lg font-semibold tracking-tight">Interviewlenz</span>
-        <span className="text-sm text-zinc-500">
-          Python · Quick practice{attemptNumber > 1 && ` · Attempt ${attemptNumber}`}
+      <header className="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
+        <span className="text-xl font-semibold tracking-tight">Interviewlenz</span>
+        <span className="hidden text-base text-zinc-400 md:inline">
+          Python · {problem.title}
+          {attemptNumber > 1 && ` · Attempt ${attemptNumber}`}
         </span>
-        <span className="text-xs text-zinc-500" data-testid="session-stats">
+        <span className="ml-auto text-sm text-zinc-500" data-testid="session-stats">
           {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
         </span>
-        <div className="ml-auto flex items-center gap-4">
-          {DEV && (
-            <>
-              <label className="flex items-center gap-2 text-xs text-zinc-400">
+        {DEV && (
+          <details className="relative">
+            <summary className="cursor-pointer select-none rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+              Dev
+            </summary>
+            <div className="absolute right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl">
+              <label className="flex flex-col gap-1 text-sm text-zinc-400">
                 Run with
                 <select
                   value={mode}
                   onChange={(e) => setMode(e.target.value as RunMode)}
-                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200"
+                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200"
                 >
                   <option value="real">Python runner</option>
                   <option value="cycle">Fixtures: cycle all four</option>
@@ -216,28 +236,29 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
                   <option value="unavailable">Fixture: runner unavailable</option>
                 </select>
               </label>
-              <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <label className="flex flex-col gap-1 text-sm text-zinc-400">
                 Report
                 <select
                   value={reportMode}
                   onChange={(e) => setReportMode(e.target.value as ReportMode)}
-                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200"
+                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200"
                 >
-                  <option value="fixture">Fixture</option>
+                  <option value="auto">Auto: /api/report, else fixture</option>
+                  <option value="fixture">Fixture only</option>
                   <option value="fixture-error">Fixture: 503 once, then OK</option>
-                  <option value="api">/api/report</option>
+                  <option value="api">/api/report only</option>
                 </select>
               </label>
-            </>
-          )}
-          <button
-            onClick={handleFinish}
-            disabled={running}
-            className="rounded-md bg-sky-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-60"
-          >
-            Finish
-          </button>
-        </div>
+            </div>
+          </details>
+        )}
+        <button
+          onClick={handleFinish}
+          disabled={running}
+          className="rounded-lg bg-sky-600 px-5 py-2 text-base font-semibold text-white hover:bg-sky-500 disabled:opacity-60"
+        >
+          Finish
+        </button>
       </header>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -252,7 +273,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             state={liveState}
             turns={attempt.turns}
             error={liveError}
-            mocked={USING_MOCK_LIVE}
+            voiceMode={voiceMode}
+            mockReason={mockReason}
+            micStatus={micStatus}
             onConnect={handleConnect}
             onToggleMic={handleToggleMic}
             onEnd={endLive}
@@ -261,24 +284,28 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
         <div className="flex min-h-0 flex-col">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-            <span className="font-mono text-xs text-zinc-500">solution.py · v{codeVersion}</span>
+            <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
             <button
               onClick={handleRun}
               disabled={running}
-              className="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-w-[7rem] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-base font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {running ? "Running…" : "Run"}
+              {running ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+                  Running
+                </>
+              ) : (
+                <>
+                  <span aria-hidden>▶</span> Run
+                </>
+              )}
             </button>
           </div>
-          <div className="min-h-[300px] flex-[3] bg-[#1e1e1e]">
-            <CodeEditor
-              value={source}
-              onChange={handleEdit}
-              errorLine={error?.line}
-              errorMessage={error?.message}
-            />
+          <div className="min-h-0 flex-[3] bg-[#1e1e1e]">
+            <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
-          <div className="min-h-[200px] flex-[2] border-t border-zinc-800">
+          <div className="h-[38%] min-h-[220px] border-t border-zinc-800">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
         </div>

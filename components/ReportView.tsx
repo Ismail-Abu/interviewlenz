@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ApiError, EvidenceRef, Finding, Report, RunResult, Session } from "@/lib/contract";
+import { ReportSkeleton } from "./Skeletons";
 
 export interface AttemptRecord {
   session: Session;
   status: "loading" | "done" | "error";
   report?: Report;
   fromFixture?: boolean;
+  fallbackReason?: string;
   error?: ApiError;
 }
 
@@ -22,6 +24,14 @@ const RATING_STYLE: Record<Finding["rating"], string> = {
   ok: "bg-sky-500/15 text-sky-300",
   needs_work: "bg-red-500/15 text-red-400",
   insufficient_evidence: "bg-zinc-700/50 text-zinc-300",
+};
+
+// Icon + word + color, so the rating never relies on color alone.
+const RATING_ICON: Record<Finding["rating"], string> = {
+  strong: "✓",
+  ok: "●",
+  needs_work: "!",
+  insufficient_evidence: "?",
 };
 
 const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
@@ -89,8 +99,11 @@ function ReportCard({
           <span className="text-xs text-zinc-500">retry of {session.priorAttemptId.slice(0, 8)}</span>
         )}
         {record.fromFixture && (
-          <span className="rounded bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300">
-            FIXTURE DATA
+          <span
+            className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300"
+            data-testid="report-fixture-badge"
+          >
+            FIXTURE DATA{record.fallbackReason ? ` (${record.fallbackReason})` : ""}
           </span>
         )}
         <span className="ml-auto text-xs text-zinc-500" data-testid="attempt-stats">
@@ -99,10 +112,7 @@ function ReportCard({
       </header>
 
       {record.status === "loading" && (
-        <div className="flex items-center gap-2 text-sm text-zinc-400">
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-200" />
-          Writing your report…
-        </div>
+        <ReportSkeleton />
       )}
 
       {record.status === "error" && record.error && (
@@ -123,19 +133,22 @@ function ReportCard({
         <>
           <section className="rounded-lg border border-sky-500/40 bg-sky-500/10 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-sky-300">Next step</div>
-            <p className="mt-1 text-base font-medium text-zinc-50">{report.nextStep}</p>
+            <p className="mt-1 text-lg font-medium leading-snug text-zinc-50" data-testid="next-step">{report.nextStep}</p>
           </section>
 
           <ul className="flex flex-col gap-3">
             {report.findings.map((f) => (
               <li key={f.id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-zinc-200">{label(f.category)}</span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${RATING_STYLE[f.rating]}`}>
+                  <span className="text-base font-semibold text-zinc-100">{label(f.category)}</span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold ${RATING_STYLE[f.rating]}`}
+                  >
+                    <span aria-hidden>{RATING_ICON[f.rating]}</span>
                     {label(f.rating)}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-zinc-300">{f.summary}</p>
+                <p className="mt-2 text-base leading-relaxed text-zinc-200">{f.summary}</p>
                 {f.evidence.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {f.evidence.map((ref, i) => (
@@ -143,7 +156,7 @@ function ReportCard({
                         key={i}
                         data-evidence-kind={ref.kind}
                         onClick={() => setSelected(ref)}
-                        className={`rounded-md border px-2.5 py-1 font-mono text-xs transition-colors ${
+                        className={`rounded-md border px-3 py-1.5 font-mono text-sm transition-colors ${
                           sameRef(selected, ref)
                             ? "border-sky-400 bg-sky-500/20 text-sky-100"
                             : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
@@ -181,7 +194,7 @@ function ReportCard({
                     if (el) turnRefs.current.set(t.id, el);
                     else turnRefs.current.delete(t.id);
                   }}
-                  className={`rounded-lg px-3 py-2 text-sm transition-colors ${
+                  className={`rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed transition-colors ${
                     hit ? "bg-amber-400/20 ring-2 ring-amber-400" : t.speaker === "student" ? "bg-zinc-800" : "bg-sky-500/10"
                   }`}
                 >

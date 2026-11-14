@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Interviewlenz",
-  description: "Practice explaining your code while you write it.",
+  description: "A coding interview that listens to how you explain your code.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full bg-zinc-950 antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

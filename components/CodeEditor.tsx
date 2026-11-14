@@ -56,7 +56,8 @@ export default function CodeEditor({ value, onChange, errorLine, errorMessage }:
       onChange={(v) => onChange(v ?? "")}
       onMount={handleMount}
       options={{
-        fontSize: 14,
+        fontSize: 16,
+        lineHeight: 24,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         tabSize: 4,

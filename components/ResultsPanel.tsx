@@ -1,4 +1,5 @@
 import type { RunResult } from "@/lib/contract";
+import { CaseSkeleton } from "./Skeletons";
 
 interface Props {
   result: RunResult | null;
@@ -12,93 +13,94 @@ const ERROR_TITLE: Partial<Record<string, string>> = {
   runner_unavailable: "Python runner unavailable",
 };
 
+// Icon + word + color, so pass/fail never relies on color alone.
 function Badge({ pass }: { pass: boolean }) {
   return (
     <span
-      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-        pass ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold ${
+        pass ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"
       }`}
     >
-      {pass ? "PASS" : "FAIL"}
+      <span aria-hidden>{pass ? "✓" : "✗"}</span>
+      {pass ? "Pass" : "Fail"}
     </span>
   );
 }
 
 export function ResultsPanel({ result, running, usingFixtures }: Props) {
+  const allPass = result?.status === "completed" && result.passed === result.total;
   return (
     <section className="flex h-full flex-col overflow-hidden">
-      <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-2">
-        <h2 className="text-sm font-semibold text-zinc-200">Results</h2>
-        {usingFixtures && (
-          <span className="rounded bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-4">
+        <h2 className="text-base font-semibold text-zinc-100">Results</h2>
+        {usingFixtures && !running && (
+          <span className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300">
             FIXTURE DATA
           </span>
         )}
-        {result?.status === "completed" && (
+        {!running && result?.status === "completed" && (
           <span
-            className={`ml-auto text-sm font-semibold ${
-              result.passed === result.total ? "text-emerald-400" : "text-red-400"
+            className={`ml-auto flex items-center gap-1.5 text-base font-semibold ${
+              allPass ? "text-emerald-300" : "text-red-300"
             }`}
+            data-testid="passed-total"
           >
+            <span aria-hidden>{allPass ? "✓" : "✗"}</span>
             {result.passed}/{result.total} passed
           </span>
         )}
-        {result && (
-          <span className={`text-xs text-zinc-500 ${result.status === "completed" ? "" : "ml-auto"}`}>
+        {!running && result && (
+          <span className={`text-sm text-zinc-500 ${result.status === "completed" ? "" : "ml-auto"}`}>
             v{result.codeVersion} · {result.durationMs} ms
           </span>
         )}
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {running && (
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-200" />
-            Running tests…
-          </div>
-        )}
+        {running && <CaseSkeleton />}
 
         {!running && !result && (
-          <p className="text-sm text-zinc-500">Press Run to test your solution.</p>
+          <p className="text-base text-zinc-500">Press Run to test your solution against 4 cases.</p>
         )}
 
         {!running && result?.status === "error" && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
-            <div className="font-semibold text-red-300">
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-base" role="alert">
+            <div className="flex items-center gap-2 font-semibold text-red-200">
+              <span aria-hidden>⚠</span>
               {ERROR_TITLE[result.error.code] ?? "Run failed"}
               {result.error.line !== undefined && ` on line ${result.error.line}`}
             </div>
-            <div className="mt-1 font-mono text-red-200">{result.error.message}</div>
+            <div className="mt-1 font-mono text-red-100">{result.error.message}</div>
             {result.error.retryable && (
-              <div className="mt-2 text-zinc-400">This may be temporary. Your code is unchanged; try Run again.</div>
+              <div className="mt-2 text-sm text-zinc-400">This may be temporary. Your code is unchanged; try Run again.</div>
             )}
           </div>
         )}
 
         {!running && result?.status === "completed" && (
-          <ul className="flex flex-col gap-3">
+          <ul className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
             {result.cases.map((c) => (
               <li
                 key={c.caseId}
-                className={`rounded-lg border p-3 font-mono text-sm ${
-                  c.pass ? "border-zinc-800 bg-zinc-900" : "border-red-500/40 bg-red-500/5"
+                className={`rounded-lg border p-3.5 font-mono text-[15px] ${
+                  c.pass ? "border-zinc-800 bg-zinc-900" : "border-red-500/50 bg-red-500/5"
                 }`}
               >
                 <div className="mb-2 flex items-center gap-2 font-sans">
                   <Badge pass={c.pass} />
-                  <span className="text-xs text-zinc-500">{c.caseId}</span>
+                  <span className="text-sm text-zinc-500">{c.caseId}</span>
                 </div>
-                <dl className="grid grid-cols-[5.5rem_1fr] gap-y-1">
+                <dl className="grid grid-cols-[6rem_1fr] gap-y-1">
                   <dt className="text-zinc-500">Input</dt>
-                  <dd className="text-zinc-100">{c.input}</dd>
+                  <dd className="break-all text-zinc-100">{c.input}</dd>
                   <dt className="text-zinc-500">Expected</dt>
                   <dd className="text-zinc-100">{c.expected}</dd>
                   <dt className="text-zinc-500">Actual</dt>
-                  <dd className={c.pass ? "text-emerald-400" : "text-red-400"}>{c.actual ?? "—"}</dd>
+                  <dd className={c.pass ? "text-emerald-300" : "text-red-300"}>{c.actual ?? "—"}</dd>
                   {c.error && (
                     <>
                       <dt className="text-zinc-500">Error</dt>
-                      <dd className="whitespace-pre-wrap text-red-300">{c.error}</dd>
+                      <dd className="whitespace-pre-wrap text-red-200">{c.error}</dd>
                     </>
                   )}
                   {c.stdout && (
