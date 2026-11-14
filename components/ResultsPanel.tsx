@@ -6,6 +6,12 @@ interface Props {
   usingFixtures: boolean;
 }
 
+const ERROR_TITLE: Partial<Record<string, string>> = {
+  syntax_error: "Syntax error",
+  timeout: "Timed out",
+  runner_unavailable: "Python runner unavailable",
+};
+
 function Badge({ pass }: { pass: boolean }) {
   return (
     <span
@@ -59,7 +65,7 @@ export function ResultsPanel({ result, running, usingFixtures }: Props) {
         {!running && result?.status === "error" && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
             <div className="font-semibold text-red-300">
-              {result.error.code === "syntax_error" ? "Syntax error" : "Run failed"}
+              {ERROR_TITLE[result.error.code] ?? "Run failed"}
               {result.error.line !== undefined && ` on line ${result.error.line}`}
             </div>
             <div className="mt-1 font-mono text-red-200">{result.error.message}</div>

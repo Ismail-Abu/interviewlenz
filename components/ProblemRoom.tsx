@@ -6,8 +6,9 @@ import type { ApiError, LiveClient, LiveState, Problem, RunResult, TranscriptTur
 import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
-import { runCodeAdapter, setFixtureMode, USING_FIXTURES, type FixtureMode } from "./runCodeAdapter";
+import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { createLiveClient, fetchLiveToken, isApiError, USING_MOCK_LIVE } from "./liveAdapter";
+import { preloadRunner } from "@/lib/runner";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -19,9 +20,15 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [codeVersion, setCodeVersion] = useState(1);
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [mode, setMode] = useState<FixtureMode>("cycle");
+  const [mode, setMode] = useState<RunMode>("real");
+  const [fromFixture, setFromFixture] = useState(false);
   const sessionId = useRef<string | null>(null);
   const getSessionId = () => (sessionId.current ??= crypto.randomUUID());
+
+  // Start loading Pyodide as soon as the page opens (CONTRACT.md).
+  useEffect(() => {
+    void preloadRunner();
+  }, []);
 
   // Voice session (kept in browser memory per CONTRACT.md).
   const live = useRef<LiveClient | null>(null);
@@ -96,14 +103,18 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   async function handleRun() {
     setRunning(true);
     try {
-      const res = await runCodeAdapter({
-        sessionId: getSessionId(),
-        problemId: problem.id,
-        codeVersion,
-        language: "python",
-        source,
-      });
-      setResult(res);
+      const res = await runCodeAdapter(
+        {
+          sessionId: getSessionId(),
+          problemId: problem.id,
+          codeVersion,
+          language: "python",
+          source,
+        },
+        mode,
+      );
+      setResult(res.result);
+      setFromFixture(res.fromFixture);
     } finally {
       setRunning(false);
     }
@@ -116,23 +127,20 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       <header className="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
         <span className="text-lg font-semibold tracking-tight">Interviewlenz</span>
         <span className="text-sm text-zinc-500">Python · Quick practice</span>
-        {USING_FIXTURES && (
+        {process.env.NODE_ENV !== "production" && (
           <label className="ml-auto flex items-center gap-2 text-xs text-zinc-400">
-            Dev fixture
+            Run with
             <select
               value={mode}
-              onChange={(e) => {
-                const m = e.target.value as FixtureMode;
-                setMode(m);
-                setFixtureMode(m);
-              }}
+              onChange={(e) => setMode(e.target.value as RunMode)}
               className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200"
             >
-              <option value="cycle">Cycle all four</option>
-              <option value="pass">Pass (4/4)</option>
-              <option value="fail">Fail (3/4)</option>
-              <option value="syntax">Syntax error</option>
-              <option value="unavailable">Runner unavailable</option>
+              <option value="real">Python runner</option>
+              <option value="cycle">Fixtures: cycle all four</option>
+              <option value="pass">Fixture: pass (4/4)</option>
+              <option value="fail">Fixture: fail (3/4)</option>
+              <option value="syntax">Fixture: syntax error</option>
+              <option value="unavailable">Fixture: runner unavailable</option>
             </select>
           </label>
         )}
@@ -177,7 +185,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             />
           </div>
           <div className="min-h-[200px] flex-[2] border-t border-zinc-800">
-            <ResultsPanel result={result} running={running} usingFixtures={USING_FIXTURES} />
+            <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
         </div>
       </main>

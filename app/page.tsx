@@ -1,6 +1,6 @@
 import { ProblemRoom } from "@/components/ProblemRoom";
-import { placeholderProblem } from "@/components/placeholderProblem";
+import { containsDuplicate } from "@/lib/problems";
 
 export default function Home() {
-  return <ProblemRoom problem={placeholderProblem} />;
+  return <ProblemRoom problem={containsDuplicate} />;
 }
