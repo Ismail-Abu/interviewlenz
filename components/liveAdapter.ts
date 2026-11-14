@@ -8,6 +8,7 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "@/lib/contract";
+import { createLiveClient } from "@/lib/live";
 
 // The only place the UI touches voice.
 //
@@ -17,11 +18,11 @@ import type {
 // back to the scripted MockLiveClient so the demo runs with zero keys.
 //
 // Agreed with Ismail: lib/live.ts exports a factory createLiveClient(), and
-// turn IDs stay unique across reconnects within a session. When lib/live.ts is
-// merged into this branch, set REAL_CLIENT to that factory:
-//   import { createLiveClient } from "@/lib/live";
-//   const REAL_CLIENT: (() => LiveClient) | null = createLiveClient;
-const REAL_CLIENT: (() => LiveClient) | null = null;
+// turn IDs stay unique across reconnects within a session.
+const REAL_CLIENT: (() => LiveClient) | null = createLiveClient;
+
+// If the Live socket has not opened by then, use the scripted fallback.
+const REAL_CONNECT_TIMEOUT_MS = 10_000;
 
 export type VoiceMode = "live" | "mock";
 
@@ -70,11 +71,29 @@ export async function openVoice(sessionId: string, problem: Problem, h: VoiceHan
 
   if (!isApiError(token) && REAL_CLIENT) {
     const real = REAL_CLIENT();
-    wire(real, h);
+    // Hold the real client's events until connect() settles: lib/live.ts emits
+    // its error before throwing. On success, replay them and pass through; on
+    // failure, drop them so they never overwrite the scripted fallback.
+    let phase: "connecting" | "live" | "abandoned" = "connecting";
+    const held: (() => void)[] = [];
+    const gate =
+      <T,>(fn: (v: T) => void) =>
+      (v: T) => {
+        if (phase === "live") fn(v);
+        else if (phase === "connecting") held.push(() => fn(v));
+      };
+    wire(real, { onState: gate(h.onState), onTurn: gate(h.onTurn), onError: gate(h.onError) });
     try {
-      await real.connect(token, problem);
+      await Promise.race([
+        real.connect(token, problem),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), REAL_CONNECT_TIMEOUT_MS)),
+      ]);
+      phase = "live";
+      held.splice(0).forEach((replay) => replay());
       return { client: real, mode: "live" };
     } catch {
+      phase = "abandoned";
+      held.length = 0;
       real.end();
       return openMock(problem, h, "voice connection failed");
     }

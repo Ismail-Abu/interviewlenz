@@ -119,6 +119,18 @@ Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either o
 
 **Still mocked** — Voice uses the scripted MockLiveClient, including the student's lines, since there is no mic audio. Report content is fixtures/report.json, remapped per attempt. Run is real. **Outstanding** — Merge B1/B2 (Ismail's branch) and set `REAL_CLIENT` in liveAdapter.ts for real voice with a key. B4 `/api/report` is not started; `auto` mode will pick it up automatically.
 
+### F5 follow-up • real voice wired — Hamza • November 14
+
+- **Synced** — Merged main (PR #6: B3 + B4) into `f5-polish`. The merge was clean, and every handoff is preserved: F1–F5, B1, B2, the integration notes, models/API version, B2 verified, B3, B4, and Ismail's switch list.
+- **Voice** — `components/liveAdapter.ts` sets `REAL_CLIENT = createLiveClient` from `@/lib/live`. `openVoice()` still POSTs `/api/live-token` first. On non-200, a connect error, or no socket within 10 s, it uses the scripted interviewer with the badge "MOCK VOICE (no API key)" or "MOCK VOICE (voice connection failed)". With a working key the badge is absent. The real client's events are held until `connect()` settles and dropped if it fails, because lib/live.ts emits its error before throwing. That keeps a stale error off the fallback.
+- **Report** — Left at `auto` as decided. It POSTs `/api/report` first (B4) and falls back to the labeled fixture only on failure. Ismail's note suggested `"api"`; `auto` covers that path and also keeps the no-key demo working.
+- **Observed** — `npm run dev`, Edge via Playwright, **no `.env.local` on this machine**:
+  - A. Real routes return **503** for both live-token and report → "MOCK VOICE (no API key)" and "FIXTURE DATA (no API key)"; the flow completes.
+  - B. With `/api/live-token` stubbed to 200 (fake token), the browser opened `wss://generativelanguage.googleapis.com/…v1beta…BidiGenerateContentConstrained`, which proves the real client is used. The fake token failed, the badge read "MOCK VOICE (voice connection failed)", and no error banner appeared.
+  - C. With `/api/report` stubbed to 200, the report rendered with **no** FIXTURE DATA label. Evidence links landed correctly: turn t2 highlighted; code v2 lines 2–3 highlighted (`for i…`, `for j…`); run v2 with c1 highlighted; code v3 lines 2–4 highlighted (`seen = set()` … `if n in seen:`). Retry reset to 0/0/0.
+  - `npm run lint`: 0 problems. `npm run build`: passes, with `/api/live-token` and `/api/report` as dynamic routes.
+- **Not done: the real spoken check.** Saying "this is linear", hearing the two code-specific replies, and getting a real Gemini report were not performed. This machine has no `GEMINI_API_KEY`/`LIVE_MODEL`/`REPORT_MODEL` and no one speaking into a microphone, and the stubs in B and C don't exercise Gemini itself. Ismail's B2–B4 checks verified the Live socket, the question wording, and the report route with his key, but not through this UI. **#5 is not merged yet**, pending that spoken check.
+
 ## Mocked for demo
 
 Label any shown preview as mocked. These features need no working integrations during the sprint.
