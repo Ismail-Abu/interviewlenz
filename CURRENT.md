@@ -156,3 +156,34 @@ Verified:
 - `.env.example` lists `GEMINI_API_KEY`, `LIVE_MODEL`, `REPORT_MODEL`; `.gitignore` ignores `.env*.local` (confirmed `.env.local` is ignored).
 
 Not verified (unchanged from B2): the real voice spoken-exchange path needs a live `GEMINI_API_KEY` + `LIVE_MODEL` and a microphone; the v1alpha/v1beta token API version is still the open risk.
+
+### Models and API version (chosen Nov 14, from the live models list)
+
+Queried `GET /v1beta/models` with the real key. Chosen and written to `.env.local` (gitignored, key never committed):
+- `LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025` — native-audio, `bidiGenerateContent`.
+- `REPORT_MODEL=gemini-3.8-flash` — newest Flash with `generateContent`.
+- **API version: `v1beta`** (both the token route default `LIVE_API_VERSION` and the `lib/live.ts` client constant).
+
+### B2 • verified live — Ismail (branch b3-b4)
+
+- `POST /api/live-token {sessionId:"test"}` on `npm run dev` → **HTTP 200** with a real ephemeral token (`auth_tokens/...`), `model`, and ISO `expiresAt`.
+- `dev/live-check.mjs` mints a token and opens a real Live session, sends one text turn, and collects the response. On **v1beta**: session opened and **~35 KB of audio returned** → Live works. (The SDK prints a "v1alpha only" advisory warning, but v1beta works end to end, so v1beta is what the route and client use.) This closes the open B2 v1alpha/v1beta risk.
+
+### B3 • interviewer brain — Ismail (branch b3-b4)
+
+- `lib/prompts.ts` (new): `interviewerInstructions(problem)` (friendly-but-rigorous system instruction: explain approach before coding, 1-2 sentence turns, never give the solution, check stated complexity against the actual code and challenge a linear claim on a nested loop, ask complexity + an edge case after all tests pass) and `formatRunContext(snapshot, result)` (the docs/CONTRACT.md run message: version, passed/total, failing cases with input/expected/actual-or-error, line-numbered source, ending "Ask one short question about this specific code and result.").
+- `lib/live.ts`: system instruction on `connect` now comes from `interviewerInstructions`; `sendRunContext` uses `formatRunContext` and is queued at a turn boundary (if the interviewer is mid-answer, it holds the run message and flushes it on the next `turnComplete` so it never cuts them off), sent with `turnComplete: true` so the interviewer asks about the run.
+- Check (text path via REPORT_MODEL, since driving a spoken mic exchange headlessly isn't feasible; voice itself is proven in B2): fed `interviewerInstructions` + a "this is linear" student line + two `formatRunContext` messages. Nested-loop question: *"you mentioned this runs in linear time—how many comparisons actually happen in your nested loops if every number is unique?"* (challenges complexity). Set question: *"What are the time and space complexities of this approach?"* The two questions differ and the nested-loop one challenges the complexity claim. **PASS.**
+
+### B4 • real report — Ismail (branch b3-b4)
+
+- `app/api/report/route.ts` (new): `POST {session}`. 400 `invalid_request` on a non-JSON body or a session missing required fields (verified). Calls `REPORT_MODEL` with `responseMimeType: application/json` + a response schema; the prompt carries the rubric categories, transcript turns with IDs, snapshots with `codeVersion` + line-numbered source, and runs with per-case results. Server-side: validates every evidence ref (turnId / codeVersion / caseId must exist in the session), drops invalid refs, downgrades any non-`insufficient_evidence` finding left with no refs to `insufficient_evidence` (empty list), and fills `reportId`, `sessionId`, `attemptId`, `createdAt`. 503 `provider_unavailable` on missing env or any Gemini error.
+- Check: POSTed a realistic session (snapshots v2 nested-loop + v3 set, 2 runs, 3 turns where the student claims "linear") → **HTTP 200**, 4 findings, 6 evidence refs, **0 unresolved**, and `spoken_reasoning` rated **needs_work** ("claimed ... linear time, which contradicts what the code actually does"). `nextStep` is one concrete practice item.
+- Finish: `npm run lint` clean; `npm run build` passes (TypeScript included); both `/api/live-token` and `/api/report` present in the build.
+
+### What Hamza needs in components/ to use the real voice and report (f5-polish)
+
+Backend is ready on `main` once b3-b4 merges; these are the only switches, all in files Hamza owns:
+- `components/liveAdapter.ts`: set `USING_MOCK_LIVE = false`; replace `createLiveClient()` to return `createLiveClient()` from `@/lib/live`; replace `fetchLiveToken` to `POST /api/live-token` with `{ sessionId }` and return the JSON (or the `ApiError` on non-200).
+- `components/reportAdapter.ts`: set `DEFAULT_REPORT_MODE = "api"` (the `"api"` branch already calls `POST /api/report`).
+- Requires `.env.local` with `GEMINI_API_KEY`, `LIVE_MODEL`, `REPORT_MODEL` (values above) on any machine that runs it; voice needs HTTPS + mic in the browser.
