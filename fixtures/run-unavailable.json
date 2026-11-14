@@ -1,0 +1,13 @@
+{
+  "sessionId": "s1",
+  "problemId": "contains-duplicate",
+  "status": "error",
+  "codeVersion": 6,
+  "ranAt": "2026-11-15T01:00:06Z",
+  "durationMs": 10,
+  "error": {
+    "code": "runner_unavailable",
+    "message": "Python worker could not initialize",
+    "retryable": true
+  }
+}

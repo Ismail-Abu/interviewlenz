@@ -1,0 +1,50 @@
+{
+  "reportId": "r1",
+  "sessionId": "s1",
+  "attemptId": "a1",
+  "findings": [
+    {
+      "id": "f1",
+      "category": "spoken_reasoning",
+      "rating": "strong",
+      "summary": "You explained why a set removes duplicates.",
+      "evidence": [
+        {
+          "kind": "turn",
+          "turnId": "t1"
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "category": "approach",
+      "rating": "strong",
+      "summary": "Version 3 compares the set size with the input length.",
+      "evidence": [
+        {
+          "kind": "code",
+          "codeVersion": 3,
+          "lines": [
+            1,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "category": "testing",
+      "rating": "needs_work",
+      "summary": "Version 4 misses the separated duplicate in c1.",
+      "evidence": [
+        {
+          "kind": "run",
+          "codeVersion": 4,
+          "caseId": "c1"
+        }
+      ]
+    }
+  ],
+  "nextStep": "Explain why adjacent comparisons miss separated duplicates.",
+  "createdAt": "2026-11-15T01:02:00Z"
+}

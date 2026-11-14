@@ -1,0 +1,14 @@
+{
+  "sessionId": "s1",
+  "problemId": "contains-duplicate",
+  "status": "error",
+  "codeVersion": 5,
+  "ranAt": "2026-11-15T01:00:05Z",
+  "durationMs": 10,
+  "error": {
+    "code": "syntax_error",
+    "message": "Invalid syntax on line 2",
+    "retryable": false,
+    "line": 2
+  }
+}

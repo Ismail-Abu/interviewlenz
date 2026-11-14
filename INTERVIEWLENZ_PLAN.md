@@ -29,7 +29,7 @@ The shared repo is ready and contains documentation. For implementation, follow 
 
 | Stage | Hamza • frontend | Ismail • backend |
 |---|---|---|
-| 1 • Python room | Scaffold and Monaco page with labeled fixture results | Define the run-code contract and implement the Pyodide browser runner with 3–4 cases |
+| 1 • Python room | Scaffold and Monaco page with labeled fixture results | Implement the shared run-code contract using a Pyodide browser runner with four cases |
 | 2 • Integration and voice | Replace fixtures with Pyodide results, wire mic/speaker buttons, display state, store transcript turns | Issue ephemeral tokens and own the browser Live client, audio I/O, and transcript/state events |
 | 3 • Code-aware conversation | Feed each completed Run into the active Live session | Define the text payload and interviewer instructions |
 | 4 • Feedback | Show report evidence and retry | Generate findings with one Flash call per finished attempt |
@@ -41,7 +41,7 @@ Keep demo session state in browser memory. Use the same problem and function sig
 
 | Operation | Input | Output |
 |---|---|---|
-| Browser Run | Problem ID, submitted Python source, code version | Run ID, version, and per-case expected, actual, and pass fields. Syntax and runner failures use the documented error shape. |
+| Browser Run | Problem ID, submitted Python source, code version | Session ID, problem ID, codeVersion, and per-case expected, actual, and pass fields. Syntax and runner failures use the documented error shape. |
 | Voice token | Browser requests access from the app server | A short-lived token for the Live connection |
 | Run context | After each Run send text containing the submitted source, version, and latest results (including errors) directly to the active Live session | Live uses that context and the ongoing conversation to ask a spoken follow-up |
 | Finish | Transcript with turn IDs, snapshots with versions, runs with IDs | One Gemini Flash response with findings linked to turn IDs, code versions, or run IDs |

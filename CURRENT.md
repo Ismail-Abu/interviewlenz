@@ -19,7 +19,7 @@ Ismail requested a 24-hour build focused on one duplicate-detection interview. T
 
 ## Repo setup and shared contract decision
 
-Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either owner adds other files. This applies to the implementation kickoff after the shared setup and contract land. Build against the shared contract. Coordinate any changes to it with both owners.
+Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either owner adds other files. This applies to the implementation kickoff after the shared setup and contract land. The shared types, endpoint and client contracts, and importable fixtures are committed. Hamza uses fixtures/ for F1, and Ismail implements B1 against the same examples. Coordinate any changes to it with both owners.
 
 ## File ownership
 
