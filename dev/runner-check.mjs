@@ -164,8 +164,10 @@ function sameShape(a, b) {
 }
 
 const withoutTimes = (r) => {
-  const { ranAt, durationMs, ...rest } = r;
-  return rest;
+  const copy = { ...r };
+  delete copy.ranAt;
+  delete copy.durationMs;
+  return copy;
 };
 
 async function main() {

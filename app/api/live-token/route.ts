@@ -1,10 +1,10 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import type { ApiError, LiveTokenResponse } from "../../../lib/contract";
 
-// Node runtime: the GenAI SDK and the permanent GEMINI_API_KEY must stay on the
-// server. The key is never sent to the browser; the browser only ever receives
-// the short-lived ephemeral token minted here.
-export const runtime = "nodejs";
+// Runs on the default Node.js runtime (route handlers are Node by default), so
+// the GenAI SDK and the permanent GEMINI_API_KEY stay on the server; the browser
+// only ever receives the short-lived ephemeral token minted here. No
+// `export const runtime` here: it is incompatible with Next's cacheComponents.
 
 // The SDK 3.3.0 docstring says ephemeral tokens are "v1alpha only", while the
 // current docs and README say v1beta. Default to v1beta (README) and allow an

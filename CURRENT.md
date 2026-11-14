@@ -138,3 +138,21 @@ Outstanding dependencies / risks:
 - `.env`: `GEMINI_API_KEY` (server-only), `LIVE_MODEL` (a Gemini Live model id). Confirm the exact live model id with the current docs before the demo.
 - `lib/live.ts` is client-only (never import on the server) and uses a `ScriptProcessorNode` (self-contained, no served AudioWorklet asset); fine for a sub-10-minute demo, swap to an AudioWorklet later.
 - `lib/prompts.ts` not created (that is B3); the interviewer instruction and run-context wording in `lib/live.ts` are placeholders for B3 to finalize.
+
+### Integration • merged to main — November 14
+
+Merged `origin/f3` (F1, F2, B1, F3, F4) and `origin/claude/sweet-franklin-fovxva` (B2) into `main`. Both merges were clean: f3's B1 files are byte-identical to the B1 branch, and B2 only added `app/api/live-token/route.ts` + `lib/live.ts` (no file-ownership overlap). `CURRENT.md` keeps all six handoff entries (F1-F4, B1, B2) and the shared sections once.
+
+Changes made during integration:
+- Added deps: `@google/genai` (dependency), `pyodide@0.29.5` + `esbuild` (devDependencies) — B2 and the B1 dev check need them; they were missing from `package.json`.
+- `app/api/live-token/route.ts`: removed `export const runtime = "nodejs"` — Next 16 `cacheComponents` rejects route-segment `runtime` and route handlers are Node by default. No behavior change.
+- `dev/runner-check.mjs`: silenced two lint warnings (unused destructured vars).
+
+Verified:
+- `npm run lint` — clean (0 problems).
+- `npm run build` — passes, including the full TypeScript typecheck of the merged tree (route + `lib/live.ts` against `@google/genai`, all F components).
+- `npm run dev` — serves and renders the page (header, problem, controls, editor).
+- Correct `contains_duplicate` solution via the real Pyodide runner → **4/4 passed, no fixtures** (4 PASS / 0 FAIL), driven in headless Chromium. Verified against the production build (`next start`): the sandbox's HTTPS proxy intercepts the dev HMR WebSocket, which stalls Turbopack dev hydration headlessly (a harness limitation, not a code issue — direct CDN fetch, build, and types all pass).
+- `.env.example` lists `GEMINI_API_KEY`, `LIVE_MODEL`, `REPORT_MODEL`; `.gitignore` ignores `.env*.local` (confirmed `.env.local` is ignored).
+
+Not verified (unchanged from B2): the real voice spoken-exchange path needs a live `GEMINI_API_KEY` + `LIVE_MODEL` and a microphone; the v1alpha/v1beta token API version is still the open risk.
