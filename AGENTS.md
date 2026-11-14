@@ -8,3 +8,13 @@ Read this file, CURRENT.md, README.md, and INTERVIEWLENZ_PLAN.md before editing.
 4. Implement only the assigned task. Use its listed inputs, outputs, owned files, and completion check. Coordinate shared contract changes with the other owner.
 5. At handoff, record the task ID, files changed, check performed and outcome, and outstanding dependencies. Update only your task entry in CURRENT.md. Stop at its completion check. The team opens the next task explicitly after reviewing the result.
    During the hackathon, CURRENT.md's schedule overrides this step: advance to your next task as soon as its completion check passes.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
