@@ -74,6 +74,11 @@ export async function POST(request: Request): Promise<Response> {
           model,
           config: {
             responseModalities: [Modality.AUDIO],
+            // The locked config is authoritative for the session, so request
+            // transcription here or the browser never receives any (audio still
+            // flows, but the transcript panel stays empty).
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
             sessionResumption: {},
           },
         },

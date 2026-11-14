@@ -253,3 +253,20 @@ Checks performed and outcome:
 What Hamza wires in `components/` (after this merges): call `client.syncCode?.(snapshot)` once after `connect` (initial sync) and on a debounced editor pause (paused-edit snapshot); keep calling `sendRunContext` on Run. No change to the existing calls.
 
 Not done from the cloud session: the `f5-demo` working tree + its four modified files live on the laptop and can't be read here, so they are not in this branch. The in-browser spoken walkthrough (human speaking into the mic) is still Hamza's/your live confirmation; the Live mechanism above is verified against Gemini.
+
+### B6 • Transcription fix — Ismail (branch `b6-transcription-stages`, off f5f80a0)
+
+Ismail's browser retest (recorded): Gemini received both implementations after Run, including the update (code-delivery path works). The transcript did not display. Silent edit sync was outside this test.
+
+Trace (one exchange, ephemeral token → Gemini events → `lib/live.ts` → `onTurn` → UI), credentials/raw audio never logged:
+- **First point where text disappears: the ephemeral token configuration.** With the token the route minted (`liveConnectConstraints.config` = `{ responseModalities:[AUDIO], sessionResumption:{} }`), a real session returns audio and `turnComplete` but **zero** `outputTranscription` text. The locked config is authoritative, so the browser's `inputAudioTranscription`/`outputAudioTranscription` request was ignored. Adding transcription to the token config makes the transcript appear ("Banana is yellow." in the trace).
+- `lib/live.ts` buffering and `onTurn` are correct (deterministic check `dev/live-transcript-check.mjs`, 4/4): text chunks accumulate, a `finished` completion event with no text still flushes, `turnComplete` flushes a turn with no `finished`, no double-emit, student before interviewer, ids `t1…`.
+
+Fix (backend, mine):
+- `app/api/live-token/route.ts`: add `inputAudioTranscription: {}` and `outputAudioTranscription: {}` to the token's `liveConnectConstraints.config`.
+- `lib/live.ts`: handle transcription presence and the `finished` flag separately, so a text-less completion event still flushes the turn.
+- Code delivery is preserved: `sendRunContext` / `sendRealtimeInput` are unchanged.
+
+Verified: fixed route end-to-end — `POST /api/live-token` → connect → spoken reply transcript "An apple is a fruit." (audio + transcription both present). `npm run lint` clean; `npm run build` passes. No `components/` changes; the frontend already renders `onTurn` turns, so no frontend handoff is needed for this bug.
+
+Pending (human, in browser): say a distinctive sentence, hear one reply, confirm the panel shows both turns once with correct speakers, and that Finish's report request carries those same turn IDs. Not observable from the cloud session.

@@ -314,19 +314,24 @@ class BrowserLiveClient implements LiveClient {
     const content = message.serverContent;
     if (!content) return;
 
-    if (content.inputTranscription?.text) {
-      this.pendingInput += content.inputTranscription.text;
-      if (content.inputTranscription.finished) {
+    // Transcription streams text across chunks, and a completion event can carry
+    // `finished` with no text of its own. Handle presence and the finished flag
+    // separately so a text-less completion still flushes the turn.
+    if (content.inputTranscription) {
+      if (content.inputTranscription.text) this.pendingInput += content.inputTranscription.text;
+      if (content.inputTranscription.finished && this.pendingInput) {
         this.emitTurn("student", this.pendingInput);
         this.pendingInput = "";
       }
     }
 
-    if (content.outputTranscription?.text) {
-      this.pendingOutput += content.outputTranscription.text;
-      this.modelTurnActive = true;
-      this.setState("speaking");
-      if (content.outputTranscription.finished) {
+    if (content.outputTranscription) {
+      if (content.outputTranscription.text) this.pendingOutput += content.outputTranscription.text;
+      if (content.outputTranscription.text || content.outputTranscription.finished) {
+        this.modelTurnActive = true;
+        this.setState("speaking");
+      }
+      if (content.outputTranscription.finished && this.pendingOutput) {
         this.emitTurn("interviewer", this.pendingOutput);
         this.pendingOutput = "";
       }
