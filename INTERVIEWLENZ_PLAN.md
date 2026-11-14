@@ -30,14 +30,14 @@ The shared repo is ready and contains documentation. For implementation, follow 
 | Stage | Hamza • frontend | Ismail • backend |
 |---|---|---|
 | 1 • Python room | Scaffold and Monaco page with labeled fixture results | Define the run-code contract and implement the Pyodide browser runner with 3–4 cases |
-| 2 • Integration and voice | Replace fixtures with Pyodide results, connect microphone and playback, capture transcript | Issue ephemeral tokens from a server route |
+| 2 • Integration and voice | Replace fixtures with Pyodide results, wire mic/speaker buttons, display state, store transcript turns | Issue ephemeral tokens and own the browser Live client, audio I/O, and transcript/state events |
 | 3 • Code-aware conversation | Feed each completed Run into the active Live session | Define the text payload and interviewer instructions |
 | 4 • Feedback | Show report evidence and retry | Generate findings with one Flash call per finished attempt |
 | Final • Submission | Deploy and record backup video | Prepare Devpost and verify links; rehearse together |
 
 ## Shared contracts
 
-Keep demo session state in browser memory. Use the same problem and function signature in F1 fixtures and B1 tests. The problem asks whether a list of integers contains a duplicate. B1 publishes the definitive examples in docs/RUN_CODE.md.
+Keep demo session state in browser memory. Use the same problem and function signature in F1 fixtures and B1 tests. The problem asks whether a list of integers contains a duplicate. Use the shared types in lib/contract.ts and agreed examples in docs/CONTRACT.md.
 
 | Operation | Input | Output |
 |---|---|---|

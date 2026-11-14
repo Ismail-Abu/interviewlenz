@@ -7,3 +7,4 @@ Read this file, CURRENT.md, README.md, and INTERVIEWLENZ_PLAN.md before editing.
 3. Inspect the actual files and recent changes. If the handoff and implementation disagree, describe the discrepancy before relying on either. Never infer that a planned integration is live.
 4. Implement only the assigned task. Use its listed inputs, outputs, owned files, and completion check. Coordinate shared contract changes with the other owner.
 5. At handoff, record the task ID, files changed, check performed and outcome, and outstanding dependencies. Update only your task entry in CURRENT.md. Stop at its completion check. The team opens the next task explicitly after reviewing the result.
+   During the hackathon, CURRENT.md's schedule overrides this step: advance to your next task as soon as its completion check passes.
