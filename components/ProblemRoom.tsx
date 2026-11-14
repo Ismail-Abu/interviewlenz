@@ -59,9 +59,26 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [micOn, setMicOn] = useState(false);
   const [liveError, setLiveError] = useState<ApiError | null>(null);
   const [voiceMode, setVoiceMode] = useState<VoiceMode | null>(null);
+  const [sharedCodeVersion, setSharedCodeVersion] = useState<number | null>(null);
   const [mockReason, setMockReason] = useState<string | undefined>();
 
   useEffect(() => () => live.current?.end(), []);
+
+  // Share the latest editor buffer after a pause, without running Python.
+  // Cleanup cancels stale edits on further typing, disconnect, or Finish.
+  useEffect(() => {
+    if (!connected || voiceMode !== "live" || view !== "room") return;
+    const timer = setTimeout(() => {
+      const client = live.current;
+      if (!client?.sendCodeContext) return;
+      const snapshot = { codeVersion, source, at: new Date().toISOString() };
+      client.sendCodeContext(snapshot);
+      setSharedCodeVersion(codeVersion);
+      setAttempt((s) => s.snapshots.some((x) => x.codeVersion === codeVersion)
+        ? s : { ...s, snapshots: [...s.snapshots, snapshot] });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [source, codeVersion, connected, voiceMode, view]);
 
   async function handleConnect() {
     setLiveError(null);
@@ -113,6 +130,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     live.current?.end();
     live.current = null;
     setConnected(false);
+    setSharedCodeVersion(null);
     setMicOn(false);
     setLiveState(null);
   }
@@ -284,7 +302,16 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
         <div className="flex min-h-0 flex-col">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-            <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
+            <div>
+              <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
+              {connected && voiceMode === "live" && (
+                <span className="ml-3 text-sm text-sky-300" role="status">
+                  {sharedCodeVersion === codeVersion
+                    ? `Code v${sharedCodeVersion} shared with interviewer`
+                    : "Sharing code after you pause typing…"}
+                </span>
+              )}
+            </div>
             <button
               onClick={handleRun}
               disabled={running}

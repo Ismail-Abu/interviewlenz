@@ -13,7 +13,7 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "./contract";
-import { formatRunContext, interviewerInstructions } from "./prompts";
+import { formatCodeContext, formatRunContext, interviewerInstructions } from "./prompts";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
 // conflict. The browser client must match the version the token was minted for.
@@ -61,6 +61,7 @@ class BrowserLiveClient implements LiveClient {
   // A run-context message waiting for the interviewer's current turn to end, so
   // it does not cut them off.
   private pendingRunContext: string | null = null;
+  private pendingCodeContext: string | null = null;
 
   // Microphone input graph.
   private micStream: MediaStream | null = null;
@@ -176,9 +177,20 @@ class BrowserLiveClient implements LiveClient {
     if (this.state !== "speaking") this.setState("idle");
   }
 
+  sendCodeContext(snapshot: CodeSnapshot): void {
+    if (!this.session) return;
+    const text = formatCodeContext(snapshot);
+    if (this.state === "speaking") {
+      this.pendingCodeContext = text;
+      return;
+    }
+    this.sendText(text);
+  }
+
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void {
     if (!this.session) return;
     const text = formatRunContext(snapshot, result);
+    this.pendingCodeContext = null;
     // Wait for a turn boundary: if the interviewer is mid-answer, queue it and
     // flush on the next turnComplete so we do not interrupt them.
     if (this.state === "speaking") {
@@ -196,7 +208,7 @@ class BrowserLiveClient implements LiveClient {
         turnComplete: true,
       });
     } catch {
-      // ignore; the next run will try again
+      this.emitError("Could not send code to the interviewer. Reconnect and try again.");
     }
   }
 
@@ -223,6 +235,7 @@ class BrowserLiveClient implements LiveClient {
     this.pendingInput = "";
     this.pendingOutput = "";
     this.pendingRunContext = null;
+    this.pendingCodeContext = null;
     this.setState("idle");
   }
 
@@ -266,6 +279,10 @@ class BrowserLiveClient implements LiveClient {
       if (this.pendingRunContext) {
         const queued = this.pendingRunContext;
         this.pendingRunContext = null;
+        this.sendText(queued);
+      } else if (this.pendingCodeContext) {
+        const queued = this.pendingCodeContext;
+        this.pendingCodeContext = null;
         this.sendText(queued);
       }
     }

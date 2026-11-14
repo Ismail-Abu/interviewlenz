@@ -94,6 +94,7 @@ export interface LiveClient {
   connect(token: LiveTokenResponse, problem: Problem): Promise<void>;
   startMic(): Promise<void>;
   stopMic(): void;
+  sendCodeContext?(snapshot: CodeSnapshot): void;
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void;
   end(): void;
   onState(cb: (state: LiveState) => void): void;
