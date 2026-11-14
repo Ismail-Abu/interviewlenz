@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Wordmark } from "./Logo";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
 
@@ -60,11 +61,10 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 text-zinc-100">
       <main className="flex w-full max-w-2xl flex-col items-center text-center">
-        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/15 text-3xl" aria-hidden>
-          🎙️
-        </div>
-        <h1 className="text-5xl font-semibold tracking-tight">Interviewlenz</h1>
-        <p className="mt-4 text-xl text-zinc-300">A coding interview that listens to how you explain your code</p>
+        <h1>
+          <Wordmark size={84} tagline />
+        </h1>
+        <p className="mt-10 text-xl text-zinc-200">A coding interview that listens to how you explain your code</p>
         <p className="mt-3 max-w-xl text-base text-zinc-500">
           Solve a Python problem, talk through your reasoning, and get questions grounded in what you actually wrote.
         </p>
@@ -72,7 +72,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
         <button
           onClick={start}
           disabled={starting}
-          className="mt-10 rounded-xl bg-emerald-600 px-8 py-3.5 text-lg font-semibold text-white shadow-lg shadow-emerald-900/30 transition-colors hover:bg-emerald-500 disabled:opacity-70"
+          className="mt-10 rounded-xl bg-brand px-8 py-3.5 text-lg font-semibold text-white shadow-lg shadow-black/40 transition-colors hover:bg-brand-hover disabled:opacity-70"
         >
           {starting ? "Starting…" : "Start practice"}
         </button>

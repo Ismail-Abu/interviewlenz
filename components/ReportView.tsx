@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiError, EvidenceRef, Finding, Report, RunResult, Session } from "@/lib/contract";
 import { ReportSkeleton } from "./Skeletons";
+import { Wordmark } from "./Logo";
 
 export interface AttemptRecord {
   session: Session;
@@ -49,7 +50,7 @@ export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
-        <span className="text-xl font-semibold tracking-tight">Interviewlenz</span>
+        <Wordmark size={26} />
         <span className="text-base text-zinc-400">Interview report</span>
         <button
           onClick={onRetryAttempt}

@@ -8,6 +8,7 @@ import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { StartScreen, type MicStatus } from "./StartScreen";
+import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { openVoice, type VoiceMode } from "./liveAdapter";
@@ -207,7 +208,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
       <header className="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
-        <span className="text-xl font-semibold tracking-tight">Interviewlenz</span>
+        <Wordmark size={26} />
         <span className="hidden text-base text-zinc-400 md:inline">
           Python · {problem.title}
           {attemptNumber > 1 && ` · Attempt ${attemptNumber}`}
