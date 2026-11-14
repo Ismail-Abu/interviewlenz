@@ -95,6 +95,11 @@ export interface LiveClient {
   startMic(): Promise<void>;
   stopMic(): void;
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void;
+  // Make a code snapshot available to the model as silent context (initial sync
+  // and paused-edit snapshots) WITHOUT requesting a spoken turn. Coalesced by
+  // version; a newer snapshot supersedes an unsent older one. Optional so
+  // existing clients (e.g. the scripted mock) stay valid without implementing it.
+  syncCode?(snapshot: CodeSnapshot): void;
   end(): void;
   onState(cb: (state: LiveState) => void): void;
   onTurn(cb: (turn: TranscriptTurn) => void): void;

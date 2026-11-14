@@ -13,7 +13,7 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "./contract";
-import { formatRunContext, interviewerInstructions } from "./prompts";
+import { formatCodeContext, formatRunContext, interviewerInstructions } from "./prompts";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
 // conflict. The browser client must match the version the token was minted for.
@@ -58,9 +58,20 @@ class BrowserLiveClient implements LiveClient {
 
   private pendingInput = "";
   private pendingOutput = "";
-  // A run-context message waiting for the interviewer's current turn to end, so
-  // it does not cut them off.
-  private pendingRunContext: string | null = null;
+
+  // --- Code context sync + versioned ask queue --------------------------
+  // The newest code the student has (from edits or runs); currentBufferSource is
+  // its source. A late older Run never lowers these.
+  private currentBufferVersion = 0;
+  private currentBufferSource = "";
+  // Highest version whose source the model has already been given.
+  private lastSentVersion = 0;
+  // Runs awaiting delivery as a spoken-turn request; coalesced per version. Each
+  // carries the exact source + results captured for that Run.
+  private pendingRuns: { version: number; text: string }[] = [];
+  // True between the interviewer's first audio/transcript and turnComplete, so
+  // queued context waits for a natural turn boundary instead of interrupting.
+  private modelTurnActive = false;
 
   // Microphone input graph.
   private micStream: MediaStream | null = null;
@@ -176,27 +187,89 @@ class BrowserLiveClient implements LiveClient {
     if (this.state !== "speaking") this.setState("idle");
   }
 
-  sendRunContext(snapshot: CodeSnapshot, result: RunResult): void {
+  // Update the model's code context WITHOUT requesting a spoken turn (initial
+  // sync and paused-edit snapshots). A typing pause alone never asks a question.
+  syncCode(snapshot: CodeSnapshot): void {
     if (!this.session) return;
-    const text = formatRunContext(snapshot, result);
-    // Wait for a turn boundary: if the interviewer is mid-answer, queue it and
-    // flush on the next turnComplete so we do not interrupt them.
-    if (this.state === "speaking") {
-      this.pendingRunContext = text;
-      return;
-    }
-    this.sendText(text);
+    this.observeVersion(snapshot.codeVersion, snapshot.source);
+    this.flushIfIdle();
   }
 
-  private sendText(text: string): void {
+  // Request a spoken turn about a specific Run. The Run carries the exact source,
+  // version, and results captured for it, and is delivered as historical
+  // evidence if the student has since edited past it.
+  sendRunContext(snapshot: CodeSnapshot, result: RunResult): void {
     if (!this.session) return;
+    const version = result.codeVersion;
+    // Coalesce a re-run of the same version; keep the latest results.
+    this.pendingRuns = this.pendingRuns.filter((r) => r.version !== version);
+    this.pendingRuns.push({ version, text: formatRunContext(snapshot, result) });
+    // The Run's source is the buffer at its version, unless a newer edit already
+    // moved the buffer on (then this Run stays historical).
+    this.observeVersion(version, snapshot.source);
+    this.flushIfIdle();
+  }
+
+  // Record the newest code the student has. A higher version supersedes the
+  // buffer; an equal/older version never lowers it (a late v4 Run must not
+  // overwrite a current v5 buffer).
+  private observeVersion(version: number, source: string): void {
+    if (version >= this.currentBufferVersion) {
+      this.currentBufferVersion = version;
+      this.currentBufferSource = source;
+    }
+  }
+
+  // Flush only at a natural turn boundary: never while the interviewer speaks.
+  private flushIfIdle(): void {
+    if (!this.session || this.modelTurnActive) return;
+    this.flush();
+  }
+
+  private flush(): void {
+    if (!this.session) return;
+    const runs = [...this.pendingRuns].sort((a, b) => a.version - b.version);
+    const runCoversBuffer = runs.some((r) => r.version === this.currentBufferVersion);
+    const includeBuffer = this.currentBufferVersion > this.lastSentVersion && !runCoversBuffer;
+
+    const parts: string[] = [];
+    let requestTurn = false;
+
+    for (const run of runs) {
+      let text = run.text;
+      if (run.version < this.currentBufferVersion) {
+        const where = includeBuffer
+          ? "shown below as the current buffer"
+          : `already provided as the current buffer (version ${this.currentBufferVersion})`;
+        text += `\n(These results are from version ${run.version}; the student has since edited to version ${this.currentBufferVersion}, ${where}.)`;
+      }
+      parts.push(text);
+      requestTurn = true;
+    }
+
+    if (includeBuffer) {
+      parts.push(
+        formatCodeContext({
+          codeVersion: this.currentBufferVersion,
+          source: this.currentBufferSource,
+          at: new Date().toISOString(),
+        }),
+      );
+    }
+
+    if (parts.length === 0) return;
+
+    this.lastSentVersion = Math.max(this.lastSentVersion, this.currentBufferVersion, ...runs.map((r) => r.version));
+    this.pendingRuns = [];
+    if (requestTurn) this.modelTurnActive = true; // a turn is coming; hold further flushes
+
     try {
       this.session.sendClientContent({
-        turns: [{ role: "user", parts: [{ text }] }],
-        turnComplete: true,
+        turns: [{ role: "user", parts: [{ text: parts.join("\n\n") }] }],
+        turnComplete: requestTurn,
       });
     } catch {
-      // ignore; the next run will try again
+      // ignore; a later event will retry
     }
   }
 
@@ -222,13 +295,21 @@ class BrowserLiveClient implements LiveClient {
     }
     this.pendingInput = "";
     this.pendingOutput = "";
-    this.pendingRunContext = null;
+    this.pendingRuns = [];
+    this.currentBufferVersion = 0;
+    this.currentBufferSource = "";
+    this.lastSentVersion = 0;
+    this.modelTurnActive = false;
     this.setState("idle");
   }
 
   private handleMessage(message: LiveServerMessage): void {
     const audio = message.data; // concatenated base64 PCM (24 kHz)
-    if (audio) this.playAudio(audio);
+    if (audio) {
+      this.modelTurnActive = true; // the interviewer is producing a turn
+      this.setState("speaking");
+      this.playAudio(audio);
+    }
 
     const content = message.serverContent;
     if (!content) return;
@@ -243,6 +324,7 @@ class BrowserLiveClient implements LiveClient {
 
     if (content.outputTranscription?.text) {
       this.pendingOutput += content.outputTranscription.text;
+      this.modelTurnActive = true;
       this.setState("speaking");
       if (content.outputTranscription.finished) {
         this.emitTurn("interviewer", this.pendingOutput);
@@ -261,13 +343,10 @@ class BrowserLiveClient implements LiveClient {
         this.emitTurn("interviewer", this.pendingOutput);
         this.pendingOutput = "";
       }
+      this.modelTurnActive = false;
       this.setState(this.micActive ? "listening" : "idle");
-      // The interviewer finished; now it is safe to deliver a queued run.
-      if (this.pendingRunContext) {
-        const queued = this.pendingRunContext;
-        this.pendingRunContext = null;
-        this.sendText(queued);
-      }
+      // Natural turn boundary: deliver anything queued while the interviewer spoke.
+      this.flushIfIdle();
     }
   }
 
