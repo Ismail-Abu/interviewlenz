@@ -13,6 +13,7 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "./contract";
+import { formatRunContext, interviewerInstructions } from "./prompts";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
 // conflict. The browser client must match the version the token was minted for.
@@ -45,26 +46,6 @@ function floatToPcm16(input: Float32Array): Uint8Array {
   return new Uint8Array(out.buffer);
 }
 
-// Minimal placeholder for the Run-context wording. B3 owns the final text and
-// moves it into lib/prompts.ts; the shape here follows docs/CONTRACT.md.
-function formatRunContext(snapshot: CodeSnapshot, result: RunResult): string {
-  const lines: string[] = [];
-  if (result.status === "completed") {
-    lines.push(`[RUN v${result.codeVersion}] ${result.passed}/${result.total} passed.`);
-    for (const c of result.cases) {
-      if (!c.pass) {
-        lines.push(
-          `Failed: ${c.caseId} input ${c.input} expected ${c.expected} got ${c.actual ?? c.error ?? "error"}`,
-        );
-      }
-    }
-  } else {
-    lines.push(`[RUN v${result.codeVersion}] error: ${result.error.code} ${result.error.message}`);
-  }
-  lines.push("Code:", "```python", snapshot.source, "```");
-  return lines.join("\n");
-}
-
 class BrowserLiveClient implements LiveClient {
   private session: Session | null = null;
 
@@ -77,6 +58,9 @@ class BrowserLiveClient implements LiveClient {
 
   private pendingInput = "";
   private pendingOutput = "";
+  // A run-context message waiting for the interviewer's current turn to end, so
+  // it does not cut them off.
+  private pendingRunContext: string | null = null;
 
   // Microphone input graph.
   private micStream: MediaStream | null = null;
@@ -105,13 +89,7 @@ class BrowserLiveClient implements LiveClient {
   async connect(token: LiveTokenResponse, problem: Problem): Promise<void> {
     this.setState("connecting");
 
-    // Minimal interviewer instruction for B2. B3 replaces the wording via
-    // lib/prompts.ts.
-    const systemInstruction =
-      `You are a technical interviewer for the problem "${problem.title}". ` +
-      "The candidate is solving it in Python. Listen to their reasoning and ask short, " +
-      "specific follow-up questions about their approach, correctness, and complexity. " +
-      "Keep spoken responses brief.";
+    const systemInstruction = interviewerInstructions(problem);
 
     try {
       const ai = new GoogleGenAI({
@@ -200,10 +178,22 @@ class BrowserLiveClient implements LiveClient {
 
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void {
     if (!this.session) return;
+    const text = formatRunContext(snapshot, result);
+    // Wait for a turn boundary: if the interviewer is mid-answer, queue it and
+    // flush on the next turnComplete so we do not interrupt them.
+    if (this.state === "speaking") {
+      this.pendingRunContext = text;
+      return;
+    }
+    this.sendText(text);
+  }
+
+  private sendText(text: string): void {
+    if (!this.session) return;
     try {
       this.session.sendClientContent({
-        turns: [{ role: "user", parts: [{ text: formatRunContext(snapshot, result) }] }],
-        turnComplete: false,
+        turns: [{ role: "user", parts: [{ text }] }],
+        turnComplete: true,
       });
     } catch {
       // ignore; the next run will try again
@@ -232,6 +222,7 @@ class BrowserLiveClient implements LiveClient {
     }
     this.pendingInput = "";
     this.pendingOutput = "";
+    this.pendingRunContext = null;
     this.setState("idle");
   }
 
@@ -271,6 +262,12 @@ class BrowserLiveClient implements LiveClient {
         this.pendingOutput = "";
       }
       this.setState(this.micActive ? "listening" : "idle");
+      // The interviewer finished; now it is safe to deliver a queued run.
+      if (this.pendingRunContext) {
+        const queued = this.pendingRunContext;
+        this.pendingRunContext = null;
+        this.sendText(queued);
+      }
     }
   }
 
