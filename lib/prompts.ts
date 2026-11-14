@@ -46,6 +46,17 @@ export function formatRunContext(snapshot: CodeSnapshot, result: RunResult): str
   return lines.join("\n");
 }
 
+// A silent code-context update: makes the current working buffer available to
+// the model without asking anything. The source is line-numbered.
+export function formatCodeContext(snapshot: CodeSnapshot): string {
+  return [
+    `[CODE v${snapshot.codeVersion}] current working buffer (not run yet):`,
+    "```python",
+    numberLines(snapshot.source),
+    "```",
+  ].join("\n");
+}
+
 function numberLines(source: string): string {
   const rows = source.split("\n");
   const width = String(rows.length).length;

@@ -230,3 +230,26 @@ Backend is ready on `main` once b3-b4 merges; these are the only switches, all i
 - `components/liveAdapter.ts`: set `USING_MOCK_LIVE = false`; replace `createLiveClient()` to return `createLiveClient()` from `@/lib/live`; replace `fetchLiveToken` to `POST /api/live-token` with `{ sessionId }` and return the JSON (or the `ApiError` on non-200).
 - `components/reportAdapter.ts`: set `DEFAULT_REPORT_MODE = "api"` (the `"api"` branch already calls `POST /api/report`).
 - Requires `.env.local` with `GEMINI_API_KEY`, `LIVE_MODEL`, `REPORT_MODEL` (values above) on any machine that runs it; voice needs HTTPS + mic in the browser.
+
+### B5 • Live code-context sync (versioned) — Ismail (branch `live-context-sync`, WIP off PR #5)
+
+Separates updating the model's code context from requesting a spoken turn, and keeps the Live session aware of edits between Runs.
+
+Client contract (shared, proposed addition — non-breaking): `LiveClient.syncCode?(snapshot)` added in `lib/contract.ts` as an **optional** method, so the scripted `MockLiveClient` stays valid. `syncCode` updates context silently (`turnComplete:false`); `sendRunContext` is the only spoken-turn request (`turnComplete:true`).
+- `lib/prompts.ts`: `formatCodeContext(snapshot)` — a line-numbered `[CODE vN] current working buffer (not run yet)` block, no question.
+- `lib/live.ts`: versioned queue. Tracks `currentBufferVersion`/source (a higher version supersedes; a late older Run never lowers it) and `lastSentVersion`. `syncCode` coalesces superseded edits to the latest. Edits/Runs that arrive while the interviewer speaks are held and flushed at the next `turnComplete` (never interrupting). A Run carries the exact source/version/results captured for it; if the student has edited past it, it is delivered as historical evidence with the current buffer alongside. An edit and a Run on the same version are not sent/asked twice. `end()` clears the queue.
+
+Checks performed and outcome:
+- `dev/live-queue-check.mjs` (deterministic; real client, `@google/genai` stubbed to capture every `sendClientContent`). **All 10 pass.** Message order recorded:
+  1. initial sync → `[CODE v1]` tc:false
+  2. idle pauses → `[CODE v2]` tc:false, `[CODE v3]` tc:false
+  3. edits v4,v5 while speaking → nothing mid-turn; at `turnComplete` → `[CODE v5]` tc:false (v4 coalesced)
+  4. v4 Run after v5 edit → `[RUN v4]` tc:true (historical, names v5 as current); when both queued in a turn → one message `[RUN v4, CODE v5]` tc:true
+  5. edit v5 + Run v5 → one ask `[RUN v5]` tc:true, no duplicate `[CODE v5]`
+  6. `end()` → reconnect sends only `[CODE v1]` (no stale v9)
+- SDK/Live (real key, `v1beta`, production native-audio `LIVE_MODEL`): a `turnComplete:false` code update produced **0** messages in a 3.5 s window (no spoken turn), and after a `turnComplete:true` ask the spoken reply transcript was *"The distinctive constant name is QUOKKA_THRESHOLD_7."* — i.e. the spoken answer references a distinctive detail from an **unrun** edit. 
+- `npm run lint` clean; `npm run build` passes (TypeScript included).
+
+What Hamza wires in `components/` (after this merges): call `client.syncCode?.(snapshot)` once after `connect` (initial sync) and on a debounced editor pause (paused-edit snapshot); keep calling `sendRunContext` on Run. No change to the existing calls.
+
+Not done from the cloud session: the `f5-demo` working tree + its four modified files live on the laptop and can't be read here, so they are not in this branch. The in-browser spoken walkthrough (human speaking into the mic) is still Hamza's/your live confirmation; the Live mechanism above is verified against Gemini.
