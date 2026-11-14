@@ -270,3 +270,16 @@ Fix (backend, mine):
 Verified: fixed route end-to-end — `POST /api/live-token` → connect → spoken reply transcript "An apple is a fruit." (audio + transcription both present). `npm run lint` clean; `npm run build` passes. No `components/` changes; the frontend already renders `onTurn` turns, so no frontend handoff is needed for this bug.
 
 Pending (human, in browser): say a distinctive sentence, hear one reply, confirm the panel shows both turns once with correct speakers, and that Finish's report request carries those same turn IDs. Not observable from the cloud session.
+
+### B6 • Interview stages + answer tracking — Ismail (branch `b6-transcription-stages`, commit 2)
+
+Grounds the interviewer in the actual Problem and enforces one outstanding question at a time.
+- `lib/prompts.ts`: `interviewerInstructions(problem)` now includes the prompt, the worked examples (expected behavior), the constraints, and the `functionName`, plus the staged protocol: start by asking for the approach; ask exactly one question then wait; only a spoken student answer advances (an edit, Run, silence, or the interviewer's own words do not); follow up on a missing detail or on the exact operation that contradicts the code; after a Run discuss that version and its results; end with time complexity, then space, then one edge case, one at a time.
+- `lib/live.ts`: tracks an `outstanding` question (set when the interviewer asks / we request a turn; cleared only by a student turn). While outstanding, a Run is held (silent code context may still go out) and raised as a single ask at the next boundary after the student answers. Reset on `end()` (so Retry starts clean).
+
+Checks:
+- `dev/live-stages-check.mjs` (deterministic): a Run while a question is outstanding sends no ask; after the student answers it is raised as one ask; two Runs while answering still produce exactly one ask; an edit while outstanding does not count as an answer. **All pass.**
+- Grounded prompt (real model, text): student "nested loop … I think it's linear" + a passing Run → one question *"you have a nested loop … how many comparisons when all elements are unique?"* (one question, challenges the claim, references the real code).
+- `npm run lint` clean; `npm run build` passes.
+
+Pending (human, in browser): claim linear + run passing code → worst-case question and wait; answer + switch to a set → space-usage follow-up; then an edge-case question; and confirm an extra Run while answering does not skip a stage or add a second question. The gate is verified deterministically above; the spoken multi-turn flow is the live confirmation.

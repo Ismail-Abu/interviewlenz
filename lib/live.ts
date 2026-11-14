@@ -72,6 +72,11 @@ class BrowserLiveClient implements LiveClient {
   // True between the interviewer's first audio/transcript and turnComplete, so
   // queued context waits for a natural turn boundary instead of interrupting.
   private modelTurnActive = false;
+  // True while the interviewer has asked a question and is waiting for the
+  // student's spoken answer. Only a student turn clears it (an edit, Run, or
+  // silence does not), so an extra Run cannot pose a second question or skip a
+  // stage.
+  private outstanding = false;
 
   // Microphone input graph.
   private micStream: MediaStream | null = null;
@@ -228,7 +233,11 @@ class BrowserLiveClient implements LiveClient {
 
   private flush(): void {
     if (!this.session) return;
-    const runs = [...this.pendingRuns].sort((a, b) => a.version - b.version);
+    // Hold spoken-turn requests while a question is outstanding (waiting for the
+    // student): an edit or Run must not pose a second question or skip a stage.
+    // Silent code context may still go out.
+    const canAsk = !this.outstanding;
+    const runs = canAsk ? [...this.pendingRuns].sort((a, b) => a.version - b.version) : [];
     const runCoversBuffer = runs.some((r) => r.version === this.currentBufferVersion);
     const includeBuffer = this.currentBufferVersion > this.lastSentVersion && !runCoversBuffer;
 
@@ -255,13 +264,19 @@ class BrowserLiveClient implements LiveClient {
           at: new Date().toISOString(),
         }),
       );
+      this.lastSentVersion = Math.max(this.lastSentVersion, this.currentBufferVersion);
     }
 
     if (parts.length === 0) return;
 
-    this.lastSentVersion = Math.max(this.lastSentVersion, this.currentBufferVersion, ...runs.map((r) => r.version));
-    this.pendingRuns = [];
-    if (requestTurn) this.modelTurnActive = true; // a turn is coming; hold further flushes
+    if (canAsk && runs.length > 0) {
+      this.lastSentVersion = Math.max(this.lastSentVersion, ...runs.map((r) => r.version));
+      this.pendingRuns = []; // delivered as an ask
+    }
+    if (requestTurn) {
+      this.modelTurnActive = true; // a turn is coming; hold further flushes
+      this.outstanding = true; // we just posed a question
+    }
 
     try {
       this.session.sendClientContent({
@@ -300,6 +315,7 @@ class BrowserLiveClient implements LiveClient {
     this.currentBufferSource = "";
     this.lastSentVersion = 0;
     this.modelTurnActive = false;
+    this.outstanding = false;
     this.setState("idle");
   }
 
@@ -449,6 +465,14 @@ class BrowserLiveClient implements LiveClient {
       text: trimmed,
       at: new Date().toISOString(),
     });
+    if (speaker === "student") {
+      // Only a real student turn answers the outstanding question; a held Run
+      // (if any) may now be raised at this boundary.
+      this.outstanding = false;
+      this.flushIfIdle();
+    } else {
+      this.outstanding = true; // the interviewer just asked; wait for the student
+    }
   }
 }
 
