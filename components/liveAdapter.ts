@@ -12,6 +12,8 @@ import type {
 // The only place the UI touches voice. When Ismail's lib/live.ts and
 // POST /api/live-token merge, replace these two bodies with the real client
 // and a fetch to /api/live-token, and set USING_MOCK_LIVE to false.
+// Agreed with Ismail: lib/live.ts exports a factory createLiveClient(), and
+// turn IDs stay unique across reconnects within a session.
 export const USING_MOCK_LIVE = true;
 
 export async function fetchLiveToken(sessionId: string): Promise<LiveTokenResponse | ApiError> {
@@ -45,6 +47,7 @@ class MockLiveClient implements LiveClient {
   private turnCbs: ((t: TranscriptTurn) => void)[] = [];
   private errorCbs: ((e: ApiError) => void)[] = [];
   private timers: ReturnType<typeof setTimeout>[] = [];
+  private connected = false;
   private micOn = false;
   private script = [
     "I'd keep a set of numbers I've seen and return True as soon as one repeats.",
@@ -60,6 +63,7 @@ class MockLiveClient implements LiveClient {
     void problem;
     this.emitState("connecting");
     await delay(500);
+    this.connected = true;
     this.emitState("idle");
   }
 
@@ -75,12 +79,38 @@ class MockLiveClient implements LiveClient {
     this.emitState("idle");
   }
 
+  // Scripted interviewer reply that reflects the run, standing in for Live's
+  // own question about the implementation and outcome.
   sendRunContext(snapshot: CodeSnapshot, result: RunResult) {
-    void snapshot;
-    void result;
+    if (!this.connected) return;
+    const v = snapshot.codeVersion;
+    let text: string;
+    if (result.status === "error") {
+      text =
+        result.error.code === "syntax_error"
+          ? `Version ${v} didn't parse${result.error.line ? ` (line ${result.error.line})` : ""}: ${result.error.message}. What do you check first when Python rejects a function definition?`
+          : `Version ${v} couldn't run: ${result.error.message}. While that's sorted out, talk me through what your code should return for an empty list.`;
+    } else if (result.passed === result.total) {
+      text = `All ${result.passed}/${result.total} cases pass on version ${v}. What's the time and space complexity, and is there a version that uses less memory?`;
+    } else {
+      const failed = result.cases.filter((c) => !c.pass);
+      const first = failed[0];
+      text = `Version ${v} passes ${result.passed}/${result.total}. ${failed.map((c) => c.caseId).join(", ")} failed — for ${first.input} you returned ${first.actual ?? first.error} but expected ${first.expected}. Why does your approach miss that one?`;
+    }
+    this.clearTimers();
+    this.emitState("speaking");
+    this.timers.push(
+      setTimeout(() => {
+        if (!this.connected) return;
+        this.emitTurn("interviewer", text);
+        this.emitState(this.micOn ? "listening" : "idle");
+        if (this.micOn) this.scheduleExchange();
+      }, 900),
+    );
   }
 
   end() {
+    this.connected = false;
     this.micOn = false;
     this.clearTimers();
     this.emitState("idle");

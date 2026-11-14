@@ -55,6 +55,39 @@ Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either o
 - **Merge order** — Merge B1 (Ismail's branch), then #1 (f1), then #2 (f2). PR #2 contains the B1 commit until B1 lands on main.
 - **Contract question for Ismail** — CONTRACT.md does not say how lib/live.ts exports the client. Is it a factory such as `createLiveClient()` or a singleton? The adapter assumes a factory. It also assumes turn IDs stay unique across a reconnect within one session.
 
+## F3 handoff • Hamza • November 14 • passed against mocks (real voice waits on B2)
+
+- **Decision from Ismail** — lib/live.ts will export a factory, `createLiveClient(): LiveClient`. Turn IDs stay unique across reconnects within a session. liveAdapter.ts assumes both.
+- **Session memory** — ProblemRoom keeps one attempt's `turns`, `snapshots`, and `runs` in state. `sessionId`, `attemptId`, and `priorAttemptId` live in a ref, and a contract `Session` is assembled from both on Finish. The IDs are minted on first use in an event handler, because Next 16 Cache Components rejects `crypto.randomUUID()` during prerender. The header shows "N snapshots · N runs · N turns".
+- **Each Run** — Push a CodeSnapshot `{codeVersion, source, at}`, await `runCode` through runCodeAdapter, push the RunResult, then call `live.sendRunContext(snapshot, result)` if a live session is open.
+- **Mock interviewer** — MockLiveClient.sendRunContext emits a scripted interviewer turn built from the result: failing case IDs with input, actual, and expected; "All N/N pass" with a complexity question; or the syntax or runner error. The panel stays labeled MOCK VOICE.
+- **Finish** — A header button ends the live session and opens the report view.
+- **Files** — components/ProblemRoom.tsx, components/liveAdapter.ts.
+
+## F4 handoff • Hamza • November 14 • passed against fixtures (real report waits on B4)
+
+- **Report** — On Finish, `requestReport(session)` in components/reportAdapter.ts returns fixtures/report.json labeled FIXTURE DATA, with the real sessionId and attemptId echoed. The fixture's evidence (t1, code v3, run v4 c1) is remapped to this attempt's first student turn, latest fully passing run, and first failing run and case, so the links resolve. Version numbers in the summaries are rewritten to match. A finding with no counterpart in the attempt becomes `insufficient_evidence` with no refs, the only rating the contract allows to be empty. A dev "Report" selector offers Fixture, "Fixture: 503 once, then OK", and `/api/report`, which POSTs `{session}` and maps non-200 responses to ApiError.
+- **Report view** — Next step is shown prominently at the top. Each finding shows its category, a rating badge (strong green, ok blue, needs_work red, insufficient_evidence grey), its summary, and clickable evidence chips. A turn chip scrolls to and highlights that transcript turn. A code chip shows that snapshot's source with the cited lines highlighted. A run chip shows that run's cases with the cited case highlighted.
+- **Retry problem** — The prior record and its report are kept. A new attemptId is created with priorAttemptId set and the same sessionId. Turns, snapshots, and runs are reset, the starter code is restored, and codeVersion returns to 1. After the next Finish both reports appear side by side, and "retry of …" names the prior attempt.
+- **Report error** — A 503 shows "Report unavailable", the message, "Your session is saved", and a Retry report button that re-requests the same attempt.
+- **Files** — components/reportAdapter.ts (new), components/ReportView.tsx (new), components/ProblemRoom.tsx.
+
+### F3 + F4 check (`npm run dev`, Edge driven with Playwright, real Pyodide runner)
+
+1. Start interview → mock student turn t1.
+2. Buggy adjacent-only solution → 3/4. Interviewer t2: "Version 2 passes 3/4. c1 failed — for nums = [1, 2, 3, 1] you returned False but expected True…"
+3. Correct set solution → 4/4. Interviewer t3: "All 4/4 cases pass on version 3. What's the time and space complexity…" The header showed **2 snapshots · 2 runs · 3 turns**.
+4. Finish → Attempt 1 report labeled FIXTURE DATA, with the next step and three findings.
+   - The Transcript t1 chip highlighted t1 and scrolled it into view.
+   - The Code v3 · lines 1–2 chip showed the correct solution with 2 lines highlighted.
+   - The Run v2 · c1 chip showed 3/4 with c1 highlighted (expected True, got False).
+5. Retry problem → 0 snapshots · 0 runs · 0 turns, starter code restored, "Attempt 2" shown.
+6. Set Report to "503 once", ran the correct solution, Finish → "Report unavailable / Report provider unavailable / Your session is saved". Retry report → the Attempt 2 report loaded ("retry of" attempt 1).
+7. The two cards sat side by side at the same top offset. Attempt 2 had no spoken turn or failing run, so those findings showed Insufficient evidence, and Approach cited Code v2.
+8. The browser console logged no errors. `npm run lint` shows 0 errors (two warnings, both in Ismail's dev/runner-check.mjs), and `npm run build` passes.
+
+**Still mocked** — Voice: the token and LiveClient are scripted in components/liveAdapter.ts, labeled MOCK VOICE, until B2. Report: fixtures/report.json is remapped per attempt and labeled FIXTURE DATA, until B4; then set `DEFAULT_REPORT_MODE = "api"`. Run is real (B1 Pyodide). Not done: the real spoken F3 check (hearing the question change with the code), which needs B2 and B3.
+
 ## Mocked for demo
 
 Label any shown preview as mocked. These features need no working integrations during the sprint.
