@@ -4,6 +4,10 @@ Interviewlenz helps CS students practice explaining their decisions while they c
 
 **Project status:** Planning. This repository currently contains the team brief and [full build plan](INTERVIEWLENZ_PLAN.md). The plan includes shared API contracts, acceptance checks, and the first AI prompts for each teammate.
 
+## Start here on a new checkout
+
+Read [the agent instructions](AGENTS.md) and [the current assignments](CURRENT.md) first. Pick the task assigned to your role. The workflow below and the full plan describe the larger build sequence.
+
 ## First demo
 
 1. Open a Python problem and explain an approach aloud.
