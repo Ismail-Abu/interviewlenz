@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { Problem, RunResult } from "@/lib/contract";
+import type { ApiError, LiveClient, LiveState, Problem, RunResult, TranscriptTurn } from "@/lib/contract";
 import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
+import { VoicePanel } from "./VoicePanel";
 import { runCodeAdapter, setFixtureMode, USING_FIXTURES, type FixtureMode } from "./runCodeAdapter";
+import { createLiveClient, fetchLiveToken, isApiError, USING_MOCK_LIVE } from "./liveAdapter";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -19,6 +21,72 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<FixtureMode>("cycle");
   const sessionId = useRef<string | null>(null);
+  const getSessionId = () => (sessionId.current ??= crypto.randomUUID());
+
+  // Voice session (kept in browser memory per CONTRACT.md).
+  const live = useRef<LiveClient | null>(null);
+  const [liveState, setLiveState] = useState<LiveState | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [micOn, setMicOn] = useState(false);
+  const [turns, setTurns] = useState<TranscriptTurn[]>([]);
+  const [liveError, setLiveError] = useState<ApiError | null>(null);
+
+  useEffect(() => () => live.current?.end(), []);
+
+  async function handleConnect() {
+    setLiveError(null);
+    setConnecting(true);
+    try {
+      const token = await fetchLiveToken(getSessionId());
+      if (isApiError(token)) {
+        setLiveError(token);
+        setLiveState("error");
+        return;
+      }
+      const client = createLiveClient();
+      client.onState(setLiveState);
+      client.onTurn((t) => setTurns((prev) => [...prev, t]));
+      client.onError((e) => {
+        setLiveError(e);
+        setMicOn(false);
+      });
+      await client.connect(token, problem);
+      live.current = client;
+      setConnected(true);
+      await client.startMic();
+      setMicOn(true);
+    } catch {
+      setLiveError({ code: "provider_unavailable", message: "Could not start the voice session", retryable: true });
+      setLiveState("error");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleToggleMic() {
+    const client = live.current;
+    if (!client) return;
+    if (micOn) {
+      client.stopMic();
+      setMicOn(false);
+    } else {
+      try {
+        await client.startMic();
+        setMicOn(true);
+      } catch {
+        setLiveError({ code: "provider_unavailable", message: "Microphone unavailable", retryable: true });
+      }
+    }
+  }
+
+  function handleEnd() {
+    live.current?.end();
+    live.current = null;
+    setConnected(false);
+    setMicOn(false);
+    setLiveState(null);
+  }
 
   function handleEdit(next: string) {
     setSource(next);
@@ -26,11 +94,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   async function handleRun() {
-    sessionId.current ??= crypto.randomUUID();
     setRunning(true);
     try {
       const res = await runCodeAdapter({
-        sessionId: sessionId.current,
+        sessionId: getSessionId(),
         problemId: problem.id,
         codeVersion,
         language: "python",
@@ -72,8 +139,22 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       </header>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="min-h-0 overflow-y-auto border-zinc-800 lg:border-r">
-          <ProblemPanel problem={problem} />
+        <div className="flex min-h-0 flex-col border-zinc-800 lg:border-r">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ProblemPanel problem={problem} />
+          </div>
+          <VoicePanel
+            connected={connected}
+            connecting={connecting}
+            micOn={micOn}
+            state={liveState}
+            turns={turns}
+            error={liveError}
+            mocked={USING_MOCK_LIVE}
+            onConnect={handleConnect}
+            onToggleMic={handleToggleMic}
+            onEnd={handleEnd}
+          />
         </div>
 
         <div className="flex min-h-0 flex-col">

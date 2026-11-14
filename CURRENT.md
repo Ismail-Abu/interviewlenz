@@ -36,6 +36,18 @@ Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either o
 - **Check** — Fresh clone of `f1`, then `npm install && npm run dev`. Edge was driven with Playwright against the page. Problem, editor, and starter code render. Five keystrokes moved the version from v1 to v6. Four Runs showed the loading state and then displayed 4/4 passed; 3/4 with c1 FAIL (expected True, got False); "Syntax error on line 2" with a line-2 marker; and "Python worker could not initialize" with a retry note. The editor text was unchanged and the browser console logged no errors. `npm run lint` and `npm run build` pass.
 - **Dependencies for F2** — Ismail's `lib/runner.ts` (`runCode`, `preloadRunner`) and `lib/problems.ts`. Wiring means replacing the body of `runCodeAdapter` with `return runCode(req)`, setting `USING_FIXTURES` to false, and importing the problem from lib/problems.ts. The F2 voice work needs `lib/live.ts` and `app/api/live-token/route.ts`.
 
+## F2 handoff • Hamza • November 14 • frontend done, blocked on B1/B2
+
+- **Built** (branch `f2`, stacked on `f1`) — An Interviewer panel under the problem has Start interview, a mic mute/unmute toggle, End, and a live state indicator: connecting, listening, interviewer speaking, idle, or error. It also shows a scrolling transcript. Turns from `onTurn` are stored in session memory in ProblemRoom alongside sessionId. Token and client errors (ApiError) are shown inline.
+- **Files** — components/liveAdapter.ts (new), components/VoicePanel.tsx (new), components/ProblemRoom.tsx.
+- **Still mocked** — All voice goes through `components/liveAdapter.ts`. `fetchLiveToken` returns a fake token, and `createLiveClient` returns a scripted MockLiveClient that implements the contract's LiveClient with no real audio. The panel is labeled MOCK VOICE. Run still uses the F1 fixtures, because lib/runner.ts has not merged.
+- **Check** — Edge was driven with Playwright against `npm run dev`. Start moved the state to Listening. The mock student turn t1 switched the state to "Interviewer speaking", and interviewer turn t2 switched it back to Listening. Mute moved it to Idle, and no turns arrived in the next 3 s. After End and Start again, the transcript was kept and turn IDs continued at t3. Run still returned 4/4 with voice active, and the console logged no errors. `npm run lint` and `npm run build` pass. **The F2 completion check (a real spoken exchange) has not run.** It needs B1 and B2.
+- **To finish once Ismail merges** —
+  1. In runCodeAdapter, call `return runCode(req)` and set `USING_FIXTURES` to false. Call `preloadRunner()` on mount.
+  2. In liveAdapter, POST `{sessionId}` to `/api/live-token` and return the JSON (a 503 returns an ApiError). Return the real client from lib/live.ts and set `USING_MOCK_LIVE` to false.
+  3. Test over HTTPS or localhost, where microphone access is allowed.
+- **Contract question for Ismail** — CONTRACT.md does not say how lib/live.ts exports the client. Is it a factory such as `createLiveClient()` or a singleton? The adapter assumes a factory. It also assumes turn IDs stay unique across a reconnect within one session.
+
 ## Mocked for demo
 
 Label any shown preview as mocked. These features need no working integrations during the sprint.
