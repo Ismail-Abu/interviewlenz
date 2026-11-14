@@ -131,6 +131,41 @@ Hamza pushes the bare Next.js scaffold first, within 20 minutes, before either o
   - `npm run lint`: 0 problems. `npm run build`: passes, with `/api/live-token` and `/api/report` as dynamic routes.
 - **Not done: the real spoken check.** Saying "this is linear", hearing the two code-specific replies, and getting a real Gemini report were not performed. This machine has no `GEMINI_API_KEY`/`LIVE_MODEL`/`REPORT_MODEL` and no one speaking into a microphone, and the stubs in B and C don't exercise Gemini itself. Ismail's B2–B4 checks verified the Live socket, the question wording, and the report route with his key, but not through this UI. **#5 is not merged yet**, pending that spoken check.
 
+### F7 • code-context sync UI + transcript path — Hamza • November 14 • branch `f-code-sync` from `f5f80a0`
+
+PR #5 (`f5f80a0`) and the logo PR #8 are unchanged. **Discrepancy:** `syncCode` is in `lib/contract.ts` and the B5 entry but not yet in `docs/CONTRACT.md`. This work follows the type and the B5 notes (silent, coalesced by version, optional).
+
+- **Sync wiring** (`components/ProblemRoom.tsx`)
+  - When real voice connects, `client.syncCode?.(snapshot)` is called once with the buffer as it is then, including edits made while connecting. The scripted mock has no `syncCode`, so nothing is sent in mock mode.
+  - After that, each edit restarts a 2 s timer, so a burst of edits sends one sync with the latest version.
+  - The latest buffer lives in a ref, so neither the timer nor a late-resolving connect reads stale state.
+  - `sendRunContext(snapshot, result)` on Run is unchanged. A Run marks its version as synced, so no redundant sync of the same version follows.
+  - End, Finish, and Retry cancel a pending sync.
+- **Two existing gaps fixed** (connection generation counter):
+  - A connect that resolves after End, Finish, or Retry is now ended and dropped. Before, it was kept as a zombie session.
+  - State, turn, and error callbacks from an ended connection are ignored, so a late turn can't land in the next attempt.
+- **Test seam** (`components/liveAdapter.ts`) — In dev only (compiled out of production builds), a browser test can set `window.__interviewlenzTestLiveClient` to a `LiveClient` factory. It stands in for `lib/live.ts` behind the same token check, event gating, and fallback.
+
+**Checks: Edge via Playwright on `npm run dev`, 25/25 pass (4 consecutive runs).** Every one of these used an injected **test LiveClient** with `/api/live-token` stubbed to 200 — **no Gemini, no `lib/live.ts`**:
+1. Connect (with a 1.5 s connect delay and two edits during it) → exactly **one** `syncCode`, after connect, carrying the latest edit (v3). No extra sync while idle.
+2. Five edits 250 ms apart → nothing at 1.5 s, then exactly **one** sync, of the latest version (v8), sent 2004 ms after the last edit.
+3. Run → `sendRunContext` got the exact source, version v9, and 4/4 results. No `syncCode` for v9 afterwards.
+4. Test client emits student `t901` "PURPLE ARMADILLO…" and interviewer `t902` "ZEBRA-42…" → exactly two transcript items, in order, labeled You · t901 and Interviewer · t902. The session shows 2 turns.
+5. Finish with an edit pending → the `/api/report` request's `session.turns` is exactly `[t901 student, t902 interviewer]` with the same text. The pending edit was never synced.
+6. Retry → a late turn emitted by the old client does not appear, and the new attempt shows 0/0/0 with no syncs. A new connection syncs the starter buffer once (v1); a stale-client turn is ignored while the new client's turn appears.
+7. Finish while still connecting → that connection is ended when it resolves and never syncs.
+
+Regression (from #5, **not** test-client):
+- A. Real routes (503 without a key) → "MOCK VOICE (no API key)" and "FIXTURE DATA (no API key)".
+- B. Real `lib/live.ts` with a stubbed 200 token → opens the Gemini `v1beta` socket, then falls back cleanly with no error banner.
+- C. Stubbed 200 report → no fixture badge, all evidence links land, Retry resets.
+
+`npm run lint` clean; `npm run build` passes.
+
+**Known, not fixed:** Monaco 0.55.1 sometimes logs `Uncaught (in promise) Canceled` when the editor is disposed (Finish right after an edit). It reproduces by disposing the editor directly, independent of this change. It never reaches a page `error` or `unhandledrejection` listener, so it can't be filtered from app code, and nothing is visible to the user.
+
+**Not done (needs Ismail's transcription fix and a real mic):** say a distinctive sentence, rename a variable without Run, ask what changed, then check that the transcript shows what was actually said and the spoken reply names the new variable.
+
 ## Mocked for demo
 
 Label any shown preview as mocked. These features need no working integrations during the sprint.

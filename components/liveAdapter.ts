@@ -21,6 +21,15 @@ import { createLiveClient } from "@/lib/live";
 // turn IDs stay unique across reconnects within a session.
 const REAL_CLIENT: (() => LiveClient) | null = createLiveClient;
 
+// Dev-only test seam: a browser test can set window.__interviewlenzTestLiveClient
+// to a LiveClient factory, which then stands in for lib/live.ts behind the same
+// token check, gating, and fallback. Production builds compile this out.
+function testClientFactory(): (() => LiveClient) | null {
+  if (process.env.NODE_ENV === "production" || typeof window === "undefined") return null;
+  const f = (window as unknown as { __interviewlenzTestLiveClient?: () => LiveClient }).__interviewlenzTestLiveClient;
+  return typeof f === "function" ? f : null;
+}
+
 // If the Live socket has not opened by then, use the scripted fallback.
 const REAL_CONNECT_TIMEOUT_MS = 10_000;
 
@@ -69,8 +78,9 @@ export async function openVoice(sessionId: string, problem: Problem, h: VoiceHan
   h.onState("connecting");
   const token = await fetchLiveToken(sessionId);
 
-  if (!isApiError(token) && REAL_CLIENT) {
-    const real = REAL_CLIENT();
+  const realFactory = testClientFactory() ?? REAL_CLIENT;
+  if (!isApiError(token) && realFactory) {
+    const real = realFactory();
     // Hold the real client's events until connect() settles: lib/live.ts emits
     // its error before throwing. On success, replay them and pass through; on
     // failure, drop them so they never overwrite the scripted fallback.

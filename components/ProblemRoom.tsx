@@ -61,21 +61,66 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [voiceMode, setVoiceMode] = useState<VoiceMode | null>(null);
   const [mockReason, setMockReason] = useState<string | undefined>();
 
-  useEffect(() => () => live.current?.end(), []);
+  // Code-context sync (B5): the real client gets the editor buffer silently via
+  // syncCode, once on connect and after a typing pause. Refs, not state, so a
+  // timer or a just-resolved connect always sees the latest buffer.
+  const latest = useRef({ codeVersion: 1, source: problem.starterCode });
+  const lastSyncedVersion = useRef<number | null>(null);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncEnabled = useRef(false); // true only while a real (non-mock) client is connected
+  // Bumped whenever a voice connection ends. Callbacks and a connect that
+  // resolves late check it, so nothing from an ended connection reaches the
+  // current attempt.
+  const connGen = useRef(0);
+
+  function cancelPendingSync() {
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = null;
+  }
+
+  function syncLatest() {
+    syncTimer.current = null;
+    const client = live.current;
+    if (!syncEnabled.current || !client?.syncCode) return;
+    const { codeVersion: v, source: src } = latest.current;
+    if (v === lastSyncedVersion.current) return;
+    client.syncCode({ codeVersion: v, source: src, at: new Date().toISOString() });
+    lastSyncedVersion.current = v;
+  }
+
+  useEffect(
+    () => () => {
+      cancelPendingSync();
+      live.current?.end();
+    },
+    [],
+  );
 
   async function handleConnect() {
     setLiveError(null);
     setConnecting(true);
+    const gen = ++connGen.current;
+    const current = () => gen === connGen.current;
     try {
       const conn = await openVoice(ids().sessionId, problem, {
-        onState: setLiveState,
-        onTurn: (t) => setAttempt((s) => ({ ...s, turns: [...s.turns, t] })),
+        onState: (s) => current() && setLiveState(s),
+        onTurn: (t) => current() && setAttempt((s) => ({ ...s, turns: [...s.turns, t] })),
         onError: (e) => {
+          if (!current()) return;
           setLiveError(e);
           setMicOn(false);
         },
       });
+      if (!current()) {
+        // Ended (End, Finish, or Retry) while connecting: drop this connection.
+        conn.client.end();
+        return;
+      }
       live.current = conn.client;
+      // Initial sync: the buffer as it is now, including edits made while connecting.
+      syncEnabled.current = conn.mode === "live";
+      lastSyncedVersion.current = null;
+      syncLatest();
       setVoiceMode(conn.mode);
       setMockReason(conn.mockReason);
       setConnected(true);
@@ -110,6 +155,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   function endLive() {
+    connGen.current++;
+    cancelPendingSync();
+    syncEnabled.current = false;
     live.current?.end();
     live.current = null;
     setConnected(false);
@@ -118,8 +166,16 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   function handleEdit(next: string) {
+    const v = latest.current.codeVersion + 1;
+    latest.current = { codeVersion: v, source: next };
     setSource(next);
-    setCodeVersion((v) => v + 1);
+    setCodeVersion(v);
+    // Debounce: each edit restarts the 2 s timer, so a burst of edits syncs
+    // once, with the latest version.
+    if (syncEnabled.current) {
+      cancelPendingSync();
+      syncTimer.current = setTimeout(syncLatest, 2000);
+    }
   }
 
   async function handleRun() {
@@ -141,6 +197,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       setResult(res.result);
       setFromFixture(res.fromFixture);
       live.current?.sendRunContext(snapshot, res.result);
+      // The Run carried this exact source, so a pending sync of the same
+      // version is redundant. A newer edit still syncs after its pause.
+      if (live.current) {
+        lastSyncedVersion.current = Math.max(lastSyncedVersion.current ?? 0, snapshot.codeVersion);
+      }
     } finally {
       setRunning(false);
     }
@@ -184,6 +245,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   function handleRetryAttempt() {
     const prior = ids();
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
+    // Finish already ended voice; ending again also drops anything still
+    // pending or still connecting from the previous attempt.
+    endLive();
+    lastSyncedVersion.current = null;
+    latest.current = { codeVersion: 1, source: problem.starterCode };
     setAttempt(EMPTY_ATTEMPT);
     setSource(problem.starterCode);
     setCodeVersion(1);
