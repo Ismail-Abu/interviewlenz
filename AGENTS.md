@@ -8,6 +8,7 @@ Read this file, CURRENT.md, README.md, and INTERVIEWLENZ_PLAN.md before editing.
 4. Implement only the assigned task. Use its listed inputs, outputs, owned files, and completion check. Coordinate shared contract changes with the other owner.
 5. At handoff, record the task ID, files changed, check performed and outcome, and outstanding dependencies. Update only your task entry in CURRENT.md. Stop at its completion check. The team opens the next task explicitly after reviewing the result.
    During the hackathon, CURRENT.md's schedule overrides this step: advance to your next task as soon as its completion check passes.
+6. Every time a completion check passes or something important changes, also update docs/EXPLAINED.md in plain English, following the "How to keep this file updated" rules at its bottom. Keep it readable for a teammate who is not reading the code.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
