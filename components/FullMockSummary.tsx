@@ -5,10 +5,11 @@ import type { AttemptRecord } from "./ReportView";
 import type { CodingSession, EvidenceRef, RoundType } from "@/lib/contract";
 import { Wordmark } from "./Logo";
 import { isBehavioralSession } from "@/lib/behavioral";
-import { nextAction, runFacts, scoreOverall, scoreRound, type RoundScore } from "@/lib/score";
+import { BAND_LABEL, nextAction, runFacts, scoreOverall, scoreRound, type RoundScore } from "@/lib/score";
 import { BandBadge, DebriefHero, DimensionMeters, RunFactsBlock, SHADOW } from "./report/Scorecard";
 import { FindingCard } from "./report/FindingCard";
 import { EvidenceReceipt } from "./report/EvidenceReceipt";
+import { ReportExtras } from "./report/ReportExtras";
 import { DownloadDebrief } from "./report/DownloadDebrief";
 import { buildDebrief, categoryLabel, describeEvidence, TRACK_LABEL, TRACK_SHORT } from "./report/debrief";
 
@@ -282,6 +283,7 @@ function TrackCard({
             </p>
           )}
           <DimensionMeters score={score} />
+          {score && <ReportExtras key={report.reportId} report={report} band={BAND_LABEL[score.band]} />}
           {facts && <RunFactsBlock facts={facts} complexity={score.dimensions.find((d) => d.category === "complexity")} />}
 
           <div className="rounded-xl bg-background border border-border p-4" data-testid={`takeaway-${round}`}>

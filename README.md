@@ -171,3 +171,9 @@ To enable real Gemini Live audio and evaluation locally:
 - **Hamza** — Frontend Systems, Interaction Design & Editorial Architecture
 
 *Built with passion at Hack the Nest 2026.*
+
+### Optional sponsor integrations
+
+Set server environment variables from .env.example and restart the app. Play question (with the interview mic muted) and Audio Debrief send the displayed question or round recommendation to ElevenLabs on demand. Without a key or when the service is unavailable, playback uses the device's speech synthesis when supported.
+
+To issue Proof of Skill receipts, configure SOLANA_DEVNET_SECRET_KEY with a dedicated Devnet keypair's JSON byte array and fund its public address with Devnet SOL. Each real round report rated Solid or Strong submits one signed memo at report generation. Its payload is the prefix `interviewlenz:skill:v1:` followed by the SHA-256 hex digest of the UTF-8 JSON array `[attemptId, band, createdAt]`. The band is lowercase and the timestamp is the report's ISO timestamp. Source, transcripts and names stay off-chain. The scorecard links to Explorer and can verify the confirmed memo and issuer. This attests to an app-generated practice assessment, without identity verification.

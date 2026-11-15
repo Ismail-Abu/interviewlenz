@@ -2,6 +2,7 @@
 
 import type { ComponentProps } from "react";
 import type { LiveState, TranscriptTurn } from "@/lib/contract";
+import { ReadAloud } from "./ReadAloud";
 import { VoicePanel } from "./VoicePanel";
 import { Wordmark } from "./Logo";
 import { AudioVisualizer } from "./behavioral/AudioVisualizer";
@@ -115,6 +116,10 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: P
               <AudioVisualizer state={turn.visualizerState} />
               <span>{turn.text}</span>
             </div>
+            {question && voice.state !== "speaking" && (!voice.micOn || !voice.connected) &&
+              <ReadAloud key={question.id + question.text} text={question.text} label="Play question" />}
+            {question && voice.connected && voice.micOn && voice.state !== "speaking" &&
+              <span className="text-xs text-muted-foreground">Mute your mic to replay the question.</span>}
           </div>
         </section>
 

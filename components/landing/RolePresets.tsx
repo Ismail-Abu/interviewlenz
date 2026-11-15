@@ -11,6 +11,7 @@ export interface RolePreset {
 }
 
 export const ROLE_PRESETS: RolePreset[] = [
+  { id: "solana-fintech", company: "Solana", role: "FinTech Engineer", level: "mid" },
   { id: "stripe-backend", company: "Stripe", role: "Backend Engineer", displayRole: "Backend Engineer", level: "mid" },
   { id: "google-swe-intern", company: "Google", role: "Software Engineer Intern", displayRole: "SWE Intern", level: "intern" },
   { id: "amazon-distsys", company: "Amazon", role: "Distributed Systems Engineer", displayRole: "Distributed Systems", level: "mid" },

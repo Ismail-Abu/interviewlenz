@@ -209,6 +209,8 @@ export interface Finding {
 
 export interface ReportRequest { session: Session }
 export interface Report {
+  skillProof?: { signature: string; digest: string; explorerUrl: string };
+  skillProofUnavailable?: boolean;
   reportId: string;
   sessionId: string;
   attemptId: string;
