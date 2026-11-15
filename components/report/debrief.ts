@@ -9,7 +9,8 @@ export const TRACK_LABEL: Record<RoundType, string> = {
   coding: "Technical Coding Evaluation",
   behavioral: "Behavioral Deep-Dive Evaluation",
 };
-export const TRACK_SHORT: Record<RoundType, string> = { coding: "Technical", behavioral: "Behavioral" };
+// Short names, matching the interview terminology (#32).
+export const TRACK_SHORT: Record<RoundType, string> = { coding: "Technical Coding", behavioral: "Behavioral Deep-Dive" };
 
 const CATEGORY_LABEL: Record<Finding["category"], string> = {
   correctness: "Correctness",

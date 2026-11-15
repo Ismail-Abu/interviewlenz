@@ -137,7 +137,7 @@ export function FullMockSummary({ codingRecord, behavioralRecord, onRetryReport,
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
             <button type="button" onClick={() => onPracticeAgain(actionRound)} className={coverBtn.primary} data-testid="score-practice-weaker">
-              Practice the {TRACK_SHORT[actionRound].toLowerCase()} evaluation again
+              Practice {TRACK_SHORT[actionRound]} again
             </button>
             <DownloadDebrief build={debrief} className={coverBtn.secondary} />
             <button type="button" onClick={onReturnHome} className={coverBtn.neutral} data-testid="action-return-home">
@@ -178,7 +178,7 @@ function TrackCard({
   );
   const practice = (
     <button type="button" onClick={onPracticeAgain} className={`${coverBtnSm.secondary} self-start`} data-testid={`practice-again-${round}`}>
-      {record ? `Practice ${TRACK_SHORT[round].toLowerCase()} again` : `Start the ${TRACK_SHORT[round].toLowerCase()} evaluation`}
+      {record ? `Practice ${TRACK_SHORT[round]} again` : `Start ${TRACK_SHORT[round]}`}
     </button>
   );
 

@@ -573,41 +573,41 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     const codingReportStatus = lastCodingRecord?.status;
 
     return (
-      <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100" data-testid="full-mock-transition" {...planMarker}>
-        <header className="flex items-center gap-4 border-b border-zinc-800 bg-zinc-950/95 px-6 py-3">
-          <Wordmark size={26} />
-          <span className="text-base text-zinc-400">Full Mock Interview · Transition</span>
+      <div data-surface="cream" className="flex min-h-screen flex-col bg-cream text-ink [color-scheme:light]" data-testid="full-mock-transition" {...planMarker}>
+        <header className="flex items-center gap-4 border-b border-cream-line bg-cream-2/95 px-6 py-4 shadow-sm">
+          <Wordmark size={26} tone="light" />
+          <span className="text-sm font-semibold text-ink-muted">Technical Coding Complete · Transition</span>
         </header>
 
         <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-12">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 shadow-2xl">
+          <div className="rounded-[28px] border border-cream-line/60 bg-cream-2 p-8 shadow-warm">
             <div className="mb-2 flex items-center justify-between">
-              <span className="rounded bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                ✓ Round 1 Complete
+              <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                ✓ Technical Coding Complete
               </span>
-              <span className="text-xs text-zinc-500">Step 1 of 2</span>
+              <span className="text-xs font-semibold text-ink-muted">Next: Behavioral Deep-Dive</span>
             </div>
 
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-50">Coding round complete</h1>
-            <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
+            <h1 className="mt-4 font-brand text-3xl font-bold tracking-tight text-ink">Technical coding interview complete</h1>
+            <p className="mt-2 text-sm text-ink-muted leading-relaxed">
               {lastCodingRun?.status === "completed"
                 ? `Your Python solution passed ${lastCodingRun.passed} of ${lastCodingRun.total} test cases.`
                 : "Your coding draft and interview responses have been saved."}
             </p>
 
-            <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-brand-coral mb-1">
-                Next Up: Round 2 · Behavioral Practice
+            <div className="mt-6 rounded-[20px] border border-cream-line/60 bg-white/80 p-5 shadow-sm">
+              <div className="text-xs font-bold uppercase tracking-wider text-maroon mb-1">
+                Next Up: Behavioral Deep-Dive Interview
               </div>
-              <p className="text-sm text-zinc-300 leading-relaxed">
-                The interviewer will transition to questions about your engineering experiences, technical decisions, and personal contributions.
+              <p className="text-sm text-ink-muted leading-relaxed">
+                The interviewer will transition to questions about your engineering experiences, technical trade-offs, and personal contributions.
               </p>
               {focusLabel && (
-                <p className="mt-2 text-xs text-zinc-400 font-medium">Tailored focus: {focusLabel}</p>
+                <p className="mt-2 text-xs text-maroon-deep font-semibold">Tailored focus: {focusLabel}</p>
               )}
               {codingReportStatus === "loading" && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500" data-testid="bg-report-loading">
-                  <span className="h-3 w-3 animate-spin rounded-full border border-zinc-600 border-t-zinc-200" />
+                <div className="mt-3 flex items-center gap-2 text-xs text-ink-muted" data-testid="bg-report-loading">
+                  <span className="h-3 w-3 animate-spin rounded-full border border-maroon border-t-transparent" />
                   Generating coding feedback in background…
                 </div>
               )}
@@ -617,7 +617,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               <button
                 type="button"
                 onClick={handleContinueToBehavioral}
-                className={`${btn.primary} flex-1 justify-center py-3 text-base font-semibold`}
+                className={`${btn.primary} flex-1 justify-center py-3 text-base font-semibold shadow-sm`}
                 data-testid="continue-behavioral"
               >
                 Continue to Behavioral Round →
@@ -636,7 +636,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               <button
                 type="button"
                 onClick={() => setView("summary")}
-                className="text-xs text-zinc-500 hover:text-zinc-300 underline-offset-4 hover:underline"
+                className="text-xs text-ink-muted hover:text-ink underline-offset-4 hover:underline"
                 data-testid="end-early"
               >
                 End interview early & view summary
@@ -671,7 +671,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         {practiceMode === "full-mock" && round === "coding" && (
           <div className="bg-cream-2 border-b border-cream-line px-6 py-3 flex items-center justify-between text-sm shadow-sm">
             <span className="text-ink-muted text-xs sm:text-sm font-medium">
-              Round 1 (Coding) feedback. Ready for Round 2?
+              Technical Coding feedback. Ready for Behavioral Deep-Dive?
             </span>
             <button
               onClick={handleContinueToBehavioral}
@@ -733,8 +733,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             </span>
           )}
           {practiceMode === "full-mock" && (
-            <span className="rounded-full bg-maroon/10 px-2.5 py-0.5 text-xs font-bold text-maroon">
-              Round 1 of 2: Technical
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-maroon/10 border border-maroon/20 px-3 py-1 text-xs font-bold text-maroon">
+              <span className="h-1.5 w-1.5 rounded-full bg-maroon" />
+              Technical Coding Interview
             </span>
           )}
         </div>
@@ -798,8 +799,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         </button>
       </header>
 
-      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] p-2 sm:p-4 gap-3 bg-cream">
-        <div className="flex shrink-0 flex-col overflow-hidden rounded-[22px] bg-[#1C1817] text-zinc-100 shadow-warm border border-cream-line/40 lg:min-h-0 lg:shrink">
+      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] p-3 sm:p-5 gap-4 bg-cream">
+        <div className="flex shrink-0 flex-col overflow-hidden rounded-[24px] bg-[#161312] text-zinc-100 shadow-warm border border-[#2D2623] lg:min-h-0 lg:shrink">
           <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0}>
             <ProblemPanel problem={problem} />
           </div>
@@ -822,15 +823,15 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           />
         </div>
 
-        <div className="flex flex-col overflow-hidden rounded-[22px] bg-[#1C1817] text-zinc-100 shadow-warm border border-cream-line/40 lg:min-h-0">
-          <div className="flex flex-wrap items-center justify-between border-b border-zinc-800 bg-[#241F1D] px-4 py-2.5 gap-2">
+        <div className="flex flex-col overflow-hidden rounded-[24px] bg-[#161312] text-zinc-100 shadow-warm border border-[#2D2623] lg:min-h-0">
+          <div className="flex flex-wrap items-center justify-between border-b border-[#2D2623] bg-[#201B19] px-5 py-3 gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2 font-mono text-xs sm:text-sm text-[#9A8C84]">
                 <span className="font-semibold text-zinc-200">solution.py · v{codeVersion}</span>
                 {result?.status === "completed" && (
                   <>
                     <span>·</span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3A28] px-2.5 py-0.5 text-xs font-semibold text-[#6EE7A0]">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3A28] border border-[#2E6B40] px-2.5 py-0.5 text-xs font-semibold text-[#6EE7A0]">
                       <span>{result.passed} / {result.total} passed</span>
                       <span>·</span>
                       <span>{result.durationMs} ms</span>
@@ -838,12 +839,12 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
                   </>
                 )}
               </div>
-              <p className="text-[11px] text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
+              <p className="mt-0.5 text-[11px] text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
             </div>
             <button
               onClick={handleRun}
               disabled={running}
-              className={`${btn.primary} min-w-[7rem] px-5 py-2 text-base`}
+              className={`${btn.primary} min-w-[7rem] px-5 py-2 text-sm font-semibold shadow-sm`}
               data-testid="run-btn"
             >
               {running ? (
@@ -861,7 +862,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           <div className="mobile-editor-pane bg-[#1e1e1e] lg:h-auto lg:min-h-0 lg:flex-[3]">
             <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
-          <div className="min-h-[260px] shrink-0 border-t border-zinc-800 lg:h-[38%] lg:shrink">
+          <div className="min-h-[260px] shrink-0 border-t border-[#2D2623] lg:h-[38%] lg:shrink">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
         </div>

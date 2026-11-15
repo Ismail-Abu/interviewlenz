@@ -178,11 +178,11 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
           </div>
         )}
 
-        {/* Round 1: Technical Coding Card */}
+        {/* Technical Coding Interview */}
         <section className="rounded-[26px] bg-cream-2 p-6 shadow-warm border border-cream-line/50">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-maroon">Round 1</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-maroon">Technical Coding Interview</span>
               <h2 className="font-brand text-2xl font-bold text-ink">Technical Coding</h2>
             </div>
             <span className="rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-ink-muted">
@@ -196,11 +196,11 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
           {renderRoundThemes("technical")}
         </section>
 
-        {/* Round 2: Behavioral Deep-Dive Card */}
+        {/* Behavioral Deep-Dive */}
         <section className="rounded-[26px] bg-cream-2 p-6 shadow-warm border border-cream-line/50">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-maroon">Round 2</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-maroon">Behavioral Deep-Dive</span>
               <h2 className="font-brand text-2xl font-bold text-ink">Behavioral Deep-Dive</h2>
             </div>
             <span className="rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-ink-muted">
@@ -276,7 +276,7 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
             )}
           </button>
           <span className="text-sm text-ink-muted">
-            Round 1 (Technical) followed immediately by Round 2 (Behavioral).
+            The Technical Coding Interview, followed immediately by the Behavioral Deep-Dive.
           </span>
         </div>
       </main>
