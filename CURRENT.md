@@ -166,6 +166,53 @@ Regression (from #5, **not** test-client):
 
 **Not done (needs Ismail's transcription fix and a real mic):** say a distinctive sentence, rename a variable without Run, ask what changed, then check that the transcript shows what was actually said and the spoken reply names the new variable.
 
+### F8 • Reconnect UI + attempt-scoped turn seeds — Hamza • November 14 • PR #10 (`f-code-sync`)
+
+**Tested commit `4db348f`** (tree `778913ff293b4922ff91aac4853985ac41f32868`) = `f88c92f` (F7) + Ismail's `5b7f31b` (PR #9; merged as `504d129`, clean, both handoffs kept) + this frontend change. Per `docs/CONTRACT.md` "Live code context, reconnect, and transcript IDs". Frontend files only: `components/ProblemRoom.tsx`, `components/VoicePanel.tsx`, `components/liveAdapter.ts`.
+
+- **Seeds** — Start passes the attempt's accepted-turn count as `turnSeed` to `createLiveClient` and to the scripted `MockLiveClient`, which is now seeded per instance instead of using a global counter. End → Start within an attempt builds a new client from the latest count. Retry resets the count to 0 and keeps the prior report.
+- **Reconnect** — When the real client reports `state "error"` (its disconnect signal; a mic failure only raises `onError`), the client is kept and the panel shows **Connection lost** and **Reconnect**. Clicking it fetches a fresh token for the same `sessionId` and calls `connect(freshToken, problem)` on the **same** client. There is no `openVoice`, no new client, no `startMic`, and no switch to the mock, so the mute choice is kept.
+  - The button is disabled while pending.
+  - A failed token or connect shows the error and Reconnect stays available.
+  - If End, Finish, or Retry happens while pending, the late result is ignored.
+  - Success clears the error.
+  - The existing initial sync, 2 s editor sync, and Run wiring are unchanged.
+- **Two small fixes found while testing** — `onError` no longer flips the mute toggle (it did, which broke mute preservation), and End clears a stale disconnect error.
+
+**Automated checks** (Edge via Playwright on `npm run dev`, no key). All reconnect and turn-ID checks used the **test LiveClient** (it mirrors lib/live.ts: seeded IDs; disconnect = `state "error"` + retryable `onError`), with `/api/live-token` stubbed per request:
+
+| Check | Result |
+|---|---|
+| First Start seeds 0; End → Start seeds 2; IDs t1, t2, t3 | PASS |
+| Scripted fallback seeded (intro is t4); IDs unique | PASS |
+| Real client after the mock seeded with the current count (4) | PASS |
+| Disconnect → Reconnect + "Connection lost" + error shown | PASS |
+| Double-click while pending → one token request; button disabled | PASS |
+| Token 503 → error shown, no `connect()`, retry allowed | PASS |
+| Token OK but socket fails → error shown, retry allowed | PASS |
+| Success → `connect()` on the **same** client with a fresh token each time (3 connects, 3 tokens); no new client; mic not restarted; still muted; no mock; error cleared | PASS |
+| IDs keep increasing after reconnect (t4 → t5) | PASS |
+| End during token fetch → no `connect()`, no stray error | PASS |
+| Finish during token fetch → no `connect()`; Retry empty, seeded 0, restarts at t1; prior report kept beside the new one | PASS |
+
+These ran three consecutive times with 30/30 each. Also on `4db348f`:
+- F7 sync/transcript suite, 25/25 (test client; the Run used real Pyodide).
+- Regression A/B/C (no-key fallbacks with real Pyodide; real `lib/live.ts` socket attempt; stubbed-200 report evidence links + Retry).
+- All seven of Ismail's `dev/live-*-check.mjs` checks pass.
+- `npm run lint` clean; `npm run build` passes.
+
+**Real-mic walkthrough — not run (no credentials or human mic on this machine).** Status per step, waiting on Ismail's configured laptop at `4db348f`:
+
+| Step | Result |
+|---|---|
+| Distinctive sentence appears once, correct speaker | not run |
+| 4/4 then 2/4; interviewer uses the latest result, one specific question | not run |
+| Disconnect → restore network → Reconnect: voice returns, mute kept, IDs increase, Gemini names the latest Run | not run |
+| Finish → `/api/report` 200, real report, evidence links resolve | not run |
+| Retry → empty attempt, prior report available | not run |
+
+PR #10 stays open until these are recorded.
+
 ## Mocked for demo
 
 Label any shown preview as mocked. These features need no working integrations during the sprint.
