@@ -8,7 +8,7 @@ import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { StartScreen, type MicStatus } from "./StartScreen";
-import { hasJob, type CandidateProfile } from "./landing/profile";
+import { hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
 import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
@@ -35,13 +35,21 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const idsRef = useRef<AttemptIds | null>(null);
   const ids = () => (idsRef.current ??= { sessionId: crypto.randomUUID(), attemptId: crypto.randomUUID() });
   const [attempt, setAttempt] = useState<AttemptData>(EMPTY_ATTEMPT);
-  const fullSession = (): Session => ({ ...ids(), problemId: problem.id, ...attempt });
+  const fullSession = (): Session => ({
+    ...ids(),
+    problemId: problem.id,
+    ...attempt,
+    ...(roleContext ? { roleContext } : {}),
+  });
   const [view, setView] = useState<"start" | "room" | "report">("start");
   const [records, setRecords] = useState<AttemptRecord[]>([]);
   const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
   // From the landing page. Browser-only and display-only: never added to the
   // Session, the token request, or the Live session (no backend fields for it).
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
+  // Text fields only, sent to the token route (every connect, incl. Reconnect)
+  // and in the Session for the report. Resume screenshots stay local.
+  const roleContext = profile ? toRoleContext(profile.job) : undefined;
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -137,6 +145,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           onError: (e) => current() && setLiveError(e),
         },
         turnCount.current,
+        roleContext,
       );
       if (!current()) {
         // Ended (End, Finish, or Retry) while connecting: drop this connection.
@@ -195,7 +204,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     // A late result is ignored if End, Finish, or Retry happened meanwhile.
     const current = () => gen === connGen.current && live.current === client;
     try {
-      const token = await fetchLiveToken(ids().sessionId);
+      const token = await fetchLiveToken(ids().sessionId, roleContext);
       if (!current()) return;
       if (isApiError(token)) {
         setLiveError(token);

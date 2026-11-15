@@ -5,6 +5,7 @@ import type {
   LiveState,
   LiveTokenResponse,
   Problem,
+  RoleContext,
   RunResult,
   TranscriptTurn,
 } from "@/lib/contract";
@@ -56,12 +57,12 @@ export function isApiError(value: unknown): value is ApiError {
 }
 
 // Also used by Reconnect: a fresh ephemeral token for the same session.
-export async function fetchLiveToken(sessionId: string): Promise<LiveTokenResponse | ApiError> {
+export async function fetchLiveToken(sessionId: string, roleContext?: RoleContext): Promise<LiveTokenResponse | ApiError> {
   try {
     const res = await fetch("/api/live-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify(roleContext ? { sessionId, roleContext } : { sessionId }),
     });
     const body = await res.json().catch(() => null);
     if (res.ok && body && typeof body.token === "string") return body as LiveTokenResponse;
@@ -84,9 +85,11 @@ export async function openVoice(
   problem: Problem,
   h: VoiceHandlers,
   turnSeed = 0,
+  // Optional target role; the token route locks it into the interviewer instruction.
+  roleContext?: RoleContext,
 ): Promise<VoiceConnection> {
   h.onState("connecting");
-  const token = await fetchLiveToken(sessionId);
+  const token = await fetchLiveToken(sessionId, roleContext);
 
   const realFactory = testClientFactory() ?? REAL_CLIENT;
   if (!isApiError(token) && realFactory) {

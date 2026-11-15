@@ -1,3 +1,5 @@
+import type { RoleContext } from "@/lib/contract";
+
 // What the student tells us on the landing page. Frontend-only: it stays in
 // this browser tab and is never sent to /api/live-token, /api/report, or the
 // Live session. The contract (lib/contract.ts, docs/CONTRACT.md) has no resume
@@ -41,6 +43,18 @@ export const RESUME_LIMITS = {
   maxBytes: 10 * 1024 * 1024,
   types: ["image/png", "image/jpeg", "image/webp"],
 } as const;
+
+// The only part of the profile that leaves the browser: the four text fields,
+// trimmed, as the shared RoleContext (lib/contract.ts). Undefined when empty,
+// so Skip / an empty setup sends nothing new. Resume images are never included.
+export function toRoleContext(job: JobInfo): RoleContext | undefined {
+  const ctx: RoleContext = {};
+  if (job.company.trim()) ctx.company = job.company.trim();
+  if (job.role.trim()) ctx.role = job.role.trim();
+  if (job.level) ctx.level = job.level;
+  if (job.listing.trim()) ctx.jobDescription = job.listing.trim();
+  return Object.keys(ctx).length ? ctx : undefined;
+}
 
 export function hasJob(job: JobInfo) {
   return Boolean(job.company.trim() || job.role.trim() || job.listing.trim());
