@@ -79,7 +79,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   return (
     // Cream is scoped to this wrapper ("beige marketing, dark app"): body and
     // the interview room keep the dark theme from globals.css.
-    <div className="min-h-screen bg-cream text-ink [color-scheme:light]">
+    <div data-surface="cream" className="min-h-screen bg-cream text-ink [color-scheme:light]">
       <main className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
         {/* Hero: 45 / 55 */}
         <section className="grid items-center gap-10 pb-12 pt-8 lg:grid-cols-[45fr_55fr] lg:gap-12 lg:pb-16 lg:pt-12">
