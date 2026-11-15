@@ -288,3 +288,68 @@ Checks performed and outcome:
 What Hamza wires in `components/` (after this merges): call `client.syncCode?.(snapshot)` once after `connect` (initial sync) and on a debounced editor pause (paused-edit snapshot); keep calling `sendRunContext` on Run. No change to the existing calls.
 
 Not done from the cloud session: the `f5-demo` working tree + its four modified files live on the laptop and can't be read here, so they are not in this branch. The in-browser spoken walkthrough (human speaking into the mic) is still Hamza's/your live confirmation; the Live mechanism above is verified against Gemini.
+
+### B6 • Transcription fix — Ismail (branch `b6-transcription-stages`, off f5f80a0)
+
+Ismail's browser retest (recorded): Gemini received both implementations after Run, including the update (code-delivery path works). The transcript did not display. Silent edit sync was outside this test.
+
+Trace (one exchange, ephemeral token → Gemini events → `lib/live.ts` → `onTurn` → UI), credentials/raw audio never logged:
+- **First point where text disappears: the ephemeral token configuration.** With the token the route minted (`liveConnectConstraints.config` = `{ responseModalities:[AUDIO], sessionResumption:{} }`), a real session returns audio and `turnComplete` but **zero** `outputTranscription` text. The locked config is authoritative, so the browser's `inputAudioTranscription`/`outputAudioTranscription` request was ignored. Adding transcription to the token config makes the transcript appear ("Banana is yellow." in the trace).
+- `lib/live.ts` buffering and `onTurn` are correct (deterministic check `dev/live-transcript-check.mjs`, 4/4): text chunks accumulate, a `finished` completion event with no text still flushes, `turnComplete` flushes a turn with no `finished`, no double-emit, student before interviewer, ids `t1…`.
+
+Fix (backend, mine):
+- `app/api/live-token/route.ts`: add `inputAudioTranscription: {}` and `outputAudioTranscription: {}` to the token's `liveConnectConstraints.config`.
+- `lib/live.ts`: handle transcription presence and the `finished` flag separately, so a text-less completion event still flushes the turn.
+- Code delivery is preserved: `sendRunContext` / `sendRealtimeInput` are unchanged.
+
+Verified: fixed route end-to-end — `POST /api/live-token` → connect → spoken reply transcript "An apple is a fruit." (audio + transcription both present). `npm run lint` clean; `npm run build` passes. No `components/` changes; the frontend already renders `onTurn` turns, so no frontend handoff is needed for this bug.
+
+Pending (human, in browser): say a distinctive sentence, hear one reply, confirm the panel shows both turns once with correct speakers, and that Finish's report request carries those same turn IDs. Not observable from the cloud session.
+
+### B6 • Interview stages + answer tracking — Ismail (branch `b6-transcription-stages`, commit 2)
+
+Grounds the interviewer in the actual Problem and enforces one outstanding question at a time.
+- `lib/prompts.ts`: `interviewerInstructions(problem)` now includes the prompt, the worked examples (expected behavior), the constraints, and the `functionName`, plus the staged protocol: start by asking for the approach; ask exactly one question then wait; only a spoken student answer advances (an edit, Run, silence, or the interviewer's own words do not); follow up on a missing detail or on the exact operation that contradicts the code; after a Run discuss that version and its results; end with time complexity, then space, then one edge case, one at a time.
+- `lib/live.ts`: tracks an `outstanding` question (set when the interviewer asks / we request a turn; cleared only by a student turn). While outstanding, a Run is held (silent code context may still go out) and raised as a single ask at the next boundary after the student answers. Reset on `end()` (so Retry starts clean).
+
+Checks:
+- `dev/live-stages-check.mjs` (deterministic): a Run while a question is outstanding sends no ask; after the student answers it is raised as one ask; two Runs while answering still produce exactly one ask; an edit while outstanding does not count as an answer. **All pass.**
+- Grounded prompt (real model, text): student "nested loop … I think it's linear" + a passing Run → one question *"you have a nested loop … how many comparisons when all elements are unique?"* (one question, challenges the claim, references the real code).
+- `npm run lint` clean; `npm run build` passes.
+
+Pending (human, in browser): claim linear + run passing code → worst-case question and wait; answer + switch to a set → space-usage follow-up; then an edge-case question; and confirm an extra Run while answering does not skip a stage or add a second question. The gate is verified deterministically above; the spoken multi-turn flow is the live confirmation.
+
+### B6 • Run-evidence delivery + disconnect preservation (PR #9, continues from d62133b) — Ismail
+
+Fixes two cases from Ismail's browser retest.
+
+1. **Stale score (Gemini reported the latest run as 4/4 when v3 scored 2/4).** The client now *separates sending completed-Run evidence from requesting a spoken follow-up*. On every Run it sends `[RUN vN] score + line-numbered source` as **silent** context (`turnComplete:false`) immediately — even while a question is outstanding — so the model's run state is always accurate (version + source + score kept together in one message). The spoken follow-up (`turnComplete:true`) is a separate, gated step. A version that has run is never also labeled `[CODE vN] not run yet`.
+2. **Lost Run on disconnect.** `sendRunContext`/`syncCode` now record the Run/buffer even with no open socket. An unexpected close or a send failure exposes the disconnected state (`onState("error")` + a retryable `onError`) and **preserves** the latest Run for the attempt; `connect()` on the same client restores the buffer + latest Run to the fresh session and re-asks. `end()` (and therefore Retry) clears it.
+
+Partial-transcript safety: the follow-up fires only after a *completed* student turn and never while `pendingInput` is non-empty, so an interim transcript cannot trigger a question mid-answer.
+
+Deterministic regression tests — all pass:
+- `dev/live-run-evidence-check.mjs` (new): v3 2/4 evidence delivered promptly while outstanding; v3 never re-labeled "not run yet"; version+source+score in one message; follow-up after the answer states 2/4 (not 4/4); partial transcript triggers nothing, completed answer raises one follow-up.
+- `dev/live-disconnect-check.mjs` (new): socket close and send failure both expose the error state; a Run while disconnected is not transmitted but is restored (evidence + one grounded follow-up) on reconnect; `end()` clears it.
+- `dev/live-queue-check.mjs` (updated to the separated evidence/ask protocol), `dev/live-stages-check.mjs` and `dev/live-transcript-check.mjs` (unchanged): all pass. The commit-1 transcription fix is untouched.
+- `npm run lint` clean; `npm run build` passes.
+
+Gemini-side verification (real key, v1beta, native-audio; mic/browser not used): after v2 4/4 then a silent `[RUN v3] 2/4`, asked "most recent run version and score?" → **"Version 3 passed 2/4 tests."** (no longer 4/4). On a reconnect that re-delivers the v3 evidence, the interviewer grounded its question in the v3 set implementation (it asked about complexity rather than restating the score verbatim, which is acceptable).
+
+Pending (human, in browser) — left to Ismail: on one real socket, claim linear, run v2 4/4, edit to v3, run v3 2/4 while answering, and confirm Gemini identifies v3 as 2/4 and asks one question grounded in that code; then force a socket close, run again, and confirm the evidence and a grounded question survive the reconnect.
+
+### B6 • Browser reconnect + attempt-scoped transcript IDs (PR #9) — Ismail
+
+Addresses Hamza's two PR #9 findings (the queue 4d "failure" was a stale B5 expectation, already fixed at `7285bbb`).
+
+Changed files (branch `b6-transcription-stages`): `lib/live.ts` (reconnect + turn-ID), `docs/CONTRACT.md` (new "Live code context, reconnect, and transcript IDs" section), `CURRENT.md`, and new `dev/live-reconnect-check.mjs` + `dev/live-turnid-check.mjs`. No frontend, token-route, `f5-polish`, `live-context-wip`, or `lib/contract.ts` changes.
+
+- **Reconnect** now runs on the current attempt's existing client. `connect()` doubles as reconnect: it is epoch-guarded so a double-click, a failed retry, or late open/message/error/close events from a superseded socket cannot overwrite the new connection or append turns to a finished attempt. One mic + one playback path persist across a reconnect (no second `startMic()`), preserving mute. An unexpected close/send-failure exposes `onState("error")` + a retryable `onError` and preserves the latest Run (incl. a Run completed offline); `connect(freshToken, problem)` restores the buffer + latest-Run evidence, then one grounded follow-up. `end()` clears it and invalidates any in-flight reconnect.
+- **Transcript IDs** are attempt-scoped: `createLiveClient(options?: { turnSeed?: number })`. Reconnecting the same client continues numbering; an End→Start within the attempt builds a fresh client seeded with `turnSeed = turns-so-far`; a new attempt (Retry) seeds 0. No global counter.
+
+Checks (all pass):
+- Deterministic (7 suites): `live-transcript`, `live-queue`, `live-stages`, `live-run-evidence`, `live-disconnect`, and new `live-reconnect` (restore after fresh-token reconnect with correct version/source/score/cases + one follow-up; double-reconnect keeps only the latest socket and ignores stale callbacks; failed retry preserves the Run; End during reconnect restores nothing and old events add no turns; cleared evidence does not replay) and `live-turnid` (unique t1..t4 across reconnect and End→Start; Retry may restart).
+- `npm run lint` clean; `npm run build` passes.
+- Direct Gemini (real key, `v1beta`, native-audio; no mic): a fresh-session restore of the v3 2/4 evidence answered "Version 3 passed 2 out of 4 test cases." — identifies v3 2/4 after reconnect. (The 4/4 → 2/4 within one socket was already confirmed.)
+
+Pending (human, in browser) — Hamza wires the reconnect control on PR #10, then the full walkthrough (below in the handoff) is run with a real key + mic.

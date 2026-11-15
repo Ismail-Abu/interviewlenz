@@ -121,30 +121,35 @@ check("3a edits v4,v5 while speaking -> nothing sent mid-turn", drain(), JSON.st
 turnComplete();
 check("3b at turnComplete -> single silent CODE v5 (v4 coalesced)", drain(), JSON.stringify([{ m: ["CODE v5"], tc: false }]));
 
-// 4) A v4 Run completing after a v5 edit -> v4 historical, v5 current, one ask.
+// 4) A v4 Run completing after a v5 edit -> v4 historical, v5 current. Evidence
+//    (silent) is delivered separately from the spoken follow-up (ask).
 c = await fresh();
 c.syncCode(snap(5));
 check("4a buffer synced to v5", drain(), JSON.stringify([{ m: ["CODE v5"], tc: false }]));
 c.sendRunContext(snap(4), run(4));
-check("4b late v4 Run -> RUN v4 (historical), one spoken turn", drain(), JSON.stringify([{ m: ["RUN v4"], tc: true, h: true }]));
+check("4b late v4 Run -> historical evidence (silent), then one follow-up (ask)", drain(),
+  JSON.stringify([{ m: ["RUN v4"], tc: false, h: true }, { m: ["RUN v4"], tc: true }]));
 
-// 4') Same, but v5 edit and v4 Run both arrive during a turn.
+// 4') Same, but v5 edit and v4 Run both arrive during a turn, and the interviewer
+//     then completes a spoken turn -> a question is outstanding, so the evidence
+//     flushes at the boundary while the follow-up waits for the student.
 c = await fresh();
 speak();
 c.syncCode(snap(5));
 c.sendRunContext(snap(4), run(4));
 check("4c v5 edit + v4 Run queued during a turn -> nothing mid-turn", drain(), JSON.stringify([]));
 turnComplete();
-check("4d flush -> one message: RUN v4 historical + CODE v5 current, one ask", drain(),
-  JSON.stringify([{ m: ["RUN v4", "CODE v5"], tc: true, h: true }]));
+check("4d at boundary: historical v4 + current v5 evidence (silent); ask deferred while outstanding", drain(),
+  JSON.stringify([{ m: ["RUN v4", "CODE v5"], tc: false, h: true }]));
 
-// 5) Avoid asking twice when an edit and a Run cover the same version.
+// 5) An edit and a Run on the same version: evidence once (silent) then one
+//    follow-up; the run version is never also sent as a "not run yet" buffer.
 c = await fresh();
 c.syncCode(snap(5));
 drain();
 c.sendRunContext(snap(5), run(5));
-check("5 edit v5 then Run v5 -> one ask (RUN v5), no duplicate CODE v5", drain(),
-  JSON.stringify([{ m: ["RUN v5"], tc: true }]));
+check("5 edit v5 then Run v5 -> evidence (silent) then one ask, no duplicate CODE v5", drain(),
+  JSON.stringify([{ m: ["RUN v5"], tc: false }, { m: ["RUN v5"], tc: true }]));
 
 // 6) Clear queued work on session end.
 c = await fresh();

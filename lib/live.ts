@@ -13,7 +13,7 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "./contract";
-import { formatCodeContext, formatRunContext, interviewerInstructions } from "./prompts";
+import { formatCodeContext, formatRunEvidence, formatRunFollowup, interviewerInstructions } from "./prompts";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
 // conflict. The browser client must match the version the token was minted for.
@@ -55,23 +55,45 @@ class BrowserLiveClient implements LiveClient {
 
   private state: LiveState = "idle";
   private turnSeq = 0;
+  // A new epoch per connect(); late callbacks from a superseded socket are ignored.
+  private connectionSeq = 0;
 
   private pendingInput = "";
   private pendingOutput = "";
 
-  // --- Code context sync + versioned ask queue --------------------------
-  // The newest code the student has (from edits or runs); currentBufferSource is
-  // its source. A late older Run never lowers these.
+  // --- Code context + completed-Run evidence + follow-up gating ----------
+  // The newest code the student has (from edits or runs). A late older Run never
+  // lowers these. Preserved across a disconnect for this attempt.
   private currentBufferVersion = 0;
   private currentBufferSource = "";
-  // Highest version whose source the model has already been given.
-  private lastSentVersion = 0;
-  // Runs awaiting delivery as a spoken-turn request; coalesced per version. Each
-  // carries the exact source + results captured for that Run.
-  private pendingRuns: { version: number; text: string }[] = [];
-  // True between the interviewer's first audio/transcript and turnComplete, so
-  // queued context waits for a natural turn boundary instead of interrupting.
+  // Highest "not run yet" buffer version this session has received.
+  private lastSentBufferVersion = 0;
+  // Versions that have been run (never labeled "not run yet").
+  private runVersions = new Set<number>();
+  // The most recent completed Run, kept version+source+score together and
+  // preserved for the whole attempt so it can be restored after a reconnect.
+  private latestRun: { epoch: number; snapshot: CodeSnapshot; result: RunResult } | null = null;
+  private runEpoch = 0; // increments per Run; identifies the latest Run
+  private deliveredRunEpoch = 0; // latest Run epoch this session has received as evidence
+  // We owe a spoken follow-up about latestRun (separate from sending evidence).
+  private followupOwed = false;
+  // True between the interviewer's first audio/transcript and its turnComplete.
   private modelTurnActive = false;
+  // True while the interviewer has asked a question and is waiting for the
+  // student's spoken answer. Only a completed student turn clears it (an edit,
+  // Run, silence, or partial transcript does not), so an extra Run cannot pose a
+  // second question or skip a stage.
+  private outstanding = false;
+  // The session dropped unexpectedly (vs. an intentional end()).
+  private disconnected = false;
+  private ending = false;
+
+  constructor(turnSeed = 0) {
+    // Attempt-scoped seed: a client rebuilt within the same attempt continues
+    // numbering (t{turnSeed+1}, ...), so transcript IDs stay unique across
+    // reconnects and voice-mode switches. A new attempt (Retry) starts at 0.
+    this.turnSeq = turnSeed;
+  }
 
   // Microphone input graph.
   private micStream: MediaStream | null = null;
@@ -97,8 +119,25 @@ class BrowserLiveClient implements LiveClient {
     this.errorCb = cb;
   }
 
+  // connect() doubles as reconnect: call it again on the SAME client (after an
+  // unexpected close or send failure) with a fresh token to restore the attempt.
   async connect(token: LiveTokenResponse, problem: Problem): Promise<void> {
+    const epoch = ++this.connectionSeq; // this attempt's current socket
+    const current = () => this.connectionSeq === epoch;
+    this.ending = false;
     this.setState("connecting");
+
+    // Replace any existing socket. Its callbacks carry an older epoch, so late
+    // open/message/error/close events from it are ignored below.
+    const previous = this.session;
+    this.session = null;
+    if (previous) {
+      try {
+        previous.close();
+      } catch {
+        // ignore
+      }
+    }
 
     const systemInstruction = interviewerInstructions(problem);
 
@@ -108,14 +147,22 @@ class BrowserLiveClient implements LiveClient {
         httpOptions: { apiVersion: LIVE_API_VERSION },
       });
 
-      this.session = await ai.live.connect({
+      const session = await ai.live.connect({
         model: token.model,
         callbacks: {
-          onopen: () => this.setState(this.micActive ? "listening" : "idle"),
-          onmessage: (message: LiveServerMessage) => this.handleMessage(message),
-          onerror: (event: ErrorEvent) => this.emitError(event?.message ?? "Live connection error"),
+          onopen: () => {
+            if (current()) this.setState(this.micActive ? "listening" : "idle");
+          },
+          onmessage: (message: LiveServerMessage) => {
+            if (current()) this.handleMessage(message);
+          },
+          onerror: (event: ErrorEvent) => {
+            if (current()) this.emitError(event?.message ?? "Live connection error");
+          },
           onclose: () => {
-            this.session = null;
+            if (!current()) return; // a superseded socket closing; ignore
+            if (this.ending) this.session = null;
+            else this.markDisconnected();
           },
         },
         config: {
@@ -126,7 +173,33 @@ class BrowserLiveClient implements LiveClient {
           systemInstruction,
         },
       });
+
+      if (!current()) {
+        // A newer connect() or an end() landed while we awaited; discard this
+        // socket so it never becomes active or appends to a finished attempt.
+        try {
+          session.close();
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      // A fresh Gemini session knows nothing: reset per-session delivery trackers
+      // and conversation state, but keep the preserved buffer + latest Run and
+      // re-deliver them now. This restores the Run evidence (and one follow-up)
+      // after a reconnect; prior transcript turns are not replayed to the model.
+      this.session = session;
+      this.deliveredRunEpoch = 0;
+      this.lastSentBufferVersion = 0;
+      this.modelTurnActive = false;
+      this.outstanding = false;
+      this.disconnected = false;
+      this.pendingInput = "";
+      this.pendingOutput = "";
+      this.pump();
     } catch (error) {
+      if (!current()) return; // superseded; stay quiet
       this.session = null;
       this.emitError(error instanceof Error ? error.message : "Could not connect to voice provider");
       throw error;
@@ -189,25 +262,25 @@ class BrowserLiveClient implements LiveClient {
 
   // Update the model's code context WITHOUT requesting a spoken turn (initial
   // sync and paused-edit snapshots). A typing pause alone never asks a question.
+  // Preserves the buffer even while disconnected, so it is restored on reconnect.
   syncCode(snapshot: CodeSnapshot): void {
-    if (!this.session) return;
     this.observeVersion(snapshot.codeVersion, snapshot.source);
-    this.flushIfIdle();
+    this.pump();
   }
 
-  // Request a spoken turn about a specific Run. The Run carries the exact source,
-  // version, and results captured for it, and is delivered as historical
-  // evidence if the student has since edited past it.
+  // Record a completed Run — exact version, source, and score kept together —
+  // and deliver it as evidence. Requesting a spoken follow-up is a SEPARATE step
+  // (pumpFollowup), gated so it cannot fire while a question is outstanding or
+  // mid-answer. The Run is preserved even while disconnected, so it survives to
+  // the next reconnect.
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void {
-    if (!this.session) return;
     const version = result.codeVersion;
-    // Coalesce a re-run of the same version; keep the latest results.
-    this.pendingRuns = this.pendingRuns.filter((r) => r.version !== version);
-    this.pendingRuns.push({ version, text: formatRunContext(snapshot, result) });
-    // The Run's source is the buffer at its version, unless a newer edit already
-    // moved the buffer on (then this Run stays historical).
+    this.runVersions.add(version);
     this.observeVersion(version, snapshot.source);
-    this.flushIfIdle();
+    this.runEpoch += 1;
+    this.latestRun = { epoch: this.runEpoch, snapshot, result };
+    this.followupOwed = true;
+    this.pump();
   }
 
   // Record the newest code the student has. A higher version supersedes the
@@ -220,34 +293,27 @@ class BrowserLiveClient implements LiveClient {
     }
   }
 
-  // Flush only at a natural turn boundary: never while the interviewer speaks.
-  private flushIfIdle(): void {
-    if (!this.session || this.modelTurnActive) return;
-    this.flush();
+  private pump(): void {
+    this.pumpEvidence();
+    this.pumpFollowup();
   }
 
-  private flush(): void {
-    if (!this.session) return;
-    const runs = [...this.pendingRuns].sort((a, b) => a.version - b.version);
-    const runCoversBuffer = runs.some((r) => r.version === this.currentBufferVersion);
-    const includeBuffer = this.currentBufferVersion > this.lastSentVersion && !runCoversBuffer;
+  // Deliver completed-Run evidence (and any genuine "not run yet" buffer) as
+  // SILENT context (turnComplete:false). This is NOT gated by the outstanding
+  // question: the model must always have the accurate latest score. Held only
+  // while the interviewer is mid-turn, flushed at the next boundary.
+  private pumpEvidence(): void {
+    if (!this.session || this.modelTurnActive) return;
 
     const parts: string[] = [];
-    let requestTurn = false;
-
-    for (const run of runs) {
-      let text = run.text;
-      if (run.version < this.currentBufferVersion) {
-        const where = includeBuffer
-          ? "shown below as the current buffer"
-          : `already provided as the current buffer (version ${this.currentBufferVersion})`;
-        text += `\n(These results are from version ${run.version}; the student has since edited to version ${this.currentBufferVersion}, ${where}.)`;
-      }
-      parts.push(text);
-      requestTurn = true;
+    const runUndelivered = !!this.latestRun && this.latestRun.epoch > this.deliveredRunEpoch;
+    if (runUndelivered && this.latestRun) {
+      parts.push(formatRunEvidence(this.latestRun.snapshot, this.latestRun.result, this.currentBufferVersion));
     }
-
-    if (includeBuffer) {
+    // Only offer a version as "not run yet" if it genuinely has not been run.
+    const bufferEligible =
+      this.currentBufferVersion > this.lastSentBufferVersion && !this.runVersions.has(this.currentBufferVersion);
+    if (bufferEligible) {
       parts.push(
         formatCodeContext({
           codeVersion: this.currentBufferVersion,
@@ -256,24 +322,56 @@ class BrowserLiveClient implements LiveClient {
         }),
       );
     }
-
     if (parts.length === 0) return;
-
-    this.lastSentVersion = Math.max(this.lastSentVersion, this.currentBufferVersion, ...runs.map((r) => r.version));
-    this.pendingRuns = [];
-    if (requestTurn) this.modelTurnActive = true; // a turn is coming; hold further flushes
 
     try {
       this.session.sendClientContent({
         turns: [{ role: "user", parts: [{ text: parts.join("\n\n") }] }],
-        turnComplete: requestTurn,
+        turnComplete: false,
       });
+      if (runUndelivered && this.latestRun) this.deliveredRunEpoch = this.latestRun.epoch;
+      if (bufferEligible) this.lastSentBufferVersion = this.currentBufferVersion;
     } catch {
-      // ignore; a later event will retry
+      this.markDisconnected();
     }
   }
 
+  // Request ONE spoken follow-up about the latest Run. Gated: never while the
+  // interviewer is mid-turn, while a question is already outstanding, or while
+  // the student is mid-answer — a partial transcript must not trigger a question.
+  private pumpFollowup(): void {
+    if (!this.session || this.modelTurnActive || this.outstanding) return;
+    if (this.pendingInput !== "") return; // student is mid-utterance
+    if (!this.followupOwed || !this.latestRun) return;
+
+    const text = formatRunFollowup(this.latestRun.result, this.currentBufferVersion);
+    try {
+      this.session.sendClientContent({
+        turns: [{ role: "user", parts: [{ text }] }],
+        turnComplete: true,
+      });
+      this.followupOwed = false;
+      this.modelTurnActive = true; // a turn is coming
+      this.outstanding = true; // we just posed a question
+    } catch {
+      this.markDisconnected();
+    }
+  }
+
+  // Preserve state and surface the disconnected state; a reconnect restores the
+  // buffer and the latest Run.
+  private markDisconnected(): void {
+    this.session = null;
+    this.modelTurnActive = false;
+    if (this.disconnected) return;
+    this.disconnected = true;
+    this.setState("error");
+    this.errorCb?.({ code: "provider_unavailable", message: "Voice connection lost", retryable: true });
+  }
+
   end(): void {
+    this.ending = true;
+    this.connectionSeq += 1; // invalidate any in-flight connect() / stale socket callbacks
     this.micActive = false;
     this.cleanupMic();
     this.stopPlayback();
@@ -293,13 +391,21 @@ class BrowserLiveClient implements LiveClient {
       }
       this.session = null;
     }
+    // Clear all preserved evidence on End (and therefore Retry, which ends the
+    // session first): the next attempt starts clean.
     this.pendingInput = "";
     this.pendingOutput = "";
-    this.pendingRuns = [];
+    this.latestRun = null;
+    this.followupOwed = false;
+    this.runVersions.clear();
+    this.runEpoch = 0;
+    this.deliveredRunEpoch = 0;
     this.currentBufferVersion = 0;
     this.currentBufferSource = "";
-    this.lastSentVersion = 0;
+    this.lastSentBufferVersion = 0;
     this.modelTurnActive = false;
+    this.outstanding = false;
+    this.disconnected = false;
     this.setState("idle");
   }
 
@@ -314,21 +420,28 @@ class BrowserLiveClient implements LiveClient {
     const content = message.serverContent;
     if (!content) return;
 
-    if (content.inputTranscription?.text) {
-      this.pendingInput += content.inputTranscription.text;
-      if (content.inputTranscription.finished) {
-        this.emitTurn("student", this.pendingInput);
-        this.pendingInput = "";
+    // Transcription streams text across chunks, and a completion event can carry
+    // `finished` with no text of its own. Handle presence and the finished flag
+    // separately so a text-less completion still flushes the turn.
+    if (content.inputTranscription) {
+      if (content.inputTranscription.text) this.pendingInput += content.inputTranscription.text;
+      if (content.inputTranscription.finished && this.pendingInput) {
+        const text = this.pendingInput;
+        this.pendingInput = ""; // clear before emit so a follow-up sees no mid-utterance
+        this.emitTurn("student", text);
       }
     }
 
-    if (content.outputTranscription?.text) {
-      this.pendingOutput += content.outputTranscription.text;
-      this.modelTurnActive = true;
-      this.setState("speaking");
-      if (content.outputTranscription.finished) {
-        this.emitTurn("interviewer", this.pendingOutput);
+    if (content.outputTranscription) {
+      if (content.outputTranscription.text) this.pendingOutput += content.outputTranscription.text;
+      if (content.outputTranscription.text || content.outputTranscription.finished) {
+        this.modelTurnActive = true;
+        this.setState("speaking");
+      }
+      if (content.outputTranscription.finished && this.pendingOutput) {
+        const text = this.pendingOutput;
         this.pendingOutput = "";
+        this.emitTurn("interviewer", text);
       }
     }
 
@@ -336,17 +449,19 @@ class BrowserLiveClient implements LiveClient {
 
     if (content.turnComplete) {
       if (this.pendingInput) {
-        this.emitTurn("student", this.pendingInput);
+        const text = this.pendingInput;
         this.pendingInput = "";
+        this.emitTurn("student", text);
       }
       if (this.pendingOutput) {
-        this.emitTurn("interviewer", this.pendingOutput);
+        const text = this.pendingOutput;
         this.pendingOutput = "";
+        this.emitTurn("interviewer", text);
       }
       this.modelTurnActive = false;
       this.setState(this.micActive ? "listening" : "idle");
-      // Natural turn boundary: deliver anything queued while the interviewer spoke.
-      this.flushIfIdle();
+      // Natural turn boundary: deliver queued evidence and any owed follow-up.
+      this.pump();
     }
   }
 
@@ -444,11 +559,27 @@ class BrowserLiveClient implements LiveClient {
       text: trimmed,
       at: new Date().toISOString(),
     });
+    if (speaker === "student") {
+      // Only a completed student turn answers the outstanding question; an owed
+      // follow-up (if any) may now be raised at this boundary.
+      this.outstanding = false;
+      this.pump();
+    } else {
+      this.outstanding = true; // the interviewer just asked; wait for the student
+    }
   }
 }
 
-export function createLiveClient(): LiveClient {
-  return new BrowserLiveClient();
+export interface CreateLiveClientOptions {
+  // Seed the transcript-turn counter so a client rebuilt within the SAME attempt
+  // continues numbering (t{turnSeed + 1}, ...). Pass the number of turns already
+  // in the attempt (e.g. session.turns.length), for the real client and the
+  // scripted fallback alike. A new attempt (Retry) starts a client at 0.
+  turnSeed?: number;
+}
+
+export function createLiveClient(options?: CreateLiveClientOptions): LiveClient {
+  return new BrowserLiveClient(options?.turnSeed ?? 0);
 }
 
 export { BrowserLiveClient };

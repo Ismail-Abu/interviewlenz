@@ -300,3 +300,23 @@ npx -y -p typescript tsc --noEmit --strict --resolveJsonModule --esModuleInterop
   npx -y -p typescript tsc --noEmit --strict "$check"
 )
 ```
+
+## Live code context, reconnect, and transcript IDs (B5/B6, Ismail owns lib/live.ts)
+
+These describe the browser `LiveClient` (`lib/live.ts`) and the `createLiveClient` factory. The `LiveClient` interface in `lib/contract.ts` is unchanged except for the optional `syncCode`.
+
+### syncCode (silent code context)
+
+`syncCode(snapshot: CodeSnapshot): void` (optional on `LiveClient`) makes the current code available to the model as silent context (`turnComplete:false`); a typing pause never asks a question. Call it once after a successful `connect` (initial sync) and after a ~2s editing pause. Coalesced to the latest version; a version that has run is sent as run evidence instead of "not run yet".
+
+### Run evidence vs spoken follow-up
+
+On each Run, `sendRunContext(snapshot, result)` delivers `[RUN vN]` version + line-numbered source + score as silent context immediately (even while a question is outstanding), then requests one spoken follow-up separately, only at a safe boundary. A newer unrun edit stays distinguishable (`[CODE vN] not run yet`) from the last executed version.
+
+### Reconnect (one supported sequence)
+
+Reconnect reuses the **current attempt's existing client** — do not build a new one. On an unexpected close or send failure the client exposes `onState("error")` plus a retryable `onError` and preserves the latest Run (exact codeVersion, source, score, cases), including a Run completed while offline. To recover: obtain a fresh ephemeral token (`POST /api/live-token`, same `sessionId`) and call `connect(freshToken, problem)` on the same client. Do not call `startMic()` afterward: the mic and playback paths persist across the reconnect, so the prior mute choice is preserved. `connect()` is epoch-guarded: double-clicks, a failed retry, and late open/message/error/close events from a superseded socket cannot overwrite the new connection or append turns to a finished attempt. On reconnect the fresh Gemini session is re-seeded with the system instruction, the current code buffer, and the latest Run evidence, then one grounded follow-up; prior transcript turns are not replayed to the model. `end()` clears the preserved Run and invalidates any in-flight reconnect.
+
+### Transcript IDs (attempt-scoped)
+
+IDs stay `t1, t2, ...` and must be unique for the whole attempt. The counter is seeded per client: `createLiveClient(options?: { turnSeed?: number }): LiveClient`. Pass `turnSeed` = the number of turns already in the attempt (e.g. `session.turns.length`) when building the real client **and** the scripted fallback, so numbering continues across a reconnect, an End→Start within the attempt, and a voice-mode switch. Reconnecting the same client needs no seed (it continues on its own). A new attempt (Retry) builds a client with `turnSeed: 0` and may restart at `t1`. Do not use a single global counter shared across unrelated attempts.
