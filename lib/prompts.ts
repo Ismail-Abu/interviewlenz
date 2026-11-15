@@ -154,3 +154,18 @@ function numberLines(source: string): string {
   const width = String(rows.length).length;
   return rows.map((line, i) => `${String(i + 1).padStart(width)}  ${line}`).join("\n");
 }
+
+// A request for ONE short remark about the code the student has just written,
+// used only at a natural pause. Deliberately not a question: it must not start
+// an interrogation the student then owes an answer to, and it must not restate
+// the code back at them.
+export function formatCodeComment(codeVersion: number): string {
+  return (
+    `[CODE v${codeVersion}] The candidate has just written this. If, and only if, ` +
+    "something here is worth raising — a bug, a complexity or edge-case concern, " +
+    "or a claim that contradicts what they said — make ONE short remark about it, " +
+    "in one or two sentences. Do not summarise or read back their code, do not " +
+    "praise routine progress, and do not ask a new question. If nothing is worth " +
+    "raising, say nothing at all."
+  );
+}

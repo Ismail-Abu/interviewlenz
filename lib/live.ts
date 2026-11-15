@@ -13,7 +13,8 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "./contract";
-import { formatCodeContext, formatOpening, formatReconnected, formatRunEvidence, formatRunFollowup } from "./prompts";
+import { formatCodeContext, formatOpening, formatReconnected,
+  formatCodeComment, formatRunEvidence, formatRunFollowup } from "./prompts";
 import { formatBehavioralOpening, formatBehavioralReconnect } from "./behavioral";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
@@ -103,6 +104,13 @@ class BrowserLiveClient implements LiveClient {
   private deliveredRunEpoch = 0; // latest Run epoch this session has received as evidence
   // We owe a spoken follow-up about latestRun (separate from sending evidence).
   private followupOwed = false;
+  // At most one spoken remark per code version, and only at a natural pause.
+  private codeCommentOwed = false;
+  private lastCommentedVersion = 0;
+  // The first buffer of a connection is the starter code (or the restored
+  // buffer after a reconnect). It establishes the baseline and earns no
+  // remark: the student has not written it.
+  private commentBaselineSet = false;
   // True between the interviewer's first audio/transcript and its turnComplete.
   private modelTurnActive = false;
   // True while the interviewer has asked a question and is waiting for the
@@ -319,6 +327,14 @@ class BrowserLiveClient implements LiveClient {
     this.observeVersion(snapshot.codeVersion, snapshot.source);
     // Version only — never the source. The sink is dev-only (see trace()).
     trace({ conn: this.connectionSeq, stage: "buffer-queued", v: snapshot.codeVersion });
+    // Owe at most one remark about this version. A Run follow-up always wins.
+    // The first sync of a connection only sets the baseline.
+    if (!this.commentBaselineSet) {
+      this.commentBaselineSet = true;
+      this.lastCommentedVersion = snapshot.codeVersion;
+    } else if (snapshot.codeVersion > this.lastCommentedVersion) {
+      this.codeCommentOwed = true;
+    }
     this.pump();
   }
 
@@ -360,6 +376,7 @@ class BrowserLiveClient implements LiveClient {
     this.pumpEvidence();
     this.pumpOpening();
     this.pumpFollowup();
+    this.pumpCodeComment();
   }
 
   // First connect of an attempt: ask the interviewer to open with the approach question.
@@ -448,6 +465,42 @@ class BrowserLiveClient implements LiveClient {
   // Request ONE spoken follow-up about the latest Run. Gated: never while the
   // interviewer is mid-turn, while a question is already outstanding, or while
   // the student is mid-answer — a partial transcript must not trigger a question.
+  // One short remark about freshly written code, at a natural boundary only.
+  // Gated exactly like a Run follow-up, plus: a Run follow-up takes priority,
+  // and each code version earns at most one remark. It asks no question, so it
+  // does not set `outstanding` and the student owes nothing.
+  private pumpCodeComment(): void {
+    if (!this.session || this.modelTurnActive || this.outstanding) return;
+    if (this.pendingInput !== "") return; // student is mid-utterance
+    if (this.followupOwed) return; // Run evidence matters more than an edit
+    if (!this.codeCommentOwed) return;
+    if (this.round === "behavioral") return;
+    if (this.currentBufferVersion <= this.lastCommentedVersion) return;
+    // Let the student finish talking before remarking on anything.
+    const wait = this.lastStudentActivityAt + this.settleMs - Date.now();
+    if (wait > 0) {
+      if (!this.followupTimer) {
+        this.followupTimer = setTimeout(() => {
+          this.followupTimer = null;
+          this.pump();
+        }, wait);
+      }
+      return;
+    }
+    try {
+      this.session.sendClientContent({
+        turns: [{ role: "user", parts: [{ text: formatCodeComment(this.currentBufferVersion) }] }],
+        turnComplete: true,
+      });
+      this.codeCommentOwed = false;
+      this.lastCommentedVersion = this.currentBufferVersion;
+      this.modelTurnActive = true;
+      trace({ conn: this.connectionSeq, stage: "code-comment", v: this.currentBufferVersion });
+    } catch {
+      this.markDisconnected();
+    }
+  }
+
   private pumpFollowup(): void {
     if (!this.session || this.modelTurnActive || this.outstanding) return;
     if (this.pendingInput !== "") return; // student is mid-utterance
