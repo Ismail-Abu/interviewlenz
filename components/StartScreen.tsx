@@ -8,7 +8,7 @@ import { TailorPanel } from "./landing/TailorPanel";
 import { EMPTY_JOB, hasJob, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
 import { coverBtn } from "./ui/buttons";
 import { LiveDemoPanel } from "./landing/LiveDemoPanel";
-import { CompanyRail } from "./landing/CompanyRail";
+import { RolePresets } from "./landing/RolePresets";
 import type { BehavioralContext } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
@@ -91,7 +91,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
 
             <span className="mt-12 inline-flex items-center gap-2.5 rounded-full bg-cream-3 px-4 py-2 text-[11.5px] font-bold uppercase tracking-[0.12em] text-maroon-deep lg:mt-16">
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-maroon" />
-              Live voice interview
+              Studio online · Real-time voice
             </span>
 
             <h1 className="mt-6 font-brand text-[40px] font-bold leading-[1.08] tracking-[-0.02em] text-ink sm:text-[47px]">
@@ -111,7 +111,14 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
               the two disagree.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <RolePresets
+              job={job}
+              onPick={setJob}
+              tone="hero"
+              className="mt-8 w-full"
+            />
+
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               {onApply ? (
                 <button type="button" onClick={onApply} data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-48`}>
                   Build my interview
@@ -156,19 +163,18 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
           </div>
         </section>
 
-        <CompanyRail />
 
         {/* Practice modes */}
         <section id="practice-modes" className="scroll-mt-6 pt-16">
           <h2 className="font-brand text-[26px] font-bold tracking-tight text-ink">Choose your practice</h2>
-          <p className="mt-1 text-[15px] text-ink-muted">Pick one round, or run the full interview loop.</p>
+          <p className="mt-1 text-[15px] text-ink-muted">Pick one interview, or run the full loop.</p>
 
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <ModeCard
-              tag="Round 1"
+              tag="Technical Coding Interview"
               meta="~20 mins"
-              title="Coding practice"
-              body="Solve a Python problem while the interviewer questions your logic, edge cases, and test results."
+              title="Technical Coding Interview"
+              body="Problem solving, algorithm implementation and live reasoning. Solve a Python problem while the interviewer questions your logic, edge cases and test results."
             >
               <button
                 type="button"
@@ -181,10 +187,10 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
               </button>
             </ModeCard>
             <ModeCard
-              tag="Round 2"
+              tag="Behavioral Deep-Dive"
               meta="~15 mins"
-              title="Behavioral practice"
-              body="Tell an engineering story and get live follow-ups about what you personally did and why."
+              title="Behavioral Deep-Dive"
+              body="Project defence and engineering trade-offs. Tell an engineering story and get live follow-ups about what you personally did and why."
             >
               <button
                 type="button"
@@ -200,8 +206,8 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
               tag="Recommended"
               strong
               meta="Coding + behavioral"
-              title="Full mock interview"
-              body="A complete two-round interview: the coding problem, then straight into the behavioral round."
+              title="Full interview loop"
+              body="The Technical Coding Interview, then straight into the Behavioral Deep-Dive."
               className="sm:col-span-2 lg:col-span-1"
             >
               <button
