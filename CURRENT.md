@@ -734,7 +734,14 @@ This was originally blocked: the fix lived only on `fix/coding-room-bash` (`ebad
 
 Covers the report half only. The `components/ProblemRoom.tsx` half (appending the unrun draft snapshot at Finish) is React and belongs with B10's browser drivers.
 
-**Not verified:** that this check goes red if the fix is reverted. The red-path run was interrupted before it finished, so the check passes but is unproven as a regression guard.
+**Proven as a regression guard** (run locally on Node 22.23.5, working tree restored clean afterwards):
+
+| State of `buildPrompt` | Result |
+|---|---|
+| With the fix (current `main`) | `unrun-draft-check: all checks passed`, exit 0 |
+| Marker lines reverted | `unrun-draft-check: 2 FAILED` — **A1** "v4 is labelled an unrun draft" and **D2** "it is labelled unrun" — check exit **1**, `test:ci` exit **1** |
+
+So a revert of the report-side fix turns CI red. Only 2 of the 19 assertions fail, which is correct: the reverted hunk is the snapshot label alone, and the section-B evidence-validation assertions do not depend on it (they guard `buildValidators`, a separate failure mode).
 
 ### Still needs a human
 
