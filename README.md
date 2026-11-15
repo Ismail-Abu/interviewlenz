@@ -177,3 +177,9 @@ To enable real Gemini Live audio and evaluation locally:
 Set server environment variables from .env.example and restart the app. Play question (with the interview mic muted) and Audio Debrief send the displayed question or round recommendation to ElevenLabs on demand. Without a key or when the service is unavailable, playback uses the device's speech synthesis when supported.
 
 To issue Proof of Skill receipts, configure SOLANA_DEVNET_SECRET_KEY with a dedicated Devnet keypair's JSON byte array and fund its public address with Devnet SOL. Each real round report rated Solid or Strong submits one signed memo at report generation. Its payload is the prefix `interviewlenz:skill:v1:` followed by the SHA-256 hex digest of the UTF-8 JSON array `[attemptId, band, createdAt]`. The band is lowercase and the timestamp is the report's ISO timestamp. Source, transcripts and names stay off-chain. The scorecard links to Explorer and can verify the confirmed memo and issuer. This attests to an app-generated practice assessment, without identity verification.
+
+### SSOJet sign-in
+
+Create an SSOJet web application with hosted login. Register the exact production redirect URI `https://interviewlenz.us/api/auth/callback/ssojet`. Set `SSOJET_ISSUER` (the project's authority URL), `SSOJET_CLIENT_ID`, `SSOJET_CLIENT_SECRET`, `NEXTAUTH_SECRET` (a random secret), and `NEXTAUTH_URL=https://interviewlenz.us` on the server, then redeploy. Local development uses its own registered localhost callback and origin.
+
+The navigation shows Sign in when the provider is configured and Remember me for browser-local practice otherwise. NextAuth handles discovery, code exchange and the session cookie. Interview history remains on the device.

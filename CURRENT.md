@@ -807,3 +807,7 @@ Validation: lint and production build passed, all 18 CI checks passed. Chrome at
 ## Remember me • November 15
 
 Production lacks the public SSOJet issuer and client ID. Ismail requested a working Remember me fallback. NavAuth now saves a display name in this browser, supports editing or forgetting it, and shows Sign in when SSOJet is configured. This local preference does not authenticate a user. Mobile Chrome verified save, reload, cancel, removal and cross-tab updates. Lint, production build and all 19 CI suites passed.
+
+## Hosted SSOJet login
+
+Ismail requested real SSOJet sign-in. The server auth route and navigation now use NextAuth OIDC with PKCE, state, nonce and a cookie session. Retired the browser-only callback and display-name token decoding. Added server environment names and callback setup to .env.example and README.md. Lint, production build and all 19 CI suites passed. Chrome completed login, reload and logout against a local signed-token test issuer. Production activation needs the team's SSOJet issuer, client ID, client secret, registered callback and a deployment containing this change.
