@@ -56,7 +56,9 @@ export default function CodeEditor({ value, onChange, errorLine, errorMessage }:
       onChange={(v) => onChange(v ?? "")}
       onMount={handleMount}
       options={{
-        fontSize: 14,
+        ariaLabel: "Python editor. To leave, press Control+M (Mac: Control+Shift+M), then Shift+Tab.",
+        fontSize: 16,
+        lineHeight: 24,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         tabSize: 4,

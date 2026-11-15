@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ApiError, EvidenceRef, Finding, Report, RunResult, Session } from "@/lib/contract";
+import { ReportSkeleton } from "./Skeletons";
+import { Wordmark } from "./Logo";
+import { btn } from "./ui/buttons";
+import { isBehavioralSession } from "@/lib/behavioral";
 
 export interface AttemptRecord {
   session: Session;
   status: "loading" | "done" | "error";
   report?: Report;
   fromFixture?: boolean;
+  fallbackReason?: string;
   error?: ApiError;
 }
 
@@ -19,9 +24,17 @@ interface Props {
 
 const RATING_STYLE: Record<Finding["rating"], string> = {
   strong: "bg-emerald-500/15 text-emerald-400",
-  ok: "bg-sky-500/15 text-sky-300",
+  ok: "bg-zinc-200/10 text-zinc-100",
   needs_work: "bg-red-500/15 text-red-400",
   insufficient_evidence: "bg-zinc-700/50 text-zinc-300",
+};
+
+// Icon + word + color, so the rating never relies on color alone.
+const RATING_ICON: Record<Finding["rating"], string> = {
+  strong: "✓",
+  ok: "●",
+  needs_work: "!",
+  insufficient_evidence: "?",
 };
 
 const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
@@ -39,14 +52,14 @@ export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
-        <span className="text-lg font-semibold tracking-tight">Interviewlenz</span>
-        <span className="text-sm text-zinc-500">Interview report</span>
+        <Wordmark size={26} />
+        <span className="text-base text-zinc-400">Interview report</span>
         <button
           onClick={onRetryAttempt}
           disabled={busy}
-          className="ml-auto rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+          className={`${btn.primary} ml-auto px-5 py-2 text-base`}
         >
-          Retry problem
+          {isBehavioralSession(records.at(-1)?.session) ? "Practice again" : "Retry problem"}
         </button>
       </header>
       <main className={`grid gap-6 p-6 ${records.length > 1 ? "xl:grid-cols-2" : "mx-auto max-w-4xl"}`}>
@@ -68,6 +81,9 @@ function ReportCard({
   onRetryReport: (attemptId: string) => void;
 }) {
   const { session, report } = record;
+  const lastSnapshot = isBehavioralSession(session) ? undefined : session.snapshots.at(-1);
+  const lastRun = isBehavioralSession(session) ? undefined : session.runs.at(-1);
+  const unrunDraft = lastSnapshot && lastSnapshot.codeVersion !== lastRun?.codeVersion ? lastSnapshot : undefined;
   const [selected, setSelected] = useState<EvidenceRef | null>(null);
   const turnRefs = useRef(new Map<string, HTMLLIElement>());
 
@@ -83,59 +99,85 @@ function ReportCard({
       className="flex flex-col gap-5 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5"
     >
       <header className="flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-semibold">Attempt {index + 1}</h2>
+        <h2 className="text-xl font-semibold">Attempt {index + 1}</h2>
         <span className="font-mono text-xs text-zinc-500">{session.attemptId.slice(0, 8)}</span>
         {session.priorAttemptId && (
           <span className="text-xs text-zinc-500">retry of {session.priorAttemptId.slice(0, 8)}</span>
         )}
         {record.fromFixture && (
-          <span className="rounded bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold tracking-wider text-amber-300">
-            FIXTURE DATA
+          <span
+            className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300"
+            data-testid="report-fixture-badge"
+          >
+            FIXTURE DATA{record.fallbackReason ? ` (${record.fallbackReason})` : ""}
           </span>
         )}
         <span className="ml-auto text-xs text-zinc-500" data-testid="attempt-stats">
-          {session.snapshots.length} snapshots · {session.runs.length} runs · {session.turns.length} turns
+          {isBehavioralSession(session)
+            ? `Behavioral · ${session.turns.length} turns · ${session.turns.filter((t) => t.speaker === "student").length} answers`
+            : `${session.snapshots.length} snapshots · ${session.runs.length} runs · ${session.turns.length} turns`}
         </span>
       </header>
 
+      {unrunDraft && (
+        <details className="rounded-md border border-zinc-700 p-3 text-sm">
+          <summary className="cursor-pointer">
+            Unrun draft · v{unrunDraft.codeVersion}
+            {lastRun ? ` · Last run: v${lastRun.codeVersion}` : " · No runs this attempt"}
+            {lastRun?.status === "completed" && ` (${lastRun.passed}/${lastRun.total} passed)`}
+          </summary>
+          <pre className="mt-2 overflow-x-auto">{unrunDraft.source}</pre>
+        </details>
+      )}
+
       {record.status === "loading" && (
-        <div className="flex items-center gap-2 text-sm text-zinc-400">
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-200" />
-          Writing your report…
-        </div>
+        <ReportSkeleton />
       )}
 
       {record.status === "error" && record.error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
-          <div className="font-semibold text-red-300">Report unavailable</div>
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm" role="alert" data-testid="report-error">
+          <div className="font-semibold text-red-300">
+            {record.error.code === "timeout" ? "Report timed out" : "Report unavailable"}
+          </div>
           <div className="mt-1 text-red-200">{record.error.message}</div>
-          <div className="mt-1 text-zinc-400">Your session is saved.</div>
-          <button
-            onClick={() => onRetryReport(session.attemptId)}
-            className="mt-3 rounded-md border border-red-400/50 px-3 py-1.5 text-sm font-semibold text-red-200 hover:bg-red-500/20"
-          >
-            Retry report
-          </button>
+          {record.error.retryable ? (
+            <>
+              <div className="mt-1 text-zinc-400">Your session is saved. Retry uses this same attempt.</div>
+              <button
+                onClick={() => onRetryReport(session.attemptId)}
+                className={`${btn.secondary} mt-3 px-3 py-1.5 text-sm`}
+              >
+                Retry report
+              </button>
+            </>
+          ) : (
+            <div className="mt-1 text-zinc-400">
+              This attempt couldn&apos;t be evaluated, and retrying won&apos;t change that. You can still start a new attempt.
+            </div>
+          )}
         </div>
       )}
 
       {report && (
         <>
-          <section className="rounded-lg border border-sky-500/40 bg-sky-500/10 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-sky-300">Next step</div>
-            <p className="mt-1 text-base font-medium text-zinc-50">{report.nextStep}</p>
+          <section className="rounded-lg border border-brand-coral/40 bg-brand-coral/10 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-brand-coral">Next step</div>
+            <p className="mt-1 text-lg font-medium leading-snug text-zinc-50" data-testid="next-step">{report.nextStep}</p>
           </section>
 
           <ul className="flex flex-col gap-3">
             {report.findings.map((f) => (
               <li key={f.id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-zinc-200">{label(f.category)}</span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${RATING_STYLE[f.rating]}`}>
+                  <span className="text-base font-semibold text-zinc-100">{label(f.category)}</span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold ${RATING_STYLE[f.rating]}`}
+                  >
+                    <span aria-hidden>{RATING_ICON[f.rating]}</span>
                     {label(f.rating)}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-zinc-300">{f.summary}</p>
+                <p className="mt-2 text-base leading-relaxed text-zinc-200">{f.summary}</p>
                 {f.evidence.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {f.evidence.map((ref, i) => (
@@ -143,9 +185,9 @@ function ReportCard({
                         key={i}
                         data-evidence-kind={ref.kind}
                         onClick={() => setSelected(ref)}
-                        className={`rounded-md border px-2.5 py-1 font-mono text-xs transition-colors ${
+                        className={`rounded-md border px-3 py-1.5 font-mono text-sm transition-colors ${
                           sameRef(selected, ref)
-                            ? "border-sky-400 bg-sky-500/20 text-sky-100"
+                            ? "border-brand-coral bg-brand-coral/15 text-zinc-50"
                             : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
                         }`}
                       >
@@ -158,7 +200,7 @@ function ReportCard({
             ))}
           </ul>
 
-          {selected && selected.kind !== "turn" && (
+          {selected && (
             <EvidencePanel refValue={selected} session={session} onClose={() => setSelected(null)} />
           )}
         </>
@@ -181,8 +223,8 @@ function ReportCard({
                     if (el) turnRefs.current.set(t.id, el);
                     else turnRefs.current.delete(t.id);
                   }}
-                  className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-                    hit ? "bg-amber-400/20 ring-2 ring-amber-400" : t.speaker === "student" ? "bg-zinc-800" : "bg-sky-500/10"
+                  className={`rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed transition-colors ${
+                    hit ? "bg-amber-400/20 ring-2 ring-amber-400" : t.speaker === "student" ? "bg-zinc-800" : "bg-brand-coral/10"
                   }`}
                 >
                   <div className="mb-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
@@ -207,14 +249,31 @@ function EvidencePanel({
   session,
   onClose,
 }: {
-  refValue: Exclude<EvidenceRef, { kind: "turn" }>;
+  refValue: EvidenceRef;
   session: Session;
   onClose: () => void;
 }) {
   const title = evidenceLabel(refValue);
   let body: React.ReactNode;
 
-  if (refValue.kind === "code") {
+  if (refValue.kind === "turn") {
+    // The exact words from THIS attempt's transcript.
+    const turn = session.turns.find((t) => t.id === refValue.turnId);
+    body = turn ? (
+      <figure data-testid="evidence-quote">
+        <blockquote className="whitespace-pre-wrap rounded-md border-l-4 border-brand-coral bg-zinc-950 px-4 py-3 text-base leading-relaxed text-zinc-50">
+          “{turn.text}”
+        </blockquote>
+        <figcaption className="mt-2 text-xs text-zinc-500">
+          {turn.speaker === "student" ? "You" : "Interviewer"} · {turn.id}
+        </figcaption>
+      </figure>
+    ) : (
+      <NotFound what={`Turn ${refValue.turnId} is not in this attempt's transcript.`} />
+    );
+  } else if (isBehavioralSession(session)) {
+    body = <NotFound what="This behavioral attempt has no code or runs." />;
+  } else if (refValue.kind === "code") {
     const snap = session.snapshots.findLast((s) => s.codeVersion === refValue.codeVersion);
     body = snap ? (
       <pre className="overflow-x-auto rounded-md bg-[#1e1e1e] py-2 font-mono text-sm" data-testid="evidence-code">
@@ -240,9 +299,9 @@ function EvidencePanel({
   }
 
   return (
-    <section className="rounded-lg border border-sky-500/40 bg-zinc-900 p-4" data-testid="evidence-panel">
+    <section className="rounded-lg border border-brand-coral/40 bg-zinc-900 p-4" data-testid="evidence-panel">
       <div className="mb-3 flex items-center">
-        <h3 className="font-mono text-sm text-sky-200">{title}</h3>
+        <h3 className="font-mono text-sm text-brand-coral">{title}</h3>
         <button onClick={onClose} className="ml-auto text-xs text-zinc-400 hover:text-zinc-200">
           Close
         </button>
