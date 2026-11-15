@@ -25,7 +25,7 @@ import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type Voice
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
-import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
+import { isBehavioralSession } from "@/lib/behavioral";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -89,7 +89,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     round === "behavioral"
       ? {
           type: "behavioral",
-          ...(behavioralContext ? { context: behavioralContext, openingExtra: behavioralOpeningExtra(behavioralContext) } : {}),
+          context: behavioralContext,
         }
       : undefined;
   const focusLabel = behavioralContext

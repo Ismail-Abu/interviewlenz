@@ -803,3 +803,9 @@ Ismail requested on-demand ElevenLabs audio for behavioral questions and scoreca
 Files: sponsor API routes, lib/solana.ts, optional Report fields, ReadAloud, ReportExtras, the behavioral room, both report views, RolePresets, environment examples, dependency lock and offline sponsor checks. The Run button and existing test IDs are preserved.
 
 Validation: lint and production build passed, all 18 CI checks passed. Chrome at 390×844 selected the Solana preset, replayed the current question, and read the debrief with browser speech stubbed. No horizontal overflow appeared in that report. Local transaction signing was exercised with an ephemeral test issuer and stubbed Devnet RPC. Live ElevenLabs audio and a confirmed Devnet transaction require deployment credentials and a funded Devnet fee payer.
+
+## Personalized behavioral opening • November 15
+
+Ismail requested that spoken behavioral questions use available candidate information. Confirmed project and practice focus take priority, followed by the target position. Without those inputs the existing generic interview remains available. The real Live setup and scripted fallback now use the same question builder. ElevenLabs replays the current interviewer turn verbatim through the existing speaker control.
+
+Changes: lib/behavioral.ts, components/liveAdapter.ts, components/ProblemRoom.tsx, dev/tailoring-check.mjs. Lint, production build and 18 CI suites passed. Local Chrome checked project + skill, role only, and empty setup with scripted voice; all three sent the displayed question verbatim to the speech endpoint.

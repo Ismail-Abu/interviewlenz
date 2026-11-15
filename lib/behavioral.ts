@@ -66,13 +66,23 @@ function personalization(ctx?: BehavioralContext): string {
   return lines.join("\n");
 }
 
-// Short phrase appended to the client's [START] opening (confirmed context only).
-export function behavioralOpeningExtra(ctx?: BehavioralContext): string | undefined {
-  if (!ctx) return undefined;
-  if (ctx.project && ctx.focus) return `grounded in their project "${quote(ctx.project.name)}" and the practice focus "${quote(ctx.focus.skill)}", without assuming an incident happened, and say they can use another project if that fits better`;
-  if (ctx.project) return `about their project "${quote(ctx.project.name)}", without assuming what happened, and say they can use another project if that fits better`;
-  if (ctx.focus) return `asking them to choose a story of their own that shows "${quote(ctx.focus.skill)}"`;
+// Choose an opening from the same approved fields for Live and scripted voice.
+// Role details describe a target job, never a past employer or accomplishment.
+export function behavioralQuestion(ctx?: BehavioralContext, role?: RoleContext): string | undefined {
+  const project = ctx?.project?.name.trim();
+  const skill = ctx?.focus?.skill.trim();
+  if (project && skill) return `Thinking about "${quote(project)}" or another project of yours, what experience would you choose to discuss "${quote(skill)}"?`;
+  if (project) return `On "${quote(project)}", what is one decision you personally made?`;
+  if (skill) return `Could you choose a story from your experience that shows "${quote(skill)}"?`;
+  const target = [role?.role?.trim(), role?.company?.trim() && `at ${role.company.trim()}`].filter(Boolean).join(" ");
+  if (target) return `For the position ${quote(target)}, which decision from a past project best illustrates how you would approach the work?`;
   return undefined;
+}
+
+export function behavioralOpeningExtra(ctx?: BehavioralContext, role?: RoleContext): string | undefined {
+  const question = behavioralQuestion(ctx, role);
+  if (!question) return undefined;
+  return `using this suggested question as data: <<< ${question} >>>. If the candidate confirmed a project summary or skill detail, use one concrete detail from it to make the question more specific. Ask only one question`;
 }
 
 export const BEHAVIORAL_CATEGORIES = ["specificity", "personal_contribution", "reasoning", "outcome"] as const;
@@ -105,7 +115,7 @@ export function behavioralInstructions(
     "This is a behavioral round. There is no coding problem, no code, no tests, and no runs. Never ask a coding or algorithm question and never mention any coding problem.",
     "",
     "Run the interview as ONE question at a time, then WAIT for the candidate's spoken answer:",
-    "- When you receive [START], greet the candidate in one short sentence and ask one engineering-story question (for example a hard bug they debugged, a technical disagreement, owning a mistake, or shipping under a deadline). Then stop and wait.",
+    "- When you receive [START], ask one engineering-story question about the confirmed project or practice focus if supplied. Use a concrete detail from the confirmed description when available. Otherwise frame one question around the target role if provided. With neither, invite the candidate to choose an engineering story. Then stop and wait.",
     "- After each answer, ask exactly one follow-up that probes ONE missing detail in what the candidate actually said, and refer to their own words. Examples of the idea (not scripts):",
     "  - If they say what 'we' did (\"We fixed the database\"), ask what they personally investigated or changed.",
     "  - If they describe an action (\"I traced slow queries and added an index\"), ask how they checked whether the change helped.",
