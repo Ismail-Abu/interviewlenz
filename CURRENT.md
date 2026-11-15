@@ -447,3 +447,57 @@ Traced one Run: `ProblemRoom.handleRun` captures `{codeVersion, source}` before 
 - `npm run lint` clean; `npm run build` passes.
 
 **Spoken acceptance: PENDING. There's no key or mic on this machine, so no human has heard it.** Browser steps for Ismail are in the PR. Expected trace while doing them: `connected` → `opening` → for each Run `queued` → `written` → `asked` → `confirmed`; after Wi-Fi off/on + Reconnect, `reconnected` and the latest Run `written` again.
+
+### B8 • Report path + public route safeguards — backend (requested by Ismail; branch `b8-report-path` from #12 `3752036`)
+
+**Code commit `e9102c9`** (tree `2f7a45417d245698a06f5cfad71219870e549c7c`). Base: #12 (B7 voice grounding), which contains #10 and #9. **No voice work has spoken acceptance yet** (no comments from Ismail on #9, #10, or #12). Files: `app/api/report/route.ts`, `app/api/live-token/route.ts`, `dev/report-check.mjs` (new). No UI, `lib/contract.ts`, or `docs/CONTRACT.md` change.
+
+**Trace (existing code).** Finish (`ProblemRoom.handleFinish`) builds the Session → `reportAdapter.requestReport` (`auto`) → `POST /api/report` → `generateContent` with a JSON schema → server-side evidence validation → `ReportView` resolves chips: turn by id, code by `snapshots.findLast(v)`, run by `runs.findLast(v)`. Evidence validation already existed. Gaps were reproduced with `dev/report-check.mjs` before editing:
+- Malformed Session elements and oversized bodies were **sent to Gemini** (6 paid calls in the check) and came back as a misleading 503.
+- A `null` model response **crashed the route** (TypeError → 500).
+- No usable findings or no `nextStep` still returned 200 with a **made-up generic next step**.
+- Line ranges could exceed the snapshot (`[40, 7]`).
+- `spoken_reasoning` could cite an interviewer turn.
+- No transcript → nothing prevented speech-based findings.
+- No snapshot/run timestamps or earlier-vs-later rule in the prompt.
+- No provider timeout.
+- Missing key reported as retryable.
+
+**Fixes.**
+- **Report request:** full Session validation (turn/snapshot/run/case shapes, unique `tN` ids, known problem → `unknown_problem`) and bounds (256 KB body, 400 turns, 4 KB per turn, 200 snapshots/runs, 20 KB per source, 20 cases), all checked before any provider call.
+- **Model output:** null, non-object, or malformed nested output never crashes.
+  - Code refs must be captured snapshots, with line ranges inside them.
+  - Run refs must exist, and case IDs must belong to that run.
+  - `spoken_reasoning` may cite only student turns.
+  - Refs are de-duplicated; at most 7 findings, summaries capped at 400 characters.
+  - Zero usable findings or no `nextStep` → **503 retryable, no report** (nothing invented).
+- **No transcript:** `spoken_reasoning` and `clarification` are forced to `insufficient_evidence` with "No transcript was captured…", and the prompt says not to describe speech.
+- **Grounding:** timestamps on snapshots and runs, plus a rule to keep an earlier claim or implementation separate from a later improvement, each citing the evidence from that time.
+- **Timeouts and errors:** report 25 s and token mint 10 s (SDK timeout + abort + race) → `503 {code:"timeout", retryable:true}`. Missing key/model → `503 … retryable:false`. Errors are generic, nothing is logged, and no provider detail or key reaches the browser.
+- **Token route:** 1 KB body cap, `sessionId` limited to `[A-Za-z0-9_-]{1,128}`.
+
+**Automated results (no key; SDK stubbed):**
+- `node --experimental-strip-types dev/report-check.mjs` → **46/46 pass**:
+  - **Request:** 10 validation/size cases with zero provider calls; not-configured is non-retryable.
+  - **Grounded nested→set attempt:** one call; the earlier "linear" claim cites t2 + v2 lines 2–4, and the later set fix cites v5 + t4 + run v5. Timestamps and the earlier-vs-later rule are in the prompt; a timeout is set.
+  - **Invented evidence (t99, v42, run v9 c1, case c9, lines 40–45, interviewer turn as speech):** dropped or downgraded.
+  - **Malformed nested output (invalid JSON, null, object findings, all-unusable findings, missing nextStep, empty text):** 503 retryable, no findings.
+  - **Missing transcript:** no invented speech.
+  - **Provider error:** 503, no detail leaked.
+  - **Hung provider and hung token mint:** 503 timeout.
+  - **Token route:** body cap, sessionId format, not-configured, and leak checks.
+- All eight `dev/live-*-check.mjs` pass. `npm run lint` clean; `npm run build` passes.
+- UI suites (test LiveClient): sync 25/25, reconnect 30/30. The no-key regression is unchanged; both real routes answer `503 … not configured, retryable:false`, and the UI shows its labeled fallbacks.
+- **UI observation (stubbed `/api/report`, no UI change):**
+  - double-click Finish → **1** report request, 1 card
+  - a real 200 report shows **no fixture badge**, and its code chip opens the cited lines
+  - Retry → Attempt 2 at 0/0/0; after it finishes, Attempt 1's real report is still shown beside it
+
+**Frontend dependency for Hamza (not blocking the real-key check):** `components/reportAdapter.ts` `auto` mode falls back to the fixture on *any* failure. Reproduce: stub `/api/report` → `503 {"code":"provider_unavailable","retryable":true}` (or `{"code":"timeout","retryable":true}`), then Finish. **Observed:** "FIXTURE DATA (no API key)" fixture report, no Retry report. **Expected:** with `retryable:true` (provider failure or timeout), show the error card with **Retry report**, keeping the attempt. Fall back to the labeled fixture only when `retryable:false` (not configured) or the route is missing. The routes now send exactly that signal.
+
+**Public usage / cost exposure for Ismail before launch.** Both routes are unauthenticated:
+- `/api/live-token` mints single-use Live tokens. Each allows a session starting within 2 min, with a 30-min message window.
+- `/api/report` makes one Flash call per request, with prompts up to the 256 KB cap.
+- **No rate limit or origin check exists.** Add a Vercel WAF rate-limit rule on `/api/*` (e.g. ~10/min per IP), a Google Cloud budget alert and quota cap on the key, and optionally an Origin check or a challenge (e.g. Turnstile). Consider shortening the 30-min token window for the demo.
+
+**Real-provider results: NOT RUN.** There's no key or mic on this machine. Steps for the real-key run are in the PR.
