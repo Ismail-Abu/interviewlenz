@@ -10,7 +10,7 @@ import { ReportView, type AttemptRecord } from "./ReportView";
 import { StartScreen, type MicStatus } from "./StartScreen";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
-import { openVoice, type VoiceMode } from "./liveAdapter";
+import { fetchLiveToken, isApiError, openVoice, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
 
@@ -60,6 +60,15 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [liveError, setLiveError] = useState<ApiError | null>(null);
   const [voiceMode, setVoiceMode] = useState<VoiceMode | null>(null);
   const [mockReason, setMockReason] = useState<string | undefined>();
+  // Reconnect (docs/CONTRACT.md): after a retryable disconnect the real client
+  // is kept and reconnected in place with a fresh token.
+  const [disconnected, setDisconnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnectInFlight = useRef(false);
+  const voiceModeRef = useRef<VoiceMode | null>(null);
+  // Turns accepted in the current attempt; seeds every client built within the
+  // attempt so transcript IDs keep increasing. Retry resets it to 0.
+  const turnCount = useRef(0);
 
   // Code-context sync (B5): the real client gets the editor buffer silently via
   // syncCode, once on connect and after a typing pause. Refs, not state, so a
@@ -102,21 +111,34 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     const gen = ++connGen.current;
     const current = () => gen === connGen.current;
     try {
-      const conn = await openVoice(ids().sessionId, problem, {
-        onState: (s) => current() && setLiveState(s),
-        onTurn: (t) => current() && setAttempt((s) => ({ ...s, turns: [...s.turns, t] })),
-        onError: (e) => {
-          if (!current()) return;
-          setLiveError(e);
-          setMicOn(false);
+      const conn = await openVoice(
+        ids().sessionId,
+        problem,
+        {
+          onState: (s) => {
+            if (!current()) return;
+            setLiveState(s);
+            // The real client signals a lost connection with state "error" (a
+            // mic failure only raises onError). Keep the client; offer Reconnect.
+            if (s === "error" && voiceModeRef.current === "live" && live.current) setDisconnected(true);
+          },
+          onTurn: (t) => {
+            if (!current()) return;
+            turnCount.current += 1;
+            setAttempt((s) => ({ ...s, turns: [...s.turns, t] }));
+          },
+          // Show the error only; never touch the mute choice here.
+          onError: (e) => current() && setLiveError(e),
         },
-      });
+        turnCount.current,
+      );
       if (!current()) {
         // Ended (End, Finish, or Retry) while connecting: drop this connection.
         conn.client.end();
         return;
       }
       live.current = conn.client;
+      voiceModeRef.current = conn.mode;
       // Initial sync: the buffer as it is now, including edits made while connecting.
       syncEnabled.current = conn.mode === "live";
       lastSyncedVersion.current = null;
@@ -154,15 +176,56 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     }
   }
 
+  // Reconnect the retained real client in place: fresh token for the same
+  // session, then connect() on that same client. No openVoice, no new client,
+  // no startMic (mic and playback persist, so the mute choice is kept), no mock.
+  // lib/live.ts restores the code buffer and latest Run on the new session.
+  async function handleReconnect() {
+    const client = live.current;
+    if (!client || voiceModeRef.current !== "live" || reconnectInFlight.current) return;
+    reconnectInFlight.current = true;
+    setReconnecting(true);
+    const gen = connGen.current;
+    // A late result is ignored if End, Finish, or Retry happened meanwhile.
+    const current = () => gen === connGen.current && live.current === client;
+    try {
+      const token = await fetchLiveToken(ids().sessionId);
+      if (!current()) return;
+      if (isApiError(token)) {
+        setLiveError(token);
+        return;
+      }
+      await client.connect(token, problem);
+      if (!current()) return;
+      setLiveError(null);
+      setDisconnected(false);
+    } catch {
+      // lib/live.ts already reported the failure through onError/onState;
+      // Reconnect stays available for another try.
+      if (current()) setLiveError((e) => e ?? { code: "provider_unavailable", message: "Could not reconnect", retryable: true });
+    } finally {
+      if (gen === connGen.current) {
+        reconnectInFlight.current = false;
+        setReconnecting(false);
+      }
+    }
+  }
+
   function endLive() {
     connGen.current++;
     cancelPendingSync();
     syncEnabled.current = false;
+    reconnectInFlight.current = false;
+    voiceModeRef.current = null;
     live.current?.end();
     live.current = null;
     setConnected(false);
     setMicOn(false);
     setLiveState(null);
+    setDisconnected(false);
+    setReconnecting(false);
+    // An error from a session the user has ended no longer applies.
+    setLiveError(null);
   }
 
   function handleEdit(next: string) {
@@ -250,6 +313,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     endLive();
     lastSyncedVersion.current = null;
     latest.current = { codeVersion: 1, source: problem.starterCode };
+    turnCount.current = 0; // new attempt: transcript IDs may restart at t1
     setAttempt(EMPTY_ATTEMPT);
     setSource(problem.starterCode);
     setCodeVersion(1);
@@ -342,6 +406,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             voiceMode={voiceMode}
             mockReason={mockReason}
             micStatus={micStatus}
+            disconnected={disconnected}
+            reconnecting={reconnecting}
+            onReconnect={handleReconnect}
             onConnect={handleConnect}
             onToggleMic={handleToggleMic}
             onEnd={endLive}

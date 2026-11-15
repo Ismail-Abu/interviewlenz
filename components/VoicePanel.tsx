@@ -15,6 +15,10 @@ interface Props {
   voiceMode: VoiceMode | null;
   mockReason?: string;
   micStatus: MicStatus;
+  // Real voice lost its connection; the client is kept for an in-place reconnect.
+  disconnected: boolean;
+  reconnecting: boolean;
+  onReconnect: () => void;
   onConnect: () => void;
   onToggleMic: () => void;
   onEnd: () => void;
@@ -35,7 +39,13 @@ export function VoicePanel(p: Props) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [p.turns.length]);
 
-  const s = p.state ? STATE_STYLE[p.state] : null;
+  const s = p.disconnected
+    ? p.reconnecting
+      ? STATE_STYLE.connecting
+      : { label: "Connection lost", dot: "bg-red-500", text: "text-red-400" }
+    : p.state
+      ? STATE_STYLE[p.state]
+      : null;
   const micBlocked = p.micStatus === "denied" || p.micStatus === "unsupported";
 
   return (
@@ -53,6 +63,16 @@ export function VoicePanel(p: Props) {
             </button>
           ) : (
             <>
+              {p.disconnected && (
+                <button
+                  onClick={p.onReconnect}
+                  disabled={p.reconnecting}
+                  data-testid="reconnect"
+                  className="rounded-lg bg-amber-500 px-4 py-2 text-base font-semibold text-zinc-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {p.reconnecting ? "Reconnecting…" : "Reconnect"}
+                </button>
+              )}
               <button
                 onClick={p.onToggleMic}
                 aria-pressed={p.micOn}

@@ -8,7 +8,7 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "@/lib/contract";
-import { createLiveClient } from "@/lib/live";
+import { createLiveClient, type CreateLiveClientOptions } from "@/lib/live";
 
 // The only place the UI touches voice.
 //
@@ -17,16 +17,19 @@ import { createLiveClient } from "@/lib/live";
 // GEMINI_API_KEY is not set), or the real client fails to connect, it falls
 // back to the scripted MockLiveClient so the demo runs with zero keys.
 //
-// Agreed with Ismail: lib/live.ts exports a factory createLiveClient(), and
-// turn IDs stay unique across reconnects within a session.
-const REAL_CLIENT: (() => LiveClient) | null = createLiveClient;
+// lib/live.ts exports the factory createLiveClient({ turnSeed }). Transcript IDs
+// are attempt-scoped: every client built within an attempt (real or scripted) is
+// seeded with the attempt's turn count so numbering continues (docs/CONTRACT.md,
+// "Live code context, reconnect, and transcript IDs").
+type ClientFactory = (options?: CreateLiveClientOptions) => LiveClient;
+const REAL_CLIENT: ClientFactory | null = createLiveClient;
 
 // Dev-only test seam: a browser test can set window.__interviewlenzTestLiveClient
 // to a LiveClient factory, which then stands in for lib/live.ts behind the same
 // token check, gating, and fallback. Production builds compile this out.
-function testClientFactory(): (() => LiveClient) | null {
+function testClientFactory(): ClientFactory | null {
   if (process.env.NODE_ENV === "production" || typeof window === "undefined") return null;
-  const f = (window as unknown as { __interviewlenzTestLiveClient?: () => LiveClient }).__interviewlenzTestLiveClient;
+  const f = (window as unknown as { __interviewlenzTestLiveClient?: ClientFactory }).__interviewlenzTestLiveClient;
   return typeof f === "function" ? f : null;
 }
 
@@ -52,7 +55,8 @@ export function isApiError(value: unknown): value is ApiError {
   return typeof value === "object" && value !== null && "code" in value && "retryable" in value;
 }
 
-async function fetchLiveToken(sessionId: string): Promise<LiveTokenResponse | ApiError> {
+// Also used by Reconnect: a fresh ephemeral token for the same session.
+export async function fetchLiveToken(sessionId: string): Promise<LiveTokenResponse | ApiError> {
   try {
     const res = await fetch("/api/live-token", {
       method: "POST",
@@ -74,13 +78,19 @@ function wire(client: LiveClient, h: VoiceHandlers) {
   client.onError(h.onError);
 }
 
-export async function openVoice(sessionId: string, problem: Problem, h: VoiceHandlers): Promise<VoiceConnection> {
+// turnSeed: turns already in the current attempt, so IDs continue (t{seed+1}, ...).
+export async function openVoice(
+  sessionId: string,
+  problem: Problem,
+  h: VoiceHandlers,
+  turnSeed = 0,
+): Promise<VoiceConnection> {
   h.onState("connecting");
   const token = await fetchLiveToken(sessionId);
 
   const realFactory = testClientFactory() ?? REAL_CLIENT;
   if (!isApiError(token) && realFactory) {
-    const real = realFactory();
+    const real = realFactory({ turnSeed });
     // Hold the real client's events until connect() settles: lib/live.ts emits
     // its error before throwing. On success, replay them and pass through; on
     // failure, drop them so they never overwrite the scripted fallback.
@@ -105,15 +115,15 @@ export async function openVoice(sessionId: string, problem: Problem, h: VoiceHan
       phase = "abandoned";
       held.length = 0;
       real.end();
-      return openMock(problem, h, "voice connection failed");
+      return openMock(problem, h, "voice connection failed", turnSeed);
     }
   }
 
-  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged");
+  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged", turnSeed);
 }
 
-async function openMock(problem: Problem, h: VoiceHandlers, reason: string): Promise<VoiceConnection> {
-  const mock = new MockLiveClient();
+async function openMock(problem: Problem, h: VoiceHandlers, reason: string, turnSeed: number): Promise<VoiceConnection> {
+  const mock = new MockLiveClient(turnSeed);
   wire(mock, h);
   await mock.connect(MOCK_TOKEN, problem);
   return { client: mock, mode: "mock", mockReason: reason };
@@ -129,7 +139,6 @@ function delay(ms: number) {
 // Scripted interviewer that follows the demo story. No audio; it emits the
 // same state and transcript events as the real client.
 
-let mockTurnCount = 0;
 
 type Approach = "nested" | "set" | "other";
 
@@ -152,6 +161,8 @@ const STUDENT_AFTER = {
 } as const;
 
 class MockLiveClient implements LiveClient {
+  // Attempt-scoped like the real client: seeded, never a global counter.
+  constructor(private turnSeq = 0) {}
   private stateCbs: ((s: LiveState) => void)[] = [];
   private turnCbs: ((t: TranscriptTurn) => void)[] = [];
   private errorCbs: ((e: ApiError) => void)[] = [];
@@ -264,7 +275,7 @@ class MockLiveClient implements LiveClient {
   }
   private emitTurn(speaker: TranscriptTurn["speaker"], text: string) {
     const turn: TranscriptTurn = {
-      id: `t${++mockTurnCount}`,
+      id: `t${++this.turnSeq}`,
       speaker,
       text,
       at: new Date().toISOString(),
