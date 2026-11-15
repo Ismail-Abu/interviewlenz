@@ -682,3 +682,61 @@ Also on `5419848`:
 - Done: coding regression in the browser (`drive-b10-coding` 10/10). With a confirmed tailoring context on the landing page, Start practice still sends a coding token with no `roundType` or `behavioralContext`; set solution 4/4 (v2) and unconditional `return False` 2/4 (v3) both reach Live with the latest version and source; the report session is the old coding shape; the F9 zero-key fixture fallback and zero-key mock voice still work; no analysis request is made.
 - Already covered by Steps 1–2: four input combinations, oversized/unreadable/too many pages, timeout, edit/remove, duplicate clicks, stale responses, manual fallback, instruction selection, opening, reconnect, report for both rounds, two attempts with different t1 quotes, rejection of invented and interviewer turn IDs.
 - Left: move the scratchpad browser drivers into the repo (`dev/`), post the B9/B10 contract proposal for Hamza, write a real-mic walkthrough for Ismail with two contrasting answers, and open the focused PR with the tested SHA, screenshots, and remaining manual acceptance.
+
+## CI handoff • automated PR checks • November 15 • passed on GitHub Actions
+
+Branch `ci/pr-checks`, based on `b10-behavioral` (`b2ef7f5`) — the latest integration branch holding the checks; it contains `main`, `release-candidate`, `f5-polish`, `f-code-sync`, `b7`, `b8`, and `b9`. PR **#17** → `b10-behavioral`. Tested commit **`e7bfa86`**.
+
+**No file in `dev/` is touched**, so the browser drivers moving into `dev/` (B10 Step 3) stay uncontested.
+
+### Files
+
+- `.github/workflows/pr.yml` (new) — `on: pull_request` + `workflow_dispatch`; `permissions: contents: read`; `concurrency: pr-checks-${{ github.event.pull_request.number || github.ref }}` with `cancel-in-progress: true`; Node 22 with npm cache; `npm ci` → `npm run lint` → `npm run test:ci` → `npm run build`; 20-minute timeout.
+- `scripts/ci-checks.mjs` (new) — runs the deterministic `dev/` checks as child processes with `--experimental-strip-types`. Explicit allowlist, not a glob. Every check runs even after a failure; exits 1 naming each failing check.
+- `package.json` — adds `"test:ci": "node scripts/ci-checks.mjs"` and `engines.node: ">=22"`.
+- `README.md` — new **Checks** section: the four commands and the "Still needs a human" table.
+
+### Local command
+
+```sh
+npm ci && npm run lint && npm run test:ci && npm run build
+```
+
+### In CI (13 deterministic checks)
+
+`runner-check` · `report-check` · `behavioral-check` · `tailoring-check` · `role-context-check` · `live-grounding-check` · `live-queue-check` · `live-stages-check` · `live-transcript-check` · `live-turnid-check` · `live-reconnect-check` · `live-disconnect-check` · `live-run-evidence-check`
+
+All stub `@google/genai` through the esbuild alias; `runner-check` drives the local `pyodide` package. None needs a key, network, port, dev server, or browser.
+
+**Excluded on purpose: `dev/live-check.mjs`.** It imports the real `GoogleGenAI`, reads `GEMINI_API_KEY`/`LIVE_MODEL` from `.env.local`, mints a real ephemeral token, and opens a real Live socket; on a clean runner its `readFileSync("../.env.local")` throws before the key check reports. The allowlist is explicit so it cannot be picked up by a `live-*.mjs` glob, and so new `dev/` browser drivers do not silently enlist.
+
+### Checks performed
+
+| Check | Result |
+|---|---|
+| Actions run [43676131163](https://github.com/Ismail-Abu/interviewlenz/actions/runs/43676131163) on `e7bfa86`, `pull_request` | **success**, 1m46s. Steps: checkout, setup-node, `npm ci`, Lint, Deterministic checks, Production build — all green |
+| `npm run test:ci` on the runner | `all 13 checks passed` on Node 22.23.4. Slowest: `live-grounding` 7863 ms, `runner-check` 6785 ms |
+| Red path (throwaway branch, since deleted) | A probe exiting 3 → step **failure**, `Production build` **skipped**, job failed with exit 1, summary `FAIL ../scripts/_fail-probe.mjs (21 ms, exit 3)` and `ci-checks: 1 of 14 FAILED: ../scripts/_fail-probe.mjs`. The other 13 still ran |
+| `cancel-in-progress` | Two rapid runs on one ref: the superseded run `43676438058` went to **cancelled** when `43676456466` started |
+| No credentials needed | The green run used no secrets; `GEMINI_API_KEY`/`LIVE_MODEL`/`REPORT_MODEL` are unset on the runner |
+
+**Not run locally:** this machine has no Node installed, so `npm run test:ci` was never executed here. Every result above comes from GitHub Actions.
+
+### No new test added — dependency to flag
+
+The suggested regression (Finish after a v3 Run scores 2/4 with an unrun v4 edit in the buffer → report retains the v4 draft, score stays on v3) is **already implemented, but not on this base**. It is only on `fix/coding-room-bash` (`ebade66`, "Fix mobile coding room and preserve unrun drafts at Finish"), which is **not an ancestor of `b10-behavioral`**:
+
+- `components/ProblemRoom.tsx` — `codingSession()` appends the unrun draft when `draft.codeVersion > 1 && lastSnapshot?.codeVersion !== draft.codeVersion`.
+- `app/api/report/route.ts` — `buildPrompt` labels it `(unrun draft; no test results for this version)`, keeping the score on v3.
+- `components/ReportView.tsx` — renders `Unrun draft · v4 · Last run: v3 (2/4 passed)`.
+
+On `b10-behavioral`, `codingSession` is still the arrow function spreading `...attempt`, with no draft preservation, so this test would fail here — it would assert a fix that is absent. **Land `fix/coding-room-bash` into the integration branch first, then add it**; the `buildPrompt` half is backend-owned and headlessly testable, while the two `components/**` halves belong with B10's incoming browser drivers rather than being duplicated.
+
+### Still needs a human
+
+- `node dev/live-check.mjs` — real key, real Live socket.
+- The in-browser spoken walkthrough — real key, HTTPS/localhost, a person at a microphone.
+- The real end-of-session report — `REPORT_MODEL` and a real Gemini call.
+- The deployed-site mic check over HTTPS.
+
+Deployment, branch protection, and application features are left to their current owners.
