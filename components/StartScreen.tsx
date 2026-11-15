@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ResumeDrop } from "./landing/ResumeDrop";
 import { JobForm } from "./landing/JobForm";
@@ -20,6 +20,15 @@ export type PracticeMode = "coding" | "behavioral" | "full-mock";
 export async function checkMicrophone(): Promise<MicStatus> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return "unsupported";
   try {
+    if (typeof navigator.permissions?.query === "function") {
+      try {
+        const queryRes = await navigator.permissions.query({ name: "microphone" as PermissionName });
+        if (queryRes.state === "granted") return "granted";
+        if (queryRes.state === "denied") return "denied";
+      } catch {
+        // Fall back to getUserMedia if permissions.query throws (e.g. Safari)
+      }
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((t) => t.stop());
     return "granted";
@@ -56,6 +65,20 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   const [resume, setResume] = useState<ResumeImage[]>([]);
   const [job, setJob] = useState<JobInfo>(EMPTY_JOB);
   const [context, setContext] = useState<BehavioralContext | undefined>(undefined);
+
+  // Proactively request microphone permission on page load so candidates never get interrupted during navigation
+  useEffect(() => {
+    if (micStatus === "unchecked") {
+      let active = true;
+      onMicStatus("checking");
+      void checkMicrophone().then((status) => {
+        if (active) onMicStatus(status);
+      });
+      return () => {
+        active = false;
+      };
+    }
+  }, [micStatus, onMicStatus]);
 
   const provided = resume.length > 0 || hasJob(job);
 
@@ -115,8 +138,25 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             </Link>
 
             <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex">
-              <span className="live-dot h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-              Live Voice Engine Ready
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  micStatus === "granted"
+                    ? "bg-success"
+                    : micStatus === "checking"
+                    ? "bg-amber-500 animate-pulse"
+                    : micStatus === "denied"
+                    ? "bg-rose-500"
+                    : "bg-success live-dot"
+                }`}
+                aria-hidden="true"
+              />
+              {micStatus === "checking"
+                ? "Connecting Microphone…"
+                : micStatus === "granted"
+                ? "Microphone Connected"
+                : micStatus === "denied"
+                ? "Mic Blocked (Scripted Mode)"
+                : "Live Voice Engine Ready"}
             </span>
           </div>
 
@@ -138,8 +178,25 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
         {/* Hero Section */}
         <section className="mx-auto max-w-6xl px-5 pb-14 pt-12 sm:px-8 sm:pt-16 lg:pb-20">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:hidden">
-            <span className="live-dot h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-            Live Voice Engine Ready
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                micStatus === "granted"
+                  ? "bg-success"
+                  : micStatus === "checking"
+                  ? "bg-amber-500 animate-pulse"
+                  : micStatus === "denied"
+                  ? "bg-rose-500"
+                  : "bg-success live-dot"
+              }`}
+              aria-hidden="true"
+            />
+            {micStatus === "checking"
+              ? "Connecting Microphone…"
+              : micStatus === "granted"
+              ? "Microphone Connected"
+              : micStatus === "denied"
+              ? "Mic Blocked (Scripted Mode)"
+              : "Live Voice Engine Ready"}
           </span>
 
           <h1 className="mt-5 max-w-3xl text-[42px] font-semibold leading-[1.02] tracking-[-0.035em] text-foreground sm:mt-0 sm:text-6xl lg:text-[72px]">
@@ -264,6 +321,28 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
                 <path d="m12 5 7 7-7 7" />
               </svg>
             </button>
+          </div>
+
+          {/* Proactive mic status feedback */}
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            {micStatus === "granted" && (
+              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Microphone connected and ready for live voice interview
+              </span>
+            )}
+            {micStatus === "checking" && (
+              <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Prompting for microphone permission…
+              </span>
+            )}
+            {micStatus === "denied" && (
+              <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                Microphone blocked — practice runs seamlessly in interactive text mode
+              </span>
+            )}
           </div>
 
           {/* Hidden helper links for browser automation / direct anchors */}
