@@ -122,6 +122,9 @@ async function runBrowserChecks() {
   const page3 = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   await page3.goto(BASE_URL);
   await page3.locator('[data-testid="start-full-mock"]').click();
+  if (await page3.locator('[data-testid="hero-start-practice"]').isVisible()) {
+    await page3.locator('[data-testid="hero-start-practice"]').click();
+  }
   await page3.waitForTimeout(1000);
 
   // Verify Round 1 header

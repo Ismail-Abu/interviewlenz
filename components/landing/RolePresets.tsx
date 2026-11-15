@@ -33,11 +33,11 @@ export function RolePresets({ job, onPick, className = "" }: Props) {
   const selected = ROLE_PRESETS.find((p) => p.company === job.company && p.role === job.role);
 
   return (
-    <fieldset className={className} data-testid="role-presets">
+    <fieldset className={`min-w-0 max-w-full ${className}`} data-testid="role-presets">
       <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         Practicing for
       </legend>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1.5 no-scrollbar sm:flex-wrap">
         {ROLE_PRESETS.map((p) => {
           const active = selected?.id === p.id;
           return (
@@ -47,7 +47,7 @@ export function RolePresets({ job, onPick, className = "" }: Props) {
               onClick={() => onPick(applyPreset(job, p))}
               aria-pressed={active}
               data-testid={`role-preset-${p.id}`}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 active
                   ? "border-foreground bg-foreground text-background shadow-sm"
                   : "border-border bg-background text-foreground hover:bg-muted"

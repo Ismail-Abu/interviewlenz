@@ -180,6 +180,14 @@ export function ApplicationSetup({
             >
               <span aria-hidden>⚡</span> Quick Start: Behavioral Deep-Dive
             </button>
+            <button
+              type="button"
+              onClick={() => onQuickPractice("full-mock")}
+              className={coverBtnSm.primary}
+              data-testid="setup-quick-full-mock"
+            >
+              <span aria-hidden>⚡</span> Quick Start: Full Mock Loop (2 Rounds)
+            </button>
           </div>
         </div>
 

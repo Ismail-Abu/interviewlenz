@@ -104,10 +104,10 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
     <div className="min-h-screen bg-background text-foreground [color-scheme:light]">
       {/* Top Navbar */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-8">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <Link
-              className="inline-flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
               aria-label="Interviewlenz home"
               href="/"
             >
@@ -160,13 +160,13 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <NavAuth />
             <button
               type="button"
               onClick={() => start(selectedMode)}
               disabled={starting}
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px rounded-md text-xs h-9 px-4"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px rounded-md text-xs h-9 px-3 sm:px-4"
             >
               Start Interview
             </button>
@@ -176,7 +176,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
 
       <main>
         {/* Hero Section */}
-        <section className="mx-auto max-w-6xl px-5 pb-14 pt-12 sm:px-8 sm:pt-16 lg:pb-20">
+        <section className="mx-auto max-w-6xl px-5 pb-10 pt-6 sm:px-8 sm:pb-14 sm:pt-16 lg:pb-20">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:hidden">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
@@ -199,47 +199,60 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
               : "Live Voice Engine Ready"}
           </span>
 
-          <h1 className="mt-5 max-w-3xl text-[42px] font-semibold leading-[1.02] tracking-[-0.035em] text-foreground sm:mt-0 sm:text-6xl lg:text-[72px]">
+          <h1 className="mt-4 max-w-3xl text-[36px] font-semibold leading-[1.04] tracking-[-0.035em] text-foreground sm:mt-0 sm:text-6xl lg:text-[72px]">
             The mock interview that actually{" "}
             <span className="font-display text-[1.08em] font-normal italic tracking-[-0.01em]">
               listens.
             </span>
           </h1>
 
-          <p className="mt-6 max-w-2xl text-[17px] leading-relaxed text-muted-foreground sm:text-lg">
+          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:mt-6 sm:text-lg">
             Practice coding and behavioral rounds with an AI interviewer that hears your reasoning out loud, evaluates
             your code, and asks realistic follow-up questions in real time.
           </p>
 
-          <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div className="flex flex-col gap-7">
+          <div className="mt-8 grid gap-6 lg:mt-10 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-8">
+            <div className="flex flex-col gap-6 sm:gap-7 min-w-0 max-w-full">
               <RolePresets job={job} onPick={setJob} />
 
-              <div role="radiogroup" aria-label="Interview mode" className="flex flex-col gap-2 sm:flex-row">
+              <div role="radiogroup" aria-label="Interview mode" className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                 <button
                   type="button"
                   role="radio"
                   aria-checked={selectedMode === "coding"}
                   onClick={() => {
-                    setSelectedMode("coding");
-                    start("coding");
+                    if (selectedMode === "coding") {
+                      start("coding");
+                    } else {
+                      setSelectedMode("coding");
+                    }
                   }}
                   data-testid="start-coding"
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
+                  className={`flex flex-col justify-between gap-1.5 rounded-xl border p-3.5 text-left text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
                     selectedMode === "coding"
-                      ? "border-foreground bg-background text-foreground shadow-card"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                      ? "border-foreground bg-background text-foreground shadow-card ring-1 ring-foreground/20"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/40"
                   }`}
                 >
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded-full border ${
-                      selectedMode === "coding" ? "border-foreground" : "border-muted-foreground/50"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {selectedMode === "coding" && <span className="h-2 w-2 rounded-full bg-foreground" />}
-                  </span>
-                  Technical Coding Interview (Python)
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`grid h-4 w-4 place-items-center rounded-full border shrink-0 ${
+                          selectedMode === "coding" ? "border-foreground" : "border-muted-foreground/50"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {selectedMode === "coding" && <span className="h-2 w-2 rounded-full bg-foreground" />}
+                      </span>
+                      <span className="font-semibold text-foreground text-xs sm:text-sm">Technical Coding</span>
+                    </div>
+                    <span className="rounded-full bg-muted border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
+                      1 Round
+                    </span>
+                  </div>
+                  <p className="pl-6 text-[11px] sm:text-xs text-muted-foreground leading-normal">
+                    Python IDE, real test cases, and real-time voice feedback
+                  </p>
                 </button>
 
                 <button
@@ -247,25 +260,38 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
                   role="radio"
                   aria-checked={selectedMode === "behavioral"}
                   onClick={() => {
-                    setSelectedMode("behavioral");
-                    start("behavioral");
+                    if (selectedMode === "behavioral") {
+                      start("behavioral");
+                    } else {
+                      setSelectedMode("behavioral");
+                    }
                   }}
                   data-testid="start-behavioral"
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
+                  className={`flex flex-col justify-between gap-1.5 rounded-xl border p-3.5 text-left text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
                     selectedMode === "behavioral"
-                      ? "border-foreground bg-background text-foreground shadow-card"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                      ? "border-foreground bg-background text-foreground shadow-card ring-1 ring-foreground/20"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/40"
                   }`}
                 >
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded-full border ${
-                      selectedMode === "behavioral" ? "border-foreground" : "border-muted-foreground/50"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {selectedMode === "behavioral" && <span className="h-2 w-2 rounded-full bg-foreground" />}
-                  </span>
-                  Behavioral Deep-Dive Interview
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`grid h-4 w-4 place-items-center rounded-full border shrink-0 ${
+                          selectedMode === "behavioral" ? "border-foreground" : "border-muted-foreground/50"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {selectedMode === "behavioral" && <span className="h-2 w-2 rounded-full bg-foreground" />}
+                      </span>
+                      <span className="font-semibold text-foreground text-xs sm:text-sm">Behavioral Deep-Dive</span>
+                    </div>
+                    <span className="rounded-full bg-muted border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
+                      1 Round
+                    </span>
+                  </div>
+                  <p className="pl-6 text-[11px] sm:text-xs text-muted-foreground leading-normal">
+                    STAR method live conversation tailored to your target role
+                  </p>
                 </button>
 
                 <button
@@ -273,25 +299,38 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
                   role="radio"
                   aria-checked={selectedMode === "full-mock"}
                   onClick={() => {
-                    setSelectedMode("full-mock");
-                    start("full-mock");
+                    if (selectedMode === "full-mock") {
+                      start("full-mock");
+                    } else {
+                      setSelectedMode("full-mock");
+                    }
                   }}
                   data-testid="start-full-mock"
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
+                  className={`flex flex-col justify-between gap-1.5 rounded-xl border p-3.5 text-left text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
                     selectedMode === "full-mock"
-                      ? "border-foreground bg-background text-foreground shadow-card"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                      ? "border-foreground bg-background text-foreground shadow-card ring-1 ring-foreground/20"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/40"
                   }`}
                 >
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded-full border ${
-                      selectedMode === "full-mock" ? "border-foreground" : "border-muted-foreground/50"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {selectedMode === "full-mock" && <span className="h-2 w-2 rounded-full bg-foreground" />}
-                  </span>
-                  Full Mock Loop
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`grid h-4 w-4 place-items-center rounded-full border shrink-0 ${
+                          selectedMode === "full-mock" ? "border-foreground" : "border-muted-foreground/50"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {selectedMode === "full-mock" && <span className="h-2 w-2 rounded-full bg-foreground" />}
+                      </span>
+                      <span className="font-semibold text-foreground text-xs sm:text-sm">Full Mock Loop</span>
+                    </div>
+                    <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary uppercase tracking-wider shrink-0">
+                      2 Rounds
+                    </span>
+                  </div>
+                  <p className="pl-6 text-[11px] sm:text-xs text-muted-foreground leading-normal">
+                    Coding followed by behavioral deep-dive in one continuous session
+                  </p>
                 </button>
               </div>
             </div>
@@ -303,7 +342,11 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
               data-testid="hero-start-practice"
               className="inline-flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px h-12 rounded-xl px-6 text-[15px] font-semibold w-full sm:w-auto"
             >
-              Launch Interview Session
+              {selectedMode === "full-mock"
+                ? "Launch Full Mock Interview (2 Rounds)"
+                : selectedMode === "behavioral"
+                ? "Launch Behavioral Deep-Dive"
+                : "Launch Technical Coding Session"}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="24"

@@ -140,6 +140,14 @@ body {
   font-family: var(--font-instrument-serif), Instrument Serif, ui-serif, Georgia, serif;
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 @media (max-width: 1023px) {
   .mobile-editor-pane {
     min-height: 360px !important;

@@ -909,9 +909,24 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
                   ? `${profile.job.company ? `${profile.job.company} · ` : ""}${profile.job.role}`
                   : "Stripe · Backend Engineer"}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                Problem: {problem.title} (Python 3)
-              </p>
+              {practiceMode === "full-mock" ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-primary tracking-wide"
+                    data-testid="full-mock-indicator"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    Full Mock Loop · Round 1 of 2 (Coding)
+                  </span>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Problem: {problem.title} (Python 3) · Behavioral follows
+                  </p>
+                </div>
+              ) : (
+                <p className="truncate text-xs text-muted-foreground">
+                  Problem: {problem.title} (Python 3)
+                </p>
+              )}
             </div>
           </div>
 
