@@ -7,6 +7,7 @@ import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
 import { BehavioralRoom } from "./BehavioralRoom";
+import { CONSOLE, SessionClock } from "./behavioral/studio";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { FullMockSummary } from "./FullMockSummary";
 import { StartScreen, type MicStatus, type PracticeMode } from "./StartScreen";
@@ -719,29 +720,34 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     );
   }
 
+  // Tested version + result, grouped for the status bar (the editor buffer can be newer).
+  const tested = result
+    ? result.status === "completed"
+      ? { ok: result.passed === result.total, text: `tested v${result.codeVersion} · ${result.passed}/${result.total} passed · ${result.durationMs} ms` }
+      : { ok: false, text: `tested v${result.codeVersion} · ${result.error.code.replace(/_/g, " ")}` }
+    : null;
+
   return (
-    <div data-surface="cream" className="flex min-h-dvh flex-col bg-cream text-ink lg:h-screen [color-scheme:light]" {...planMarker}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-cream-line bg-cream-2/90 px-4 py-3 sm:gap-4 sm:px-6 shadow-sm">
-        <Wordmark size={26} tone="light" />
-        <div className="hidden items-center gap-2 md:flex">
-          <span className="font-semibold text-ink">
-            Python · {problem.title}
+    <div className={`flex min-h-dvh flex-col lg:h-screen ${CONSOLE.page}`} {...planMarker}>
+      <header className={`${CONSOLE.header} flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6`}>
+        <Wordmark size={26} tone="dark" />
+        <div className="hidden min-w-0 items-center gap-2 md:flex">
+          <span className="truncate font-mono text-sm text-zinc-200">
+            python · <span className="font-sans font-semibold text-zinc-50">{problem.title}</span>
           </span>
           {attemptNumber > 1 && (
-            <span className="rounded-full bg-cream-3 px-2 py-0.5 text-xs font-medium text-ink-muted">
-              Attempt {attemptNumber}
-            </span>
+            <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-zinc-300">Attempt {attemptNumber}</span>
           )}
           {practiceMode === "full-mock" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-maroon/10 border border-maroon/20 px-3 py-1 text-xs font-bold text-maroon">
-              <span className="h-1.5 w-1.5 rounded-full bg-maroon" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-950/50 px-3 py-1 text-xs font-bold text-rose-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.9)]" />
               Technical Coding Interview
             </span>
           )}
         </div>
         {profile && hasJob(profile.job) && (
           <span
-            className="hidden max-w-xs truncate rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-maroon-deep lg:inline"
+            className="hidden max-w-xs truncate rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs font-semibold text-zinc-200 lg:inline"
             data-testid="target-role"
             title="Role details used for interview framing and feedback."
           >
@@ -749,22 +755,20 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             {profile.job.company.trim() && ` at ${profile.job.company.trim()}`}
           </span>
         )}
-        <span className="ml-auto text-sm text-ink-muted max-sm:sr-only" data-testid="session-stats">
-          {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
+        {/* Session telemetry: snapshots, runs, turns, elapsed. */}
+        <span
+          className="ml-auto rounded-[10px] border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 font-mono text-xs text-zinc-300 max-sm:sr-only"
+          data-testid="session-stats"
+        >
+          {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns · <SessionClock key={attemptNumber} />
         </span>
         {DEV && (
           <details className="relative max-sm:ml-auto">
-            <summary className="cursor-pointer select-none rounded-[12px] border border-cream-line bg-cream-3 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#EFE0CA]">
-              Dev
-            </summary>
-            <div className="absolute right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-[18px] border border-cream-line bg-cream-2 p-4 shadow-xl">
-              <label className="flex flex-col gap-1 text-xs font-bold text-ink">
+            <summary className={`${CONSOLE.ghost} cursor-pointer select-none px-3 py-1.5 text-xs`}>Dev</summary>
+            <div className="absolute right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-[14px] border border-white/[0.1] bg-[#15161A] p-4 shadow-2xl">
+              <label className="flex flex-col gap-1 text-xs font-bold text-zinc-200">
                 Run with
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as RunMode)}
-                  className="rounded-lg border border-cream-line bg-white px-2 py-1.5 text-ink text-sm"
-                >
+                <select value={mode} onChange={(e) => setMode(e.target.value as RunMode)} className="rounded-lg border border-white/[0.1] bg-[#0B0C0E] px-2 py-1.5 text-sm text-zinc-100">
                   <option value="real">Python runner</option>
                   <option value="cycle">Fixtures: cycle all four</option>
                   <option value="pass">Fixture: pass (4/4)</option>
@@ -773,13 +777,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
                   <option value="unavailable">Fixture: runner unavailable</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs font-bold text-ink">
+              <label className="flex flex-col gap-1 text-xs font-bold text-zinc-200">
                 Report
-                <select
-                  value={reportMode}
-                  onChange={(e) => setReportMode(e.target.value as ReportMode)}
-                  className="rounded-lg border border-cream-line bg-white px-2 py-1.5 text-ink text-sm"
-                >
+                <select value={reportMode} onChange={(e) => setReportMode(e.target.value as ReportMode)} className="rounded-lg border border-white/[0.1] bg-[#0B0C0E] px-2 py-1.5 text-sm text-zinc-100">
                   <option value="auto">Auto: /api/report, else fixture</option>
                   <option value="fixture">Fixture only</option>
                   <option value="fixture-error">Fixture: 503 once, then OK</option>
@@ -789,18 +789,13 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             </div>
           </details>
         )}
-        <button
-          onClick={handleFinish}
-          disabled={running}
-          className={`${coverBtnSm.secondary} px-5 py-2 text-sm`}
-          data-testid="finish-btn"
-        >
+        <button onClick={handleFinish} disabled={running} className={CONSOLE.finish} data-testid="finish-btn">
           Finish
         </button>
       </header>
 
-      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] p-3 sm:p-5 gap-4 bg-cream">
-        <div className="flex shrink-0 flex-col overflow-hidden rounded-[24px] bg-[#161312] text-zinc-100 shadow-warm border border-[#2D2623] lg:min-h-0 lg:shrink">
+      <main className="flex flex-col gap-4 p-3 sm:p-4 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className={`flex shrink-0 flex-col overflow-hidden lg:min-h-0 lg:shrink ${CONSOLE.panel}`}>
           <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0}>
             <ProblemPanel problem={problem} />
           </div>
@@ -823,30 +818,27 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           />
         </div>
 
-        <div className="flex flex-col overflow-hidden rounded-[24px] bg-[#161312] text-zinc-100 shadow-warm border border-[#2D2623] lg:min-h-0">
-          <div className="flex flex-wrap items-center justify-between border-b border-[#2D2623] bg-[#201B19] px-5 py-3 gap-2">
-            <div>
-              <div className="flex flex-wrap items-center gap-2 font-mono text-xs sm:text-sm text-[#9A8C84]">
-                <span className="font-semibold text-zinc-200">solution.py · v{codeVersion}</span>
-                {result?.status === "completed" && (
-                  <>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3A28] border border-[#2E6B40] px-2.5 py-0.5 text-xs font-semibold text-[#6EE7A0]">
-                      <span>{result.passed} / {result.total} passed</span>
-                      <span>·</span>
-                      <span>{result.durationMs} ms</span>
-                    </span>
-                  </>
+        <div className={`flex flex-col overflow-hidden lg:min-h-0 ${CONSOLE.panel}`}>
+          {/* Workbench status bar: buffer version, tested version + result, runtime. */}
+          <div className={`${CONSOLE.bar} flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2.5 sm:px-5`}>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 font-mono text-xs sm:text-sm">
+                <span className="font-semibold text-zinc-100">solution.py · v{codeVersion}</span>
+                {tested && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                      tested.ok ? "border-emerald-500/30 bg-emerald-950/60 text-emerald-400" : "border-amber-500/30 bg-amber-950/60 text-amber-300"
+                    }`}
+                    data-testid="status-passed"
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${tested.ok ? "bg-emerald-400" : "bg-amber-400"}`} aria-hidden />
+                    {tested.text}
+                  </span>
                 )}
               </div>
               <p className="mt-0.5 text-[11px] text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
             </div>
-            <button
-              onClick={handleRun}
-              disabled={running}
-              className={`${btn.primary} min-w-[7rem] px-5 py-2 text-sm font-semibold shadow-sm`}
-              data-testid="run-btn"
-            >
+            <button onClick={handleRun} disabled={running} className={`${CONSOLE.primary} min-w-[7rem] px-5 py-2 text-sm`} data-testid="run-btn">
               {running ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
@@ -862,7 +854,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           <div className="mobile-editor-pane bg-[#1e1e1e] lg:h-auto lg:min-h-0 lg:flex-[3]">
             <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
-          <div className="min-h-[260px] shrink-0 border-t border-[#2D2623] lg:h-[38%] lg:shrink">
+          <div className="min-h-[260px] shrink-0 border-t border-white/[0.08] bg-[#0E0F12] lg:h-[38%] lg:shrink">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
         </div>
