@@ -1,5 +1,24 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { EndSensitivity, GoogleGenAI, Modality } from "@google/genai";
 import type { ApiError, LiveTokenResponse } from "../../../lib/contract";
+import { containsDuplicate } from "../../../lib/problems";
+import { interviewerInstructions } from "../../../lib/prompts";
+
+// The interviewer instruction for the canonical problem, built by the shared
+// builder. A token minted with liveConnectConstraints locks the ENTIRE Live
+// config (SDK 3.3.0 authTokens.create docs, "Case 2"), so a client-side
+// systemInstruction or realtimeInputConfig is ignored: both must live here.
+const SYSTEM_INSTRUCTION = interviewerInstructions(containsDuplicate);
+
+// Server turn detection: require 1.2 s of silence before ending the student's
+// turn, so a natural ~850 ms pause mid-sentence does not hand the turn to the
+// interviewer. Low end-of-speech sensitivity for the same reason.
+const TURN_DETECTION = {
+  automaticActivityDetection: {
+    silenceDurationMs: 1200,
+    prefixPaddingMs: 300,
+    endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+  },
+};
 
 // Runs on the default Node.js runtime (route handlers are Node by default), so
 // the GenAI SDK and the permanent GEMINI_API_KEY stay on the server; the browser
@@ -80,6 +99,8 @@ export async function POST(request: Request): Promise<Response> {
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             sessionResumption: {},
+            systemInstruction: SYSTEM_INSTRUCTION,
+            realtimeInputConfig: TURN_DETECTION,
           },
         },
       },

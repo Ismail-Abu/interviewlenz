@@ -27,7 +27,7 @@ export class GoogleGenAI {
     this.live = { connect: async ({ callbacks }) => {
       globalThis.__CB__ = callbacks;
       if (callbacks.onopen) callbacks.onopen();
-      return { sendClientContent: (m) => { globalThis.__SENT__.push(m); }, sendRealtimeInput: () => {}, close: () => {} };
+      return { sendClientContent: (m) => { const __t = m?.turns?.[0]?.parts?.[0]?.text ?? ""; if (__t.startsWith("[START]")) { queueMicrotask(() => { callbacks.onmessage({ serverContent: { turnComplete: true } }); callbacks.onmessage({ serverContent: { inputTranscription: { text: "Opening answered.", finished: true } } }); }); return; } globalThis.__SENT__.push(m); }, sendRealtimeInput: () => {}, close: () => {} };
     } };
   }
 }
@@ -71,7 +71,7 @@ function check(label, got, want) {
 function assert(label, cond) { if (!cond) fails += 1; console.log(`${cond ? "PASS" : "FAIL"}  ${label}`); }
 
 async function fresh() {
-  const c = createLiveClient();
+  const c = createLiveClient({ followupSettleMs: 0 });
   await c.connect(token, problem);
   drain();
   return c;

@@ -27,7 +27,7 @@ export class GoogleGenAI {
       globalThis.__CB__ = callbacks;
       if (callbacks.onopen) callbacks.onopen();
       return {
-        sendClientContent: (m) => { if (globalThis.__FAIL_SEND__) throw new Error("send failed"); globalThis.__SENT__.push(m); },
+        sendClientContent: (m) => { const __t = m?.turns?.[0]?.parts?.[0]?.text ?? ""; if (__t.startsWith("[START]")) { queueMicrotask(() => { callbacks.onmessage({ serverContent: { turnComplete: true } }); callbacks.onmessage({ serverContent: { inputTranscription: { text: "Opening answered.", finished: true } } }); }); return; } if (globalThis.__FAIL_SEND__) throw new Error("send failed"); globalThis.__SENT__.push(m); },
         sendRealtimeInput: () => {},
         close: () => {},
       };
@@ -54,7 +54,7 @@ const assert = (label, cond, extra) => { if (!cond) fails += 1; console.log(`${c
 // === Socket-close path =====================================================
 const states = [];
 const errors = [];
-const c = createLiveClient();
+const c = createLiveClient({ followupSettleMs: 0 });
 c.onState((s) => states.push(s));
 c.onError((e) => errors.push(e));
 await c.connect(token, problem);
@@ -84,7 +84,7 @@ assert("End clears preserved evidence (nothing restored next connect)", afterEnd
 // === Send-failure path =====================================================
 globalThis.__SENT__.length = 0;
 const states2 = [];
-const d = createLiveClient();
+const d = createLiveClient({ followupSettleMs: 0 });
 d.onState((s) => states2.push(s));
 await d.connect(token, problem);
 drain();

@@ -13,9 +13,13 @@ export function interviewerInstructions(problem: Problem): string {
     .join("\n");
   const constraints = problem.constraints.map((c) => `  - ${c}`).join("\n");
 
+  // This text is locked into the single-use ephemeral token by
+  // app/api/live-token/route.ts; that is the only place it takes effect (a
+  // token with liveConnectConstraints locks the whole Live config, so a
+  // client-side systemInstruction is ignored).
   return [
     `You are a friendly but rigorous technical interviewer for the problem "${problem.title}".`,
-    "The candidate solves it in Python in a live voice interview.",
+    "The candidate solves it in Python in a live voice interview. Speak only in English.",
     "",
     "The problem:",
     problem.prompt,
@@ -27,12 +31,23 @@ export function interviewerInstructions(problem: Problem): string {
     "- Start by asking the candidate to explain their approach, before they write code.",
     "- Keep every spoken turn to one or two sentences. Never give the solution or dictate code.",
     "- Ask exactly one question, then stop and wait. Do not stack or repeat questions.",
-    "- Only the candidate's spoken answer advances the interview. An edit, a Run result, silence, or your own words are NOT an answer; if you have not heard an answer yet, keep waiting.",
+    "- Only the candidate's spoken answer advances the interview. An edit, a Run result, silence, or your own words are NOT an answer; if you have not heard an answer yet, keep waiting. A short pause mid-sentence is not the end of an answer.",
     "- If an answer is incomplete, ask about the specific missing detail. If an answer contradicts the code, ask about the exact operation that creates the contradiction (e.g. a 'linear time' claim about a nested loop: ask how many comparisons happen when every element is different).",
-    "- After a Run, discuss that submitted version and its actual test results (sent to you as a [RUN v..] message with the code and results).",
-    "- End the interview with time complexity, then space complexity, then one edge case, each as its own single question, one at a time.",
+    "- After a Run, discuss that submitted version and its actual observed test results.",
+    "- When time allows, cover time complexity, then space complexity, then one edge case, each as its own single question, before wrapping up.",
     "",
-    "You also receive [CODE v..] context updates (the current buffer). Ground every question in the candidate's actual code and results, never generic advice.",
+    "How you receive information (text messages from the app, never spoken by the candidate):",
+    "- [START]: begin the interview with your opening question.",
+    "- [CODE vN]: a silent snapshot of the current editor buffer, version N. It has NOT been run. Do not respond to it on its own.",
+    "- [RUN vN] P/T passed: the exact code the candidate ran as version N, with the observed results (P of T cases passed, failing cases listed). The latest Run is the [RUN v..] with the highest version you have received. A later [CODE] snapshot can be newer than the latest Run; it does not change which version was last run or its score.",
+    "- A message asking you to discuss a Run: ask one focused question about that version's code and results.",
+    "- [RECONNECTED]: the app observed the voice connection drop and restored it. Earlier conversation is not available to you; the current code and latest Run follow it.",
+    "",
+    "Grounding rules:",
+    "- If asked which version was run, how many cases passed, or why: answer with the latest [RUN v..] version number, its exact score, and a specific detail of that version's code that explains the result.",
+    "- If you have not received what is needed (no [RUN] yet, or no code), say exactly what is missing. Never guess a version, a score, or code you have not been given.",
+    "- Mention a reconnect only if you received [RECONNECTED]. Never claim one otherwise.",
+    "- Ground every question in the candidate's actual code and results, never generic advice.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -88,6 +103,17 @@ export function formatRunFollowup(
       : `failed (${result.error.code}${result.error.line ? ` on line ${result.error.line}` : ""})`;
   const buffer = v < currentBufferVersion ? ` The current buffer is version ${currentBufferVersion}.` : "";
   return `[RUN v${v}] The most recent run is version ${v}, which ${outcome}.${buffer} Discuss this version and ask one focused question grounded in its code and results.`;
+}
+
+// Sent once, on the first connect of an attempt, so the interviewer opens.
+export function formatOpening(problem: Problem): string {
+  return `[START] Begin the interview now. In English, greet the candidate in one short sentence and ask them to explain their approach to "${problem.title}" before they code. Then wait for their answer.`;
+}
+
+// Sent once, silently, after the app observed a drop and reconnected. The
+// restored code and latest Run evidence follow it in the same message.
+export function formatReconnected(): string {
+  return "[RECONNECTED] The app observed the voice connection drop and restored it. Earlier conversation is not available to you. The current code and the latest Run follow.";
 }
 
 // A silent code-context update: makes the current working buffer available to

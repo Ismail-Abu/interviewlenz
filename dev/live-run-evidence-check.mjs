@@ -26,7 +26,7 @@ export class GoogleGenAI {
     this.live = { connect: async ({ callbacks }) => {
       globalThis.__CB__ = callbacks;
       if (callbacks.onopen) callbacks.onopen();
-      return { sendClientContent: (m) => { globalThis.__SENT__.push(m); }, sendRealtimeInput: () => {}, close: () => {} };
+      return { sendClientContent: (m) => { const __t = m?.turns?.[0]?.parts?.[0]?.text ?? ""; if (__t.startsWith("[START]")) { queueMicrotask(() => { callbacks.onmessage({ serverContent: { turnComplete: true } }); callbacks.onmessage({ serverContent: { inputTranscription: { text: "Opening answered.", finished: true } } }); }); return; } globalThis.__SENT__.push(m); }, sendRealtimeInput: () => {}, close: () => {} };
     } };
   }
 }
@@ -57,7 +57,7 @@ function drain() {
 let fails = 0;
 const assert = (label, cond, extra) => { if (!cond) fails += 1; console.log(`${cond ? "PASS" : "FAIL"}  ${label}${cond || extra === undefined ? "" : `  (${extra})`}`); };
 
-const c = createLiveClient();
+const c = createLiveClient({ followupSettleMs: 0 });
 await c.connect(token, problem);
 drain();
 
@@ -91,7 +91,7 @@ assert("after answer: exactly one spoken follow-up", asks.length === 1, `got ${a
 assert("follow-up is about v3 and states 2/4 (not 4/4)", asks[0] && asks[0].text.includes("[RUN v3]") && asks[0].text.includes("2/4") && !asks[0].text.includes("4/4"), asks[0]?.text);
 
 // --- Partial-transcript safety ---------------------------------------------
-const c2 = createLiveClient();
+const c2 = createLiveClient({ followupSettleMs: 0 });
 await c2.connect(token, problem);
 drain();
 c2.sendRunContext(snap(2), completed(2, 4, 4)); // evidence + follow-up -> outstanding

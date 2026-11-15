@@ -32,7 +32,7 @@ export class GoogleGenAI {
         globalThis.__CB__ = callbacks;
         if (callbacks.onopen) callbacks.onopen();
         return {
-          sendClientContent: (m) => { globalThis.__SENT__.push(m); },
+          sendClientContent: (m) => { const __t = m?.turns?.[0]?.parts?.[0]?.text ?? ""; if (__t.startsWith("[START]")) { queueMicrotask(() => { callbacks.onmessage({ serverContent: { turnComplete: true } }); callbacks.onmessage({ serverContent: { inputTranscription: { text: "Opening answered.", finished: true } } }); }); return; } globalThis.__SENT__.push(m); },
           sendRealtimeInput: () => {},
           close: () => {},
         };
@@ -96,7 +96,7 @@ function check(label, items, expectedSig) {
 }
 
 async function fresh() {
-  const c = createLiveClient();
+  const c = createLiveClient({ followupSettleMs: 0 });
   await c.connect(token, problem);
   drain();
   return c;

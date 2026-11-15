@@ -13,13 +13,38 @@ import type {
   RunResult,
   TranscriptTurn,
 } from "./contract";
-import { formatCodeContext, formatRunEvidence, formatRunFollowup, interviewerInstructions } from "./prompts";
+import { formatCodeContext, formatOpening, formatReconnected, formatRunEvidence, formatRunFollowup } from "./prompts";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
 // conflict. The browser client must match the version the token was minted for.
 const LIVE_API_VERSION = "v1beta";
 const INPUT_SAMPLE_RATE = 16000; // Live API input: 16-bit PCM, 16 kHz, mono
 const OUTPUT_SAMPLE_RATE = 24000; // Live API output: 16-bit PCM, 24 kHz
+// After the student's last speech activity, wait this long before the app asks
+// for a Run follow-up, so a natural pause mid-sentence never triggers a question.
+// Speech resuming cancels the wait. (Server turn detection is locked into the
+// token: 1.2 s silence, low end-of-speech sensitivity; see the token route.)
+const STUDENT_SETTLE_MS = 1500;
+
+// Local, opt-in correlation trace for debugging a Run end to end: set
+// globalThis.__ILZ_LIVE_TRACE__ = [] in a dev console or test. Metadata only
+// (connection id, run id, version, score, stage); never audio, source code,
+// transcript text, or tokens. Off unless that array exists.
+type TraceEvent = {
+  at: number;
+  conn: number;
+  stage: string;
+  runId?: number;
+  v?: number;
+  score?: string;
+  speaker?: string;
+  id?: string;
+};
+function trace(e: Omit<TraceEvent, "at">): void {
+  const sink = (globalThis as { __ILZ_LIVE_TRACE__?: TraceEvent[] }).__ILZ_LIVE_TRACE__;
+  if (Array.isArray(sink)) sink.push({ at: Date.now(), ...e });
+}
+const scoreOf = (r: RunResult) => (r.status === "completed" ? `${r.passed}/${r.total}` : `error:${r.error.code}`);
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -87,8 +112,19 @@ class BrowserLiveClient implements LiveClient {
   // The session dropped unexpectedly (vs. an intentional end()).
   private disconnected = false;
   private ending = false;
+  // Opening question: asked once per attempt (first connect), never on reconnect.
+  private problem: Problem | null = null;
+  private openingSent = false;
+  private openingPending = false;
+  // A drop was observed and the session restored: tell the model once.
+  private reconnectNoticePending = false;
+  // Follow-up settle window after the student's last speech activity.
+  private lastStudentActivityAt = 0;
+  private followupTimer: ReturnType<typeof setTimeout> | null = null;
+  // The latest Run whose follow-up was written, awaiting a grounded reply.
+  private awaitingConfirmation: { runId: number; v: number; passed?: number; total?: number } | null = null;
 
-  constructor(turnSeed = 0) {
+  constructor(turnSeed = 0, private readonly settleMs = STUDENT_SETTLE_MS) {
     // Attempt-scoped seed: a client rebuilt within the same attempt continues
     // numbering (t{turnSeed+1}, ...), so transcript IDs stay unique across
     // reconnects and voice-mode switches. A new attempt (Retry) starts at 0.
@@ -139,7 +175,9 @@ class BrowserLiveClient implements LiveClient {
       }
     }
 
-    const systemInstruction = interviewerInstructions(problem);
+    this.problem = problem;
+    // The interviewer instruction is NOT set here: the token route locks it into
+    // the ephemeral token, and a locked token ignores client-side config.
 
     try {
       const ai = new GoogleGenAI({
@@ -170,7 +208,6 @@ class BrowserLiveClient implements LiveClient {
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           sessionResumption: {},
-          systemInstruction,
         },
       });
 
@@ -190,6 +227,10 @@ class BrowserLiveClient implements LiveClient {
       // re-deliver them now. This restores the Run evidence (and one follow-up)
       // after a reconnect; prior transcript turns are not replayed to the model.
       this.session = session;
+      trace({ conn: epoch, stage: this.disconnected ? "reconnected" : "connected" });
+      // Tell the model about a reconnect only when the app observed a drop.
+      this.reconnectNoticePending = this.disconnected;
+      if (!this.openingSent) this.openingPending = true;
       this.deliveredRunEpoch = 0;
       this.lastSentBufferVersion = 0;
       this.modelTurnActive = false;
@@ -277,9 +318,17 @@ class BrowserLiveClient implements LiveClient {
     const version = result.codeVersion;
     this.runVersions.add(version);
     this.observeVersion(version, snapshot.source);
+    // An older Run completing late never replaces newer Run evidence, and does
+    // not earn its own question. Re-running the same version does replace it.
+    if (this.latestRun && version < this.latestRun.result.codeVersion) {
+      trace({ conn: this.connectionSeq, stage: "superseded", v: version, score: scoreOf(result) });
+      return;
+    }
     this.runEpoch += 1;
     this.latestRun = { epoch: this.runEpoch, snapshot, result };
+    // One pending follow-up, always about the latest Run (superseded ones coalesce).
     this.followupOwed = true;
+    trace({ conn: this.connectionSeq, stage: "queued", runId: this.runEpoch, v: version, score: scoreOf(result) });
     this.pump();
   }
 
@@ -295,7 +344,26 @@ class BrowserLiveClient implements LiveClient {
 
   private pump(): void {
     this.pumpEvidence();
+    this.pumpOpening();
     this.pumpFollowup();
+  }
+
+  // First connect of an attempt: ask the interviewer to open with the approach question.
+  private pumpOpening(): void {
+    if (!this.session || this.modelTurnActive || !this.openingPending || !this.problem) return;
+    try {
+      this.session.sendClientContent({
+        turns: [{ role: "user", parts: [{ text: formatOpening(this.problem) }] }],
+        turnComplete: true,
+      });
+      this.openingPending = false;
+      this.openingSent = true;
+      this.modelTurnActive = true;
+      this.outstanding = true; // the opening is a question; wait for the answer
+      trace({ conn: this.connectionSeq, stage: "opening" });
+    } catch {
+      this.markDisconnected();
+    }
   }
 
   // Deliver completed-Run evidence (and any genuine "not run yet" buffer) as
@@ -306,6 +374,7 @@ class BrowserLiveClient implements LiveClient {
     if (!this.session || this.modelTurnActive) return;
 
     const parts: string[] = [];
+    if (this.reconnectNoticePending) parts.push(formatReconnected());
     const runUndelivered = !!this.latestRun && this.latestRun.epoch > this.deliveredRunEpoch;
     if (runUndelivered && this.latestRun) {
       parts.push(formatRunEvidence(this.latestRun.snapshot, this.latestRun.result, this.currentBufferVersion));
@@ -329,7 +398,12 @@ class BrowserLiveClient implements LiveClient {
         turns: [{ role: "user", parts: [{ text: parts.join("\n\n") }] }],
         turnComplete: false,
       });
-      if (runUndelivered && this.latestRun) this.deliveredRunEpoch = this.latestRun.epoch;
+      this.reconnectNoticePending = false;
+      if (runUndelivered && this.latestRun) {
+        this.deliveredRunEpoch = this.latestRun.epoch;
+        const r = this.latestRun.result;
+        trace({ conn: this.connectionSeq, stage: "written", runId: this.latestRun.epoch, v: r.codeVersion, score: scoreOf(r) });
+      }
       if (bufferEligible) this.lastSentBufferVersion = this.currentBufferVersion;
     } catch {
       this.markDisconnected();
@@ -343,6 +417,17 @@ class BrowserLiveClient implements LiveClient {
     if (!this.session || this.modelTurnActive || this.outstanding) return;
     if (this.pendingInput !== "") return; // student is mid-utterance
     if (!this.followupOwed || !this.latestRun) return;
+    // Let the student finish: wait out the settle window after their last speech.
+    const wait = this.lastStudentActivityAt + this.settleMs - Date.now();
+    if (wait > 0) {
+      if (!this.followupTimer) {
+        this.followupTimer = setTimeout(() => {
+          this.followupTimer = null;
+          this.pump();
+        }, wait);
+      }
+      return;
+    }
 
     const text = formatRunFollowup(this.latestRun.result, this.currentBufferVersion);
     try {
@@ -353,6 +438,13 @@ class BrowserLiveClient implements LiveClient {
       this.followupOwed = false;
       this.modelTurnActive = true; // a turn is coming
       this.outstanding = true; // we just posed a question
+      const r = this.latestRun.result;
+      this.awaitingConfirmation = {
+        runId: this.latestRun.epoch,
+        v: r.codeVersion,
+        ...(r.status === "completed" ? { passed: r.passed, total: r.total } : {}),
+      };
+      trace({ conn: this.connectionSeq, stage: "asked", runId: this.latestRun.epoch, v: r.codeVersion, score: scoreOf(r) });
     } catch {
       this.markDisconnected();
     }
@@ -369,8 +461,14 @@ class BrowserLiveClient implements LiveClient {
     this.errorCb?.({ code: "provider_unavailable", message: "Voice connection lost", retryable: true });
   }
 
+  private cancelFollowupTimer(): void {
+    if (this.followupTimer) clearTimeout(this.followupTimer);
+    this.followupTimer = null;
+  }
+
   end(): void {
     this.ending = true;
+    this.cancelFollowupTimer();
     this.connectionSeq += 1; // invalidate any in-flight connect() / stale socket callbacks
     this.micActive = false;
     this.cleanupMic();
@@ -406,6 +504,11 @@ class BrowserLiveClient implements LiveClient {
     this.modelTurnActive = false;
     this.outstanding = false;
     this.disconnected = false;
+    this.openingSent = false;
+    this.openingPending = false;
+    this.reconnectNoticePending = false;
+    this.awaitingConfirmation = null;
+    this.lastStudentActivityAt = 0;
     this.setState("idle");
   }
 
@@ -424,7 +527,13 @@ class BrowserLiveClient implements LiveClient {
     // `finished` with no text of its own. Handle presence and the finished flag
     // separately so a text-less completion still flushes the turn.
     if (content.inputTranscription) {
-      if (content.inputTranscription.text) this.pendingInput += content.inputTranscription.text;
+      // Any student speech (or its end) restarts the settle window; speech
+      // resuming cancels a pending follow-up until the student pauses again.
+      this.lastStudentActivityAt = Date.now();
+      if (content.inputTranscription.text) {
+        this.cancelFollowupTimer();
+        this.pendingInput += content.inputTranscription.text;
+      }
       if (content.inputTranscription.finished && this.pendingInput) {
         const text = this.pendingInput;
         this.pendingInput = ""; // clear before emit so a follow-up sees no mid-utterance
@@ -553,12 +662,10 @@ class BrowserLiveClient implements LiveClient {
     const trimmed = text.trim();
     if (!trimmed) return;
     this.turnSeq += 1;
-    this.turnCb?.({
-      id: `t${this.turnSeq}`,
-      speaker,
-      text: trimmed,
-      at: new Date().toISOString(),
-    });
+    const id = `t${this.turnSeq}` as const;
+    this.turnCb?.({ id, speaker, text: trimmed, at: new Date().toISOString() });
+    trace({ conn: this.connectionSeq, stage: "turn", speaker, id });
+    if (speaker === "interviewer" && this.awaitingConfirmation) this.checkGrounded(trimmed);
     if (speaker === "student") {
       // Only a completed student turn answers the outstanding question; an owed
       // follow-up (if any) may now be raised at this boundary.
@@ -566,6 +673,27 @@ class BrowserLiveClient implements LiveClient {
       this.pump();
     } else {
       this.outstanding = true; // the interviewer just asked; wait for the student
+    }
+  }
+
+  // Mark the asked-about Run "confirmed" when the interviewer's reply names its
+  // version or its score (a grounded reply). Only metadata is traced.
+  private checkGrounded(text: string): void {
+    const a = this.awaitingConfirmation;
+    if (!a) return;
+    const t = text.toLowerCase();
+    const namesVersion = new RegExp(`\\b(version|v)\\s*${a.v}\\b`).test(t);
+    const namesScore =
+      a.passed !== undefined && new RegExp(`\\b${a.passed}\\s*(/|out of|of)\\s*${a.total}\\b`).test(t);
+    if (namesVersion || namesScore) {
+      trace({
+        conn: this.connectionSeq,
+        stage: "confirmed",
+        runId: a.runId,
+        v: a.v,
+        ...(a.passed !== undefined ? { score: `${a.passed}/${a.total}` } : {}),
+      });
+      this.awaitingConfirmation = null;
     }
   }
 }
@@ -576,10 +704,13 @@ export interface CreateLiveClientOptions {
   // in the attempt (e.g. session.turns.length), for the real client and the
   // scripted fallback alike. A new attempt (Retry) starts a client at 0.
   turnSeed?: number;
+  // Wait after the student's last speech before a Run follow-up (default 1500 ms).
+  // Deterministic dev checks pass 0; the app uses the default.
+  followupSettleMs?: number;
 }
 
 export function createLiveClient(options?: CreateLiveClientOptions): LiveClient {
-  return new BrowserLiveClient(options?.turnSeed ?? 0);
+  return new BrowserLiveClient(options?.turnSeed ?? 0, options?.followupSettleMs ?? STUDENT_SETTLE_MS);
 }
 
 export { BrowserLiveClient };
