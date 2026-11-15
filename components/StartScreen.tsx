@@ -9,6 +9,7 @@ import { EMPTY_JOB, hasJob, type CandidateProfile, type JobInfo, type ResumeImag
 import { coverBtn } from "./ui/buttons";
 import { LiveDemoPanel } from "./landing/LiveDemoPanel";
 import { RolePresets } from "./landing/RolePresets";
+import { CompanyRail } from "./landing/CompanyRail";
 import type { BehavioralContext } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
@@ -163,6 +164,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
           </div>
         </section>
 
+        <CompanyRail />
 
         {/* Practice modes */}
         <section id="practice-modes" className="scroll-mt-6 pt-16">
