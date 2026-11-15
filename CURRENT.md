@@ -685,7 +685,9 @@ Also on `5419848`:
 
 ## CI handoff • automated PR checks • November 15 • passed on GitHub Actions
 
-Branch `ci/pr-checks`, based on `b10-behavioral` (`b2ef7f5`) — the latest integration branch holding the checks; it contains `main`, `release-candidate`, `f5-polish`, `f-code-sync`, `b7`, `b8`, and `b9`. PR **#17** → `b10-behavioral`. Tested commit **`e7bfa86`**.
+Branch `ci/pr-checks`. PR **#17** → **`main`**. Tested commit **`b6b3133`**.
+
+Originally based on `b10-behavioral` (`b2ef7f5`) and targeted there. Retargeted to `main` once `main` moved ahead: `main` (`984f26b`) now carries the unrun-draft fix (via its own merge `52a4f98`) plus PR #18's 2-round flow, streamlined homepage, and mobile editor, and is ahead of `b10-behavioral` in features. Merging `main` in conflicted on `components/StartScreen.tsx` — **took main's version**, since this branch adds CI only and must not change Hamza's components. Its diff against `main` is CI files alone (workflow, `scripts/ci-checks.mjs`, `dev/unrun-draft-check.mjs`, `package.json`, `README.md`, this entry).
 
 **No file in `dev/` is touched**, so the browser drivers moving into `dev/` (B10 Step 3) stay uncontested.
 
@@ -722,15 +724,17 @@ All stub `@google/genai` through the esbuild alias; `runner-check` drives the lo
 
 **Not run locally:** this machine has no Node installed, so `npm run test:ci` was never executed here. Every result above comes from GitHub Actions.
 
-### No new test added — dependency to flag
+### Regression test added — dependency resolved
 
-The suggested regression (Finish after a v3 Run scores 2/4 with an unrun v4 edit in the buffer → report retains the v4 draft, score stays on v3) is **already implemented, but not on this base**. It is only on `fix/coding-room-bash` (`ebade66`, "Fix mobile coding room and preserve unrun drafts at Finish"), which is **not an ancestor of `b10-behavioral`**:
+`dev/unrun-draft-check.mjs` (new; no existing `dev/` file touched), in CI via the allowlist. 19 assertions, all passing.
 
-- `components/ProblemRoom.tsx` — `codingSession()` appends the unrun draft when `draft.codeVersion > 1 && lastSnapshot?.codeVersion !== draft.codeVersion`.
-- `app/api/report/route.ts` — `buildPrompt` labels it `(unrun draft; no test results for this version)`, keeping the score on v3.
-- `components/ReportView.tsx` — renders `Unrun draft · v4 · Last run: v3 (2/4 passed)`.
+Scenario: a v3 Run scores 2/4, the student edits to v4 and presses Finish without running. It asserts `buildPrompt` labels v4 `(unrun draft; no test results for this version)`, leaves v3 unlabelled, retains the v4 source, states 2/4 on v3, attributes no run to v4, and emits exactly one run line; that `buildValidators` keeps v4 citable as `kind:code` while dropping an invented `kind:run` v4 citation; that a version which *was* run gets no false marker; and that an attempt with no Runs still sends the draft.
 
-On `b10-behavioral`, `codingSession` is still the arrow function spreading `...attempt`, with no draft preservation, so this test would fail here — it would assert a fix that is absent. **Land `fix/coding-room-bash` into the integration branch first, then add it**; the `buildPrompt` half is backend-owned and headlessly testable, while the two `components/**` halves belong with B10's incoming browser drivers rather than being duplicated.
+This was originally blocked: the fix lived only on `fix/coding-room-bash` (`ebade66`) and was absent from the then-base. Resolved — the fix reached `main` via `52a4f98`, and `b10-behavioral` via the merge `35ecda9` recorded below.
+
+Covers the report half only. The `components/ProblemRoom.tsx` half (appending the unrun draft snapshot at Finish) is React and belongs with B10's browser drivers.
+
+**Not verified:** that this check goes red if the fix is reverted. The red-path run was interrupted before it finished, so the check passes but is unproven as a regression guard.
 
 ### Still needs a human
 
