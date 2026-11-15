@@ -678,6 +678,12 @@ Also on `5419848`:
   - The too-large browser case stubs the canvas encoder: real synthetic noise pages still compress under the cap at 1100 px.
 - **Needs a human (real key):** extraction quality on a real resume screenshot and listing, and hearing an opening about the corrected project.
 
+#### Step 3 — verification: **tested commit `ff26911`**, draft PR #19 (base `b9-role-context`)
+- Rebased onto Ismail's coding-room merge `35ecda9`, then reran everything on the combined head. Typecheck, `eslint .`, and `next build` pass; all stubbed dev checks pass (`live-check` needs a real key and wasn't run).
+- Browser checks committed under `dev/browser/`: `drive-behavioral` 27/27, `drive-tailor` 34/34, and `drive-b10-coding` 10/10. With a tailoring context confirmed, a coding round still sends no `roundType`/`behavioralContext`. The set solution scores 4/4 (v2) and unconditional `return False` scores 2/4 (v3); both reach Live with the latest version, and the report gets the old coding shape. F9 zero-key fallbacks still work. The landing, sync, reconnect, role, and report-retry suites pass.
+- PR #19 carries the contract proposal for Hamza, the screenshots (branch `pr-assets/b10`, images only, never merge), and a 5-step real-mic walkthrough for Ismail with two contrasting answers.
+- **Outstanding:** Hamza's contract approval, after which `docs/CONTRACT.md` gets B9 + B10; Ismail's real key + mic walkthrough; extraction quality on a real resume; the setup copy decision noted in `35ecda9`. Next task after merge: the combined multi-round interview.
+
 #### Step 3 — verification: **in progress** (on `b752373`, no app code changed)
 - Done: coding regression in the browser (`drive-b10-coding` 10/10). With a confirmed tailoring context on the landing page, Start practice still sends a coding token with no `roundType` or `behavioralContext`; set solution 4/4 (v2) and unconditional `return False` 2/4 (v3) both reach Live with the latest version and source; the report session is the old coding shape; the F9 zero-key fixture fallback and zero-key mock voice still work; no analysis request is made.
 - Already covered by Steps 1–2: four input combinations, oversized/unreadable/too many pages, timeout, edit/remove, duplicate clicks, stale responses, manual fallback, instruction selection, opening, reconnect, report for both rounds, two attempts with different t1 quotes, rejection of invented and interviewer turn IDs.
