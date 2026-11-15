@@ -296,7 +296,9 @@ function buildPrompt(session: CodingSession, role?: RoleContext): string {
   parts.push("\n=== Code snapshots (cite with kind:code, codeVersion) ===");
   if (session.snapshots.length === 0) parts.push("(none)");
   for (const s of session.snapshots as CodeSnapshot[]) {
-    parts.push(`codeVersion ${s.codeVersion} @ ${s.at}:\n${numberLines(s.source)}`);
+    const tested = session.runs.some((run) => run.codeVersion === s.codeVersion);
+    const status = tested ? "" : " (unrun draft; no test results for this version)";
+    parts.push(`codeVersion ${s.codeVersion}${status} @ ${s.at}:\n${numberLines(s.source)}`);
   }
 
   parts.push("\n=== Runs (cite with kind:run, codeVersion, optional caseId) ===");
