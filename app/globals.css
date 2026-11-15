@@ -19,6 +19,20 @@
   --color-brand: #c8102e;
   --color-brand-hover: #dc1f3d;
   --color-brand-coral: #fe6b73;
+
+  /* Cream & Maroon design tokens */
+  --color-cream:        #FBF6EC;
+  --color-cream-2:      #F6EEE0;
+  --color-cream-3:      #F3E8D6;
+  --color-cream-line:   #EDE2D0;
+  --color-ink:          #3A302C;
+  --color-ink-muted:    #75665C;
+  --color-maroon:       #9B3B50;
+  --color-maroon-hover: #B04A60;
+  --color-maroon-deep:  #8C2F43;
+  --color-maroon-soft:  #C77D8C;
+  --color-panel:        #1C1817;
+  --color-panel-2:      #2A2422;
 }
 
 html {
@@ -32,7 +46,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #fe6b73;
+  outline: 2px solid var(--color-maroon-soft, #C77D8C);
   outline-offset: 2px;
 }
 
