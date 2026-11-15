@@ -6,6 +6,7 @@ import { ResumeDrop } from "./landing/ResumeDrop";
 import { JobForm } from "./landing/JobForm";
 import { EMPTY_JOB, hasJob, previewLoop, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
 import { btn } from "./ui/buttons";
+import type { RoundType } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
 
@@ -40,7 +41,7 @@ interface Props {
   micStatus: MicStatus;
   onMicStatus: (s: MicStatus) => void;
   // The profile stays in the browser; ProblemRoom only displays it.
-  onStart: (profile: CandidateProfile) => void;
+  onStart: (profile: CandidateProfile, round?: RoundType) => void;
 }
 
 const FEATURES = [
@@ -80,13 +81,13 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   }
 
   // Check the mic on the way in if it hasn't been checked, but never block on it.
-  async function start() {
+  async function start(round: RoundType = "coding") {
     setStarting(true);
     if (micStatus === "unchecked") {
       onMicStatus("checking");
       onMicStatus(await checkMicrophone());
     }
-    onStart({ resume, job });
+    onStart({ resume, job }, round);
   }
 
   const msg = micStatus === "unchecked" ? null : MIC_MESSAGE[micStatus];
@@ -131,11 +132,20 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             </a>
             <button
               type="button"
-              onClick={start}
+              onClick={() => start("coding")}
               disabled={starting}
               className={`${btn.neutral} rounded-xl px-6 py-3 text-lg`}
             >
               Skip to a coding round
+            </button>
+            <button
+              type="button"
+              onClick={() => start("behavioral")}
+              disabled={starting}
+              data-testid="skip-behavioral"
+              className={`${btn.neutral} rounded-xl px-6 py-3 text-lg`}
+            >
+              Skip to a behavioral round
             </button>
           </div>
         </section>
@@ -163,7 +173,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
         <section id="setup" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
           <h2 className="font-brand text-3xl font-bold tracking-tight">Set up your interview</h2>
           <p className="mt-2 max-w-2xl text-base text-zinc-400">
-            Add resume screenshots, enter the job, or both. Everything stays in this browser tab; nothing is uploaded.
+            Add resume screenshots, enter the job, or both. Resume screenshots stay in this browser tab. Role details you type (title, company, level, and the listing for coding rounds) are sent to the interviewer to frame questions.
           </p>
 
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -234,17 +244,26 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
           <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <button
               type="button"
-              onClick={start}
+              onClick={() => start("coding")}
               disabled={starting}
               data-testid="start-practice"
               className={`${btn.primary} rounded-xl px-8 py-3.5 text-lg`}
             >
               {starting ? "Starting…" : "Start practice"}
             </button>
+            <button
+              type="button"
+              onClick={() => start("behavioral")}
+              disabled={starting}
+              data-testid="start-behavioral"
+              className={`${btn.secondary} rounded-xl px-8 py-3.5 text-lg`}
+            >
+              Start behavioral round
+            </button>
             <span className="text-sm text-zinc-400" data-testid="setup-summary">
               {provided
-                ? `${resume.length} resume screenshot${resume.length === 1 ? "" : "s"}${hasJob(job) ? " · job details added" : ""}. You'll start with the coding round.`
-                : "Nothing added yet. You can still start the coding round."}
+                ? `${resume.length} resume screenshot${resume.length === 1 ? "" : "s"}${hasJob(job) ? " · job details added" : ""}. Choose a coding or behavioral round.`
+                : "Nothing added yet. You can still start either round."}
             </span>
           </div>
 

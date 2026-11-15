@@ -3,6 +3,7 @@ import type { ApiError, LiveTokenResponse } from "../../../lib/contract";
 import { containsDuplicate } from "../../../lib/problems";
 import { interviewerInstructions } from "../../../lib/prompts";
 import { normalizeRoleContext } from "../../../lib/roleContext";
+import { behavioralInstructions } from "../../../lib/behavioral";
 
 // The interviewer instruction for the canonical problem, built by the shared
 // builder. A token minted with liveConnectConstraints locks the ENTIRE Live
@@ -64,6 +65,7 @@ const MINT_TIMEOUT_MS = Number(process.env.LIVE_TOKEN_TIMEOUT_MS) || 10_000;
 export async function POST(request: Request): Promise<Response> {
   let sessionId: unknown;
   let roleInput: unknown;
+  let roundInput: unknown;
   try {
     if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) throw new Error("too large");
     const raw = await request.text();
@@ -71,6 +73,7 @@ export async function POST(request: Request): Promise<Response> {
     const body = JSON.parse(raw) as { sessionId?: unknown; roleContext?: unknown } | null;
     sessionId = body?.sessionId;
     roleInput = body?.roleContext;
+    roundInput = (body as { roundType?: unknown } | null)?.roundType;
   } catch {
     const error: ApiError = {
       code: "invalid_request",
@@ -94,7 +97,18 @@ export async function POST(request: Request): Promise<Response> {
     const error: ApiError = { code: "invalid_request", message: role.message, retryable: false };
     return json(error, 400);
   }
-  const systemInstruction = interviewerInstructions(containsDuplicate, role.value);
+  // roundType: omitted -> "coding" (unchanged behavior).
+  if (roundInput !== undefined && roundInput !== "coding" && roundInput !== "behavioral") {
+    const error: ApiError = { code: "invalid_request", message: "roundType must be coding or behavioral", retryable: false };
+    return json(error, 400);
+  }
+  const behavioral = roundInput === "behavioral";
+  // Behavioral: no coding problem; role framing uses title/company/level only
+  // (the raw job listing is never part of the behavioral Live session).
+  const behavioralRole = role.value && { company: role.value.company, role: role.value.role, level: role.value.level };
+  const systemInstruction = behavioral
+    ? behavioralInstructions({ roleContext: behavioralRole })
+    : interviewerInstructions(containsDuplicate, role.value);
 
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.LIVE_MODEL;

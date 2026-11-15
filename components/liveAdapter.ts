@@ -57,12 +57,17 @@ export function isApiError(value: unknown): value is ApiError {
 }
 
 // Also used by Reconnect: a fresh ephemeral token for the same session.
-export async function fetchLiveToken(sessionId: string, roleContext?: RoleContext): Promise<LiveTokenResponse | ApiError> {
+// roundType is sent only for a behavioral round, so coding requests are unchanged.
+export async function fetchLiveToken(
+  sessionId: string,
+  roleContext?: RoleContext,
+  roundType?: "behavioral",
+): Promise<LiveTokenResponse | ApiError> {
   try {
     const res = await fetch("/api/live-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(roleContext ? { sessionId, roleContext } : { sessionId }),
+      body: JSON.stringify({ sessionId, ...(roleContext ? { roleContext } : {}), ...(roundType ? { roundType } : {}) }),
     });
     const body = await res.json().catch(() => null);
     if (res.ok && body && typeof body.token === "string") return body as LiveTokenResponse;
@@ -80,6 +85,12 @@ function wire(client: LiveClient, h: VoiceHandlers) {
 }
 
 // turnSeed: turns already in the current attempt, so IDs continue (t{seed+1}, ...).
+// A behavioral round: no coding problem; openingExtra (optional) shapes the opener.
+export interface BehavioralRound {
+  type: "behavioral";
+  openingExtra?: string;
+}
+
 export async function openVoice(
   sessionId: string,
   problem: Problem,
@@ -87,13 +98,15 @@ export async function openVoice(
   turnSeed = 0,
   // Optional target role; the token route locks it into the interviewer instruction.
   roleContext?: RoleContext,
+  // Omitted for a coding round.
+  round?: BehavioralRound,
 ): Promise<VoiceConnection> {
   h.onState("connecting");
-  const token = await fetchLiveToken(sessionId, roleContext);
+  const token = await fetchLiveToken(sessionId, roleContext, round?.type);
 
   const realFactory = testClientFactory() ?? REAL_CLIENT;
   if (!isApiError(token) && realFactory) {
-    const real = realFactory({ turnSeed });
+    const real = realFactory({ turnSeed, ...(round ? { round: "behavioral", openingExtra: round.openingExtra } : {}) });
     // Hold the real client's events until connect() settles: lib/live.ts emits
     // its error before throwing. On success, replay them and pass through; on
     // failure, drop them so they never overwrite the scripted fallback.
@@ -108,7 +121,7 @@ export async function openVoice(
     wire(real, { onState: gate(h.onState), onTurn: gate(h.onTurn), onError: gate(h.onError) });
     try {
       await Promise.race([
-        real.connect(token, problem),
+        real.connect(token, round ? undefined : problem),
         new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), REAL_CONNECT_TIMEOUT_MS)),
       ]);
       phase = "live";
@@ -118,17 +131,23 @@ export async function openVoice(
       phase = "abandoned";
       held.length = 0;
       real.end();
-      return openMock(problem, h, "voice connection failed", turnSeed);
+      return openMock(problem, h, "voice connection failed", turnSeed, round);
     }
   }
 
-  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged", turnSeed);
+  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged", turnSeed, round);
 }
 
-async function openMock(problem: Problem, h: VoiceHandlers, reason: string, turnSeed: number): Promise<VoiceConnection> {
-  const mock = new MockLiveClient(turnSeed);
+async function openMock(
+  problem: Problem,
+  h: VoiceHandlers,
+  reason: string,
+  turnSeed: number,
+  round?: BehavioralRound,
+): Promise<VoiceConnection> {
+  const mock = new MockLiveClient(turnSeed, round ? "behavioral" : "coding");
   wire(mock, h);
-  await mock.connect(MOCK_TOKEN, problem);
+  await mock.connect(MOCK_TOKEN, round ? undefined : problem);
   return { client: mock, mode: "mock", mockReason: reason };
 }
 
@@ -165,7 +184,18 @@ const STUDENT_AFTER = {
 
 class MockLiveClient implements LiveClient {
   // Attempt-scoped like the real client: seeded, never a global counter.
-  constructor(private turnSeq = 0) {}
+  constructor(
+    private turnSeq = 0,
+    private readonly round: "coding" | "behavioral" = "coding",
+  ) {}
+  // Behavioral demo script (MOCK VOICE): the interviewer probes a missing detail
+  // in each scripted answer. Not a model; the real interviewer listens.
+  private behavioralStep = 0;
+  private static readonly BEHAVIORAL: [string, string | null][] = [
+    ["Hi! Tell me about a time you had to debug a hard problem on a project.", "We had a slow checkout page, and we fixed the database."],
+    ["You said the team fixed the database. What did you personally investigate or change?", "I traced the slow queries and added an index on the orders table."],
+    ["How did you check whether the index actually helped?", null],
+  ];
   private stateCbs: ((s: LiveState) => void)[] = [];
   private turnCbs: ((t: TranscriptTurn) => void)[] = [];
   private errorCbs: ((e: ApiError) => void)[] = [];
@@ -174,12 +204,23 @@ class MockLiveClient implements LiveClient {
   private micOn = false;
   private pendingStudent: string | null = null;
 
-  async connect(token: LiveTokenResponse, problem: Problem) {
+  async connect(token: LiveTokenResponse, problem?: Problem) {
     void token;
     this.emitState("connecting");
     await delay(400);
     this.connected = true;
+    if (this.round === "behavioral" || !problem) {
+      this.nextBehavioral(300);
+      return;
+    }
     this.say(`Hi! Before you code, walk me through how you'd approach ${problem.title}.`, STUDENT_AFTER.intro, 300);
+  }
+
+  private nextBehavioral(wait: number) {
+    const step = MockLiveClient.BEHAVIORAL[this.behavioralStep];
+    if (!step) return;
+    this.behavioralStep += 1;
+    this.say(step[0], step[1], wait);
   }
 
   async startMic() {
@@ -194,7 +235,7 @@ class MockLiveClient implements LiveClient {
   }
 
   sendRunContext(snapshot: CodeSnapshot, result: RunResult) {
-    if (!this.connected) return;
+    if (!this.connected || this.round === "behavioral") return;
     let text: string;
     let reply: string | null = null;
     if (result.status === "error") {
@@ -265,6 +306,7 @@ class MockLiveClient implements LiveClient {
           return;
         }
         this.emitTurn("student", line);
+        if (this.round === "behavioral") this.nextBehavioral(1200);
       }, 2500),
     );
   }

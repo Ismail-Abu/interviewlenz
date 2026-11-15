@@ -5,6 +5,7 @@ import type { ApiError, EvidenceRef, Finding, Report, RunResult, Session } from 
 import { ReportSkeleton } from "./Skeletons";
 import { Wordmark } from "./Logo";
 import { btn } from "./ui/buttons";
+import { isBehavioralSession } from "@/lib/behavioral";
 
 export interface AttemptRecord {
   session: Session;
@@ -58,7 +59,7 @@ export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
           disabled={busy}
           className={`${btn.primary} ml-auto px-5 py-2 text-base`}
         >
-          Retry problem
+          {isBehavioralSession(records.at(-1)?.session) ? "Practice again" : "Retry problem"}
         </button>
       </header>
       <main className={`grid gap-6 p-6 ${records.length > 1 ? "xl:grid-cols-2" : "mx-auto max-w-4xl"}`}>
@@ -109,7 +110,9 @@ function ReportCard({
           </span>
         )}
         <span className="ml-auto text-xs text-zinc-500" data-testid="attempt-stats">
-          {session.snapshots.length} snapshots · {session.runs.length} runs · {session.turns.length} turns
+          {isBehavioralSession(session)
+            ? `Behavioral · ${session.turns.length} turns · ${session.turns.filter((t) => t.speaker === "student").length} answers`
+            : `${session.snapshots.length} snapshots · ${session.runs.length} runs · ${session.turns.length} turns`}
         </span>
       </header>
 
@@ -183,7 +186,7 @@ function ReportCard({
             ))}
           </ul>
 
-          {selected && selected.kind !== "turn" && (
+          {selected && (
             <EvidencePanel refValue={selected} session={session} onClose={() => setSelected(null)} />
           )}
         </>
@@ -232,14 +235,31 @@ function EvidencePanel({
   session,
   onClose,
 }: {
-  refValue: Exclude<EvidenceRef, { kind: "turn" }>;
+  refValue: EvidenceRef;
   session: Session;
   onClose: () => void;
 }) {
   const title = evidenceLabel(refValue);
   let body: React.ReactNode;
 
-  if (refValue.kind === "code") {
+  if (refValue.kind === "turn") {
+    // The exact words from THIS attempt's transcript.
+    const turn = session.turns.find((t) => t.id === refValue.turnId);
+    body = turn ? (
+      <figure data-testid="evidence-quote">
+        <blockquote className="whitespace-pre-wrap rounded-md border-l-4 border-brand-coral bg-zinc-950 px-4 py-3 text-base leading-relaxed text-zinc-50">
+          “{turn.text}”
+        </blockquote>
+        <figcaption className="mt-2 text-xs text-zinc-500">
+          {turn.speaker === "student" ? "You" : "Interviewer"} · {turn.id}
+        </figcaption>
+      </figure>
+    ) : (
+      <NotFound what={`Turn ${refValue.turnId} is not in this attempt's transcript.`} />
+    );
+  } else if (isBehavioralSession(session)) {
+    body = <NotFound what="This behavioral attempt has no code or runs." />;
+  } else if (refValue.kind === "code") {
     const snap = session.snapshots.findLast((s) => s.codeVersion === refValue.codeVersion);
     body = snap ? (
       <pre className="overflow-x-auto rounded-md bg-[#1e1e1e] py-2 font-mono text-sm" data-testid="evidence-code">

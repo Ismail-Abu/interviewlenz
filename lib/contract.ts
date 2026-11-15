@@ -75,18 +75,35 @@ export interface CodeSnapshot {
   at: string;
 }
 
-export interface Session {
+// Interview round (PROPOSED with B10, pending Hamza's approval). Omitted means
+// "coding", so existing callers, fixtures, and saved coding attempts keep their
+// behavior. The coding problem ID and runner contract stay coding-only.
+export type RoundType = "coding" | "behavioral";
+
+interface SessionBase {
   sessionId: string;
   attemptId: string;
   priorAttemptId?: string;
-  problemId: Problem["id"];
   turns: TranscriptTurn[];
-  snapshots: CodeSnapshot[];
-  runs: RunResult[];
   // Optional target role from the landing setup (PROPOSED, pending Hamza's
   // approval). Absent when setup was skipped or left empty.
   roleContext?: RoleContext;
 }
+
+export interface CodingSession extends SessionBase {
+  roundType?: "coding";
+  problemId: Problem["id"];
+  snapshots: CodeSnapshot[];
+  runs: RunResult[];
+}
+
+// A behavioral round has no coding problem, code, snapshots, or runs: its only
+// evidence is what the student said.
+export interface BehavioralSession extends SessionBase {
+  roundType: "behavioral";
+}
+
+export type Session = CodingSession | BehavioralSession;
 
 // Optional target-role context the student typed on the landing page. It is
 // user-provided data: it may shape the interviewer's framing and one relevant
@@ -102,13 +119,16 @@ export interface RoleContext {
 
 // roleContext (optional) is re-sent on every token request of an attempt,
 // including Reconnect, so the locked interviewer instruction stays the same.
-export interface LiveTokenRequest { sessionId: string; roleContext?: RoleContext }
+// roundType defaults to "coding"; "behavioral" selects the behavioral
+// interviewer instruction locked into the token.
+export interface LiveTokenRequest { sessionId: string; roleContext?: RoleContext; roundType?: RoundType }
 export interface LiveTokenResponse { token: string; model: string; expiresAt: string }
 
 export type LiveState = "connecting" | "listening" | "speaking" | "idle" | "error";
 
 export interface LiveClient {
-  connect(token: LiveTokenResponse, problem: Problem): Promise<void>;
+  // problem is required for a coding round and omitted for a behavioral round.
+  connect(token: LiveTokenResponse, problem?: Problem): Promise<void>;
   startMic(): Promise<void>;
   stopMic(): void;
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void;
@@ -130,7 +150,19 @@ export type EvidenceRef =
 
 export interface Finding {
   id: string;
-  category: "correctness" | "clarification" | "approach" | "complexity" | "testing" | "code_clarity" | "spoken_reasoning";
+  category:
+    | "correctness"
+    | "clarification"
+    | "approach"
+    | "complexity"
+    | "testing"
+    | "code_clarity"
+    | "spoken_reasoning"
+    // Behavioral rounds (evidence: student transcript turns only).
+    | "specificity"
+    | "personal_contribution"
+    | "reasoning"
+    | "outcome";
   rating: "strong" | "ok" | "needs_work" | "insufficient_evidence";
   summary: string;
   evidence: EvidenceRef[];

@@ -14,6 +14,7 @@ import type {
   TranscriptTurn,
 } from "./contract";
 import { formatCodeContext, formatOpening, formatReconnected, formatRunEvidence, formatRunFollowup } from "./prompts";
+import { formatBehavioralOpening, formatBehavioralReconnect } from "./behavioral";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
 // conflict. The browser client must match the version the token was minted for.
@@ -114,6 +115,8 @@ class BrowserLiveClient implements LiveClient {
   private ending = false;
   // Opening question: asked once per attempt (first connect), never on reconnect.
   private problem: Problem | null = null;
+  // Recent transcript (bounded) for the behavioral reconnect recap.
+  private history: { speaker: TranscriptTurn["speaker"]; text: string }[] = [];
   private openingSent = false;
   private openingPending = false;
   // A drop was observed and the session restored: tell the model once.
@@ -124,7 +127,14 @@ class BrowserLiveClient implements LiveClient {
   // The latest Run whose follow-up was written, awaiting a grounded reply.
   private awaitingConfirmation: { runId: number; v: number; passed?: number; total?: number } | null = null;
 
-  constructor(turnSeed = 0, private readonly settleMs = STUDENT_SETTLE_MS) {
+  constructor(
+    turnSeed = 0,
+    private readonly settleMs = STUDENT_SETTLE_MS,
+    // "behavioral": no coding problem, code, or Runs; opening and reconnect
+    // recap are behavioral; Run/code calls are ignored.
+    private readonly round: "coding" | "behavioral" = "coding",
+    private readonly openingExtra?: string,
+  ) {
     // Attempt-scoped seed: a client rebuilt within the same attempt continues
     // numbering (t{turnSeed+1}, ...), so transcript IDs stay unique across
     // reconnects and voice-mode switches. A new attempt (Retry) starts at 0.
@@ -157,7 +167,7 @@ class BrowserLiveClient implements LiveClient {
 
   // connect() doubles as reconnect: call it again on the SAME client (after an
   // unexpected close or send failure) with a fresh token to restore the attempt.
-  async connect(token: LiveTokenResponse, problem: Problem): Promise<void> {
+  async connect(token: LiveTokenResponse, problem?: Problem): Promise<void> {
     const epoch = ++this.connectionSeq; // this attempt's current socket
     const current = () => this.connectionSeq === epoch;
     this.ending = false;
@@ -175,7 +185,7 @@ class BrowserLiveClient implements LiveClient {
       }
     }
 
-    this.problem = problem;
+    this.problem = problem ?? null;
     // The interviewer instruction is NOT set here: the token route locks it into
     // the ephemeral token, and a locked token ignores client-side config.
 
@@ -305,6 +315,7 @@ class BrowserLiveClient implements LiveClient {
   // sync and paused-edit snapshots). A typing pause alone never asks a question.
   // Preserves the buffer even while disconnected, so it is restored on reconnect.
   syncCode(snapshot: CodeSnapshot): void {
+    if (this.round === "behavioral") return; // no code in a behavioral round
     this.observeVersion(snapshot.codeVersion, snapshot.source);
     this.pump();
   }
@@ -315,6 +326,7 @@ class BrowserLiveClient implements LiveClient {
   // mid-answer. The Run is preserved even while disconnected, so it survives to
   // the next reconnect.
   sendRunContext(snapshot: CodeSnapshot, result: RunResult): void {
+    if (this.round === "behavioral") return; // no Runs in a behavioral round
     const version = result.codeVersion;
     this.runVersions.add(version);
     this.observeVersion(version, snapshot.source);
@@ -350,10 +362,13 @@ class BrowserLiveClient implements LiveClient {
 
   // First connect of an attempt: ask the interviewer to open with the approach question.
   private pumpOpening(): void {
-    if (!this.session || this.modelTurnActive || !this.openingPending || !this.problem) return;
+    if (!this.session || this.modelTurnActive || !this.openingPending) return;
+    if (this.round === "coding" && !this.problem) return;
+    const opening =
+      this.round === "behavioral" ? formatBehavioralOpening(this.openingExtra) : formatOpening(this.problem as Problem);
     try {
       this.session.sendClientContent({
-        turns: [{ role: "user", parts: [{ text: formatOpening(this.problem) }] }],
+        turns: [{ role: "user", parts: [{ text: opening }] }],
         turnComplete: true,
       });
       this.openingPending = false;
@@ -374,6 +389,21 @@ class BrowserLiveClient implements LiveClient {
     if (!this.session || this.modelTurnActive) return;
 
     const parts: string[] = [];
+    if (this.round === "behavioral") {
+      // Behavioral: the only context is the conversation itself.
+      if (!this.reconnectNoticePending) return;
+      try {
+        this.session.sendClientContent({
+          turns: [{ role: "user", parts: [{ text: formatBehavioralReconnect(this.history) }] }],
+          turnComplete: this.history.at(-1)?.speaker === "student",
+        });
+        this.reconnectNoticePending = false;
+        if (this.history.at(-1)?.speaker === "student") this.modelTurnActive = true;
+      } catch {
+        this.markDisconnected();
+      }
+      return;
+    }
     if (this.reconnectNoticePending) parts.push(formatReconnected());
     const runUndelivered = !!this.latestRun && this.latestRun.epoch > this.deliveredRunEpoch;
     if (runUndelivered && this.latestRun) {
@@ -509,6 +539,7 @@ class BrowserLiveClient implements LiveClient {
     this.reconnectNoticePending = false;
     this.awaitingConfirmation = null;
     this.lastStudentActivityAt = 0;
+    this.history = [];
     this.setState("idle");
   }
 
@@ -665,6 +696,8 @@ class BrowserLiveClient implements LiveClient {
     const id = `t${this.turnSeq}` as const;
     this.turnCb?.({ id, speaker, text: trimmed, at: new Date().toISOString() });
     trace({ conn: this.connectionSeq, stage: "turn", speaker, id });
+    this.history.push({ speaker, text: trimmed });
+    if (this.history.length > 20) this.history.shift();
     if (speaker === "interviewer" && this.awaitingConfirmation) this.checkGrounded(trimmed);
     if (speaker === "student") {
       // Only a completed student turn answers the outstanding question; an owed
@@ -707,10 +740,19 @@ export interface CreateLiveClientOptions {
   // Wait after the student's last speech before a Run follow-up (default 1500 ms).
   // Deterministic dev checks pass 0; the app uses the default.
   followupSettleMs?: number;
+  // Interview round (default "coding"). Behavioral clients take no problem.
+  round?: "coding" | "behavioral";
+  // Behavioral only: appended to the opening request (e.g. the confirmed focus).
+  openingExtra?: string;
 }
 
 export function createLiveClient(options?: CreateLiveClientOptions): LiveClient {
-  return new BrowserLiveClient(options?.turnSeed ?? 0, options?.followupSettleMs ?? STUDENT_SETTLE_MS);
+  return new BrowserLiveClient(
+    options?.turnSeed ?? 0,
+    options?.followupSettleMs ?? STUDENT_SETTLE_MS,
+    options?.round ?? "coding",
+    options?.openingExtra,
+  );
 }
 
 export { BrowserLiveClient };

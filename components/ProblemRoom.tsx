@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { ApiError, CodeSnapshot, LiveClient, LiveState, Problem, RunResult, Session } from "@/lib/contract";
+import type { ApiError, CodeSnapshot, CodingSession, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
 import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
+import { BehavioralRoom } from "./BehavioralRoom";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { StartScreen, type MicStatus } from "./StartScreen";
 import { hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
 import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
-import { fetchLiveToken, isApiError, openVoice, type VoiceMode } from "./liveAdapter";
+import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
 import { btn } from "./ui/buttons";
@@ -25,7 +26,7 @@ const CodeEditor = dynamic(() => import("./CodeEditor"), {
 const DEV = process.env.NODE_ENV !== "production";
 
 type AttemptIds = Pick<Session, "sessionId" | "attemptId" | "priorAttemptId">;
-type AttemptData = Pick<Session, "turns" | "snapshots" | "runs">;
+type AttemptData = Pick<CodingSession, "turns" | "snapshots" | "runs">;
 const EMPTY_ATTEMPT: AttemptData = { turns: [], snapshots: [], runs: [] };
 
 export function ProblemRoom({ problem }: { problem: Problem }) {
@@ -35,7 +36,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const idsRef = useRef<AttemptIds | null>(null);
   const ids = () => (idsRef.current ??= { sessionId: crypto.randomUUID(), attemptId: crypto.randomUUID() });
   const [attempt, setAttempt] = useState<AttemptData>(EMPTY_ATTEMPT);
-  const fullSession = (): Session => ({
+  const fullSession = (): Session =>
+    round === "behavioral"
+      ? { ...ids(), roundType: "behavioral", turns: attempt.turns, ...(behavioralRole ? { roleContext: behavioralRole } : {}) }
+      : codingSession();
+  const codingSession = (): CodingSession => ({
     ...ids(),
     problemId: problem.id,
     ...attempt,
@@ -50,6 +55,16 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   // Text fields only, sent to the token route (every connect, incl. Reconnect)
   // and in the Session for the report. Resume screenshots stay local.
   const roleContext = profile ? toRoleContext(profile.job) : undefined;
+  // Interview round chosen on the landing page. Behavioral uses no code at all.
+  const [round, setRound] = useState<RoundType>("coding");
+  // Behavioral rounds never send the raw job listing: title, company, level only.
+  const behavioralRole = (() => {
+    if (!roleContext) return undefined;
+    const { jobDescription, ...rest } = roleContext;
+    void jobDescription;
+    return Object.keys(rest).length ? rest : undefined;
+  })();
+  const behavioralRound: BehavioralRound | undefined = round === "behavioral" ? { type: "behavioral" } : undefined;
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -145,7 +160,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           onError: (e) => current() && setLiveError(e),
         },
         turnCount.current,
-        roleContext,
+        round === "behavioral" ? behavioralRole : roleContext,
+        behavioralRound,
       );
       if (!current()) {
         // Ended (End, Finish, or Retry) while connecting: drop this connection.
@@ -204,7 +220,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     // A late result is ignored if End, Finish, or Retry happened meanwhile.
     const current = () => gen === connGen.current && live.current === client;
     try {
-      const token = await fetchLiveToken(ids().sessionId, roleContext);
+      const token = await fetchLiveToken(
+        ids().sessionId,
+        round === "behavioral" ? behavioralRole : roleContext,
+        behavioralRound?.type,
+      );
       if (!current()) return;
       if (isApiError(token)) {
         setLiveError(token);
@@ -343,8 +363,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       <StartScreen
         micStatus={micStatus}
         onMicStatus={setMicStatus}
-        onStart={(p) => {
+        onStart={(p, r) => {
           setProfile(p);
+          setRound(r ?? "coding");
           setView("room");
         }}
       />
@@ -357,6 +378,27 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
   const error = result?.status === "error" ? result.error : undefined;
   const attemptNumber = records.length + 1;
+  const voiceProps = {
+    connected,
+    connecting,
+    micOn,
+    state: liveState,
+    turns: attempt.turns,
+    error: liveError,
+    voiceMode,
+    mockReason,
+    micStatus,
+    disconnected,
+    reconnecting,
+    onReconnect: handleReconnect,
+    onConnect: handleConnect,
+    onToggleMic: handleToggleMic,
+    onEnd: endLive,
+  };
+
+  if (round === "behavioral") {
+    return <BehavioralRoom voice={voiceProps} attemptNumber={attemptNumber} onFinish={handleFinish} />;
+  }
 
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
@@ -430,23 +472,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ProblemPanel problem={problem} />
           </div>
-          <VoicePanel
-            connected={connected}
-            connecting={connecting}
-            micOn={micOn}
-            state={liveState}
-            turns={attempt.turns}
-            error={liveError}
-            voiceMode={voiceMode}
-            mockReason={mockReason}
-            micStatus={micStatus}
-            disconnected={disconnected}
-            reconnecting={reconnecting}
-            onReconnect={handleReconnect}
-            onConnect={handleConnect}
-            onToggleMic={handleToggleMic}
-            onEnd={endLive}
-          />
+          <VoicePanel {...voiceProps} />
         </div>
 
         <div className="flex min-h-0 flex-col">
