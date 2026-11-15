@@ -9,6 +9,8 @@ import { EMPTY_JOB, hasJob, type CandidateProfile, type JobInfo, type ResumeImag
 import { LiveDemoPanel } from "./landing/LiveDemoPanel";
 import { RolePresets } from "./landing/RolePresets";
 import { CompanyRail } from "./landing/CompanyRail";
+import { NavAuth } from "./NavAuth";
+import { SessionHistory } from "./SessionHistory";
 import type { BehavioralContext } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
@@ -119,6 +121,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
           </div>
 
           <div className="flex items-center gap-3">
+            <NavAuth />
             <button
               type="button"
               onClick={() => start(selectedMode)}
@@ -283,6 +286,8 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             Start behavioral round now
           </button>
         </section>
+
+        <SessionHistory />
 
         {/* Live Product Preview */}
         <section aria-label="Live product preview" className="mx-auto max-w-6xl px-5 sm:px-8">

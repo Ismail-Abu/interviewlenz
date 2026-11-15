@@ -9,6 +9,7 @@ import { VoicePanel } from "./VoicePanel";
 import { BehavioralRoom } from "./BehavioralRoom";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { FullMockSummary } from "./FullMockSummary";
+import { recordAttempt } from "./historyStore";
 import { StartScreen, type MicStatus, type PracticeMode } from "./StartScreen";
 import { EMPTY_JOB, hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
 import { ApplicationSetup } from "./flow/ApplicationSetup";
@@ -378,6 +379,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       rs.map((r) => (r.session.attemptId === target.attemptId ? { session: target, status: "loading" } : r)),
     );
     const outcome = await requestReport(target, reportMode);
+    if (outcome.ok) {
+      const job = profile?.job;
+      const role = job && hasJob(job) ? [job.role.trim(), job.company.trim()].filter(Boolean).join(" at ") : undefined;
+      recordAttempt(target, outcome.report, outcome.fromFixture, role);
+    }
     updateRecords((rs) =>
       rs.map((r) =>
         r.session.attemptId !== target.attemptId
