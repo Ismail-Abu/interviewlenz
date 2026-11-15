@@ -155,7 +155,9 @@ function RoundSummaryCard({
   selectedEvidence: EvidenceRef | null;
 }) {
   const isCoding = round === "coding";
-  const title = isCoding ? "Round 1: Coding Practice" : "Round 2: Behavioral Practice";
+  const title = isCoding ? "Technical Coding Interview" : "Behavioral Deep-Dive";
+  // Short form for inline sentences; testids keep the raw round type.
+  const roundName = isCoding ? "Technical Coding" : "Behavioral Deep-Dive";
   const testId = isCoding ? "summary-coding-card" : "summary-behavioral-card";
 
   if (!record) {
@@ -163,10 +165,10 @@ function RoundSummaryCard({
       <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6" data-testid={testId}>
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{title}</span>
-          <p className="mt-3 text-sm text-zinc-400">Round not started yet.</p>
+          <p className="mt-3 text-sm text-zinc-400">Not started yet.</p>
         </div>
         <button onClick={onPracticeAgain} className={`${btn.secondary} mt-6 w-full justify-center text-sm`}>
-          Start {round} round
+          Start {roundName}
         </button>
       </div>
     );
@@ -215,7 +217,7 @@ function RoundSummaryCard({
         {status === "loading" && (
           <div className="mt-6 flex flex-col items-center justify-center gap-3 py-8 text-center text-zinc-400">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-500 border-t-white" />
-            <p className="text-sm">Synthesizing {round} report feedback…</p>
+            <p className="text-sm">Synthesizing {roundName} feedback…</p>
           </div>
         )}
 
@@ -344,7 +346,7 @@ function RoundSummaryCard({
             className={`${btn.secondary} flex-1 justify-center py-2 text-xs font-semibold`}
             data-testid={`practice-again-${round}`}
           >
-            Practice {round} again
+            Practice {roundName} again
           </button>
         </div>
       </div>
