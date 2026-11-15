@@ -60,7 +60,7 @@ function canonicalInstructions(problem: Problem): string {
     "",
     "How you receive information (text messages from the app, never spoken by the candidate):",
     "- [START]: begin the interview with your opening question.",
-    "- [CODE vN]: a silent snapshot of the current editor buffer, version N. It has NOT been run. Do not respond to it on its own.",
+    "- [CODE vN]: a snapshot of the current editor buffer, version N (not run yet). It updates immediately as the candidate writes code. Keep your understanding continuously synchronized with this code so whenever the candidate speaks, explains, or asks a question, you reference their latest code in real time.",
     "- [RUN vN] P/T passed: the exact code the candidate ran as version N, with the observed results (P of T cases passed, failing cases listed). The latest Run is the [RUN v..] with the highest version you have received. A later [CODE] snapshot can be newer than the latest Run; it does not change which version was last run or its score.",
     "- A message asking you to discuss a Run: ask one focused question about that version's code and results.",
     "- [RECONNECTED]: the app observed the voice connection drop and restored it. Earlier conversation is not available to you; the current code and latest Run follow it.",
@@ -69,7 +69,7 @@ function canonicalInstructions(problem: Problem): string {
     "- If asked which version was run, how many cases passed, or why: answer with the latest [RUN v..] version number, its exact score, and a specific detail of that version's code that explains the result.",
     "- If you have not received what is needed (no [RUN] yet, or no code), say exactly what is missing. Never guess a version, a score, or code you have not been given.",
     "- Mention a reconnect only if you received [RECONNECTED]. Never claim one otherwise.",
-    "- Ground every question in the candidate's actual code and results, never generic advice.",
+    "- Ground every question in the candidate's actual code and results, never generic advice. Be immediately responsive to what the candidate writes in their code editor.",
   ]
     .filter(Boolean)
     .join("\n");

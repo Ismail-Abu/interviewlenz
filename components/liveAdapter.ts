@@ -220,17 +220,35 @@ class MockLiveClient implements LiveClient {
   private connected = false;
   private micOn = false;
   private pendingStudent: string | null = null;
+  private lastAcknowledgedApproach: Approach | null = null;
+  private currentProblemTitle = "";
 
   async connect(token: LiveTokenResponse, problem?: Problem) {
     void token;
     this.emitState("connecting");
     await delay(400);
     this.connected = true;
+    this.lastAcknowledgedApproach = null;
+    this.currentProblemTitle = problem?.title ?? "";
     if (this.round === "behavioral" || !problem) {
       this.nextBehavioral(300);
       return;
     }
     this.say(`Hi! Before you code, walk me through how you'd approach ${problem.title}.`, STUDENT_AFTER.intro, 300);
+  }
+
+  syncCode(snapshot: CodeSnapshot) {
+    if (!this.connected || this.round === "behavioral") return;
+    const approach = detectApproach(snapshot.source);
+    if (approach !== "other" && approach !== this.lastAcknowledgedApproach) {
+      this.lastAcknowledgedApproach = approach;
+      this.clearTimers();
+      const text =
+        approach === "set"
+          ? "I see you're typing a set-based solution. Walk me through your thinking as you write."
+          : "I see you're comparing elements with a loop. Walk me through your thought process.";
+      this.say(text, null, 800);
+    }
   }
 
   private nextBehavioral(wait: number) {

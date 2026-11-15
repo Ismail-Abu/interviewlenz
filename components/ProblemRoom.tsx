@@ -287,7 +287,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
 
       live.current = conn.client;
       voiceModeRef.current = conn.mode;
-      syncEnabled.current = conn.mode === "live";
+      syncEnabled.current = true;
       lastSyncedVersion.current = null;
       sync().reset();
       if (round === "coding") syncLatest();
@@ -607,7 +607,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   function handleSwitchProblem(next: Problem) {
     if (next.id === problem.id) return;
     loadProblem(next);
-    if (live.current && voiceMode === "live") {
+    if (live.current) {
       void handleReconnect();
     }
   }
