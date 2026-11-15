@@ -66,11 +66,14 @@ export function FullMockSummary({
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" data-testid="full-mock-summary">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
-        <div className="flex items-center gap-4">
+      {/* Wraps and shrinks: at 390px the one-line version overflowed the page. */}
+      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur sm:px-6">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <Wordmark size={26} />
-          <span className="text-base font-semibold text-zinc-200">Full Mock Interview Summary</span>
-          <span className="rounded bg-brand-coral/15 px-2 py-0.5 text-xs font-bold text-brand-coral uppercase tracking-wider">
+          <span className="hidden truncate text-base font-semibold text-zinc-200 sm:inline">
+            Full Mock Interview Summary
+          </span>
+          <span className="shrink-0 rounded bg-brand-coral/15 px-2 py-0.5 text-xs font-bold text-brand-coral uppercase tracking-wider">
             2 Rounds Complete
           </span>
         </div>
