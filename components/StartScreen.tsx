@@ -389,7 +389,6 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
       <footer className="border-t border-border bg-background">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-sm text-muted-foreground sm:px-8">
           <span>© 2026 Interviewlenz</span>
-          <span>Coding and behavioral practice for CS students</span>
         </div>
       </footer>
     </div>
