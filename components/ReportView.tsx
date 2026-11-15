@@ -14,6 +14,7 @@ import { ReportExtras } from "./report/ReportExtras";
 import { DownloadDebrief } from "./report/DownloadDebrief";
 import { buildDebrief, TRACK_LABEL } from "./report/debrief";
 import { BAND_LABEL, scoreOverall, scoreRound } from "@/lib/score";
+import { timingLabel, type RoundTiming } from "./roundClock";
 
 export interface AttemptRecord {
   session: Session;
@@ -22,6 +23,8 @@ export interface AttemptRecord {
   fromFixture?: boolean;
   fallbackReason?: string;
   error?: ApiError;
+  // How long the round took (components/roundClock.ts). Absent if never started.
+  timing?: RoundTiming;
 }
 
 interface Props {
@@ -140,6 +143,17 @@ function ReportCard({
               data-testid="report-fixture-badge"
             >
               FIXTURE DATA{record.fallbackReason ? ` (${record.fallbackReason})` : ""}
+            </span>
+          )}
+
+          {record.timing && (
+            <span
+              className={`rounded-full border px-3 py-0.5 font-mono text-xs font-semibold ${
+                record.timing.timedOut ? "border-amber-200 bg-amber-50 text-amber-800" : "border-border bg-background text-foreground"
+              }`}
+              data-testid="attempt-time"
+            >
+              {timingLabel(record.timing)}
             </span>
           )}
 

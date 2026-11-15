@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AttemptRecord } from "./ReportView";
+import { timingLabel } from "./roundClock";
 import type { CodingSession, EvidenceRef, RoundType } from "@/lib/contract";
 import { Wordmark } from "./Logo";
 import { isBehavioralSession } from "@/lib/behavioral";
@@ -239,6 +240,16 @@ function TrackCard({
             : `${session.runs.length} runs · ${session.snapshots.length} code versions · ${session.turns.length} turns`}
           {score ? ` · ${score.ratedCount} of ${score.totalCount} dimensions assessed` : ""}
         </p>
+        {record.timing && (
+          <span
+            className={`self-start rounded-full border px-3 py-0.5 font-mono text-xs font-semibold ${
+              record.timing.timedOut ? "border-amber-200 bg-amber-50 text-amber-800" : "border-border bg-background text-foreground"
+            }`}
+            data-testid={`summary-time-${round}`}
+          >
+            {timingLabel(record.timing)}
+          </span>
+        )}
         {record.fromFixture && (
           <span className="self-start rounded-full bg-amber-500/10 text-amber-800 border border-amber-500/20 px-3 py-1 text-xs font-mono font-semibold" data-testid={`fixture-${round}`}>
             Sample feedback: no report service is configured
