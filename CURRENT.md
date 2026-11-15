@@ -654,7 +654,6 @@ Also on `5419848`:
   - Coding regression: landing, sync, reconnect, role, F9 report-retry, and all 12 dev checks; lint clean.
 - **Needs a human (real key + mic):** the real interviewer's follow-up adapting to two different answers.
 
-
 #### Step 2 — Tailor this interview: **tested commit `0093b75`**
 - **Contract (PROPOSED, same review):** `BehavioralContext { project?: {name, summary?}; focus?: {skill, detail?} }` on `BehavioralSession` and `LiveTokenRequest` (behavioral only; 400 on a coding token). `TailoringRequest` / `TailoringSuggestion` for the new route. Limits in `lib/behavioral.ts`: 3,500,000 request bytes, 4 pages, 8000 listing chars, 80/240-char context fields.
 - **`POST /api/analyze-tailoring` (new):**
@@ -682,3 +681,11 @@ Also on `5419848`:
 - Done: coding regression in the browser (`drive-b10-coding` 10/10). With a confirmed tailoring context on the landing page, Start practice still sends a coding token with no `roundType` or `behavioralContext`; set solution 4/4 (v2) and unconditional `return False` 2/4 (v3) both reach Live with the latest version and source; the report session is the old coding shape; the F9 zero-key fixture fallback and zero-key mock voice still work; no analysis request is made.
 - Already covered by Steps 1–2: four input combinations, oversized/unreadable/too many pages, timeout, edit/remove, duplicate clicks, stale responses, manual fallback, instruction selection, opening, reconnect, report for both rounds, two attempts with different t1 quotes, rejection of invented and interviewer turn IDs.
 - Left: move the scratchpad browser drivers into the repo (`dev/`), post the B9/B10 contract proposal for Hamza, write a real-mic walkthrough for Ismail with two contrasting answers, and open the focused PR with the tested SHA, screenshots, and remaining manual acceptance.
+
+### Coding-room bug bash • mobile editor, keyboard access, and final coding draft
+
+Branched from behavioral handoff 20bc1a3, which includes PR #16. Coordinated the coding setup disclosure and shared-component scope on that commit. Coding setup now names Gemini and both uses of job details; resume screenshots stay local in the coding path. Behavioral analysis opt-in wording belongs beside its own action.
+
+Changed ProblemRoom, CodeEditor, StartScreen, ReportView and the coding report prompt. Loaded Monaco at 390×844 measured 5 px before and 379 px after. At 1366×768 it measured 377 px both times. Verified in Chrome with the real browser Python worker: typed set solution → 4/4, results visible, Finish reachable. Keyboard exit on macOS: Ctrl+Shift+M, Shift+Tab to Run; keyboard activation and subsequent navigation to Finish passed on both viewport sizes.
+
+Both viewport sizes: a v3 Run scored 2/4; after editing and finishing, the report request included v3 and v4 ISO-dated snapshots and exactly one Run, v3. The report displayed v4 as an unrun draft. An edit followed by Finish with no Runs saved the draft and showed no runs. The report prompt marks snapshots with no matching Run as unrun. Browser checks used the no-key report fallback. Lint, production build, report/token and behavioral regression checks passed.
