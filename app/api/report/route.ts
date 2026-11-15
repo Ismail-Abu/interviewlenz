@@ -1,3 +1,4 @@
+import { attachSkillProof } from "../../../lib/solana";
 import { GoogleGenAI, Type } from "@google/genai";
 import type {
   ApiError,
@@ -504,7 +505,7 @@ export async function POST(request: Request): Promise<Response> {
     createdAt: new Date().toISOString(),
   };
 
-  return json(report, 200);
+  return json(await attachSkillProof(report, "coding"), 200);
 }
 
 // ---------------------------------------------------------------------------
@@ -697,5 +698,5 @@ async function behavioralReport(session: BehavioralSession): Promise<Response> {
     nextStep,
     createdAt: new Date().toISOString(),
   };
-  return json(report, 200);
+  return json(await attachSkillProof(report, "behavioral"), 200);
 }

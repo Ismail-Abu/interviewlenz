@@ -10,9 +10,10 @@ import { EvidenceReceipt } from "./report/EvidenceReceipt";
 import { TranscriptSection } from "./report/TranscriptSection";
 import { UnrunDraftDisclosure } from "./report/UnrunDraftDisclosure";
 import { BandBadge, DimensionMeters } from "./report/Scorecard";
+import { ReportExtras } from "./report/ReportExtras";
 import { DownloadDebrief } from "./report/DownloadDebrief";
 import { buildDebrief, TRACK_LABEL } from "./report/debrief";
-import { scoreOverall, scoreRound } from "@/lib/score";
+import { BAND_LABEL, scoreOverall, scoreRound } from "@/lib/score";
 
 export interface AttemptRecord {
   session: Session;
@@ -207,6 +208,7 @@ function ReportCard({
           )}
 
           <VerdictBanner nextStep={report.nextStep} />
+          {score && <ReportExtras key={report.reportId} report={report} band={BAND_LABEL[score.band]} />}
 
           <ul className="flex flex-col gap-4">
             {report.findings.map((f) => (
