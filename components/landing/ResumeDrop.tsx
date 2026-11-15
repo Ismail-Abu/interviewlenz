@@ -131,7 +131,7 @@ export function ResumeDrop({ images, onChange }: Props) {
                 type="button"
                 onClick={() => remove(img.id)}
                 aria-label={`Remove ${img.name}`}
-                className="absolute right-1.5 top-1.5 rounded-md bg-zinc-950/85 px-2 py-0.5 text-sm text-zinc-200 hover:bg-red-600"
+                className="absolute right-1.5 top-1.5 rounded-md bg-zinc-950/85 px-2 py-0.5 text-sm text-zinc-200 hover:bg-brand"
               >
                 ✕
               </button>

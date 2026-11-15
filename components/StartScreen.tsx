@@ -5,6 +5,7 @@ import { Wordmark } from "./Logo";
 import { ResumeDrop } from "./landing/ResumeDrop";
 import { JobForm } from "./landing/JobForm";
 import { EMPTY_JOB, hasJob, previewLoop, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
+import { btn } from "./ui/buttons";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
 
@@ -100,7 +101,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
           </a>
           <a
             href="#setup"
-            className="ml-auto whitespace-nowrap rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 hover:border-zinc-500 sm:ml-0"
+            className={`${btn.neutral} ml-auto whitespace-nowrap px-4 py-2 text-sm sm:ml-0`}
           >
             <span className="sm:hidden">Set up</span>
             <span className="hidden sm:inline">Set up my interview</span>
@@ -124,7 +125,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
           <div className="flex flex-wrap items-center gap-3">
             <a
               href="#setup"
-              className="rounded-xl bg-brand px-6 py-3 text-lg font-semibold text-white shadow-lg shadow-black/40 hover:bg-brand-hover"
+              className={`${btn.primary} rounded-xl px-6 py-3 text-lg`}
             >
               Set up my interview
             </a>
@@ -132,7 +133,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
               type="button"
               onClick={start}
               disabled={starting}
-              className="rounded-xl border border-zinc-700 px-6 py-3 text-lg font-semibold text-zinc-100 hover:border-zinc-500 disabled:opacity-60"
+              className={`${btn.neutral} rounded-xl px-6 py-3 text-lg`}
             >
               Skip to a coding round
             </button>
@@ -236,7 +237,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
               onClick={start}
               disabled={starting}
               data-testid="start-practice"
-              className="rounded-xl bg-brand px-8 py-3.5 text-lg font-semibold text-white shadow-lg shadow-black/40 transition-colors hover:bg-brand-hover disabled:opacity-70"
+              className={`${btn.primary} rounded-xl px-8 py-3.5 text-lg`}
             >
               {starting ? "Starting…" : "Start practice"}
             </button>

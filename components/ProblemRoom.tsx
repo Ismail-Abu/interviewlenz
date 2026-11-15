@@ -15,6 +15,7 @@ import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { openVoice, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { btn } from "./ui/buttons";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -279,7 +280,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         <button
           onClick={handleFinish}
           disabled={running}
-          className="rounded-lg bg-sky-600 px-5 py-2 text-base font-semibold text-white hover:bg-sky-500 disabled:opacity-60"
+          className={`${btn.secondary} px-5 py-2 text-base`}
         >
           Finish
         </button>
@@ -312,7 +313,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             <button
               onClick={handleRun}
               disabled={running}
-              className="flex min-w-[7rem] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-base font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${btn.primary} min-w-[7rem] px-5 py-2 text-base`}
             >
               {running ? (
                 <>

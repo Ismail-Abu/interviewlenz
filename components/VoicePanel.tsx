@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { ApiError, LiveState, TranscriptTurn } from "@/lib/contract";
 import type { VoiceMode } from "./liveAdapter";
 import type { MicStatus } from "./StartScreen";
+import { btn } from "./ui/buttons";
 
 interface Props {
   connected: boolean;
@@ -23,7 +24,7 @@ interface Props {
 const STATE_STYLE: Record<LiveState, { label: string; dot: string; text: string }> = {
   connecting: { label: "Connecting…", dot: "bg-amber-400 animate-pulse", text: "text-amber-300" },
   listening: { label: "Listening", dot: "bg-emerald-400 animate-pulse", text: "text-emerald-300" },
-  speaking: { label: "Interviewer speaking", dot: "bg-sky-400 animate-pulse", text: "text-sky-300" },
+  speaking: { label: "Interviewer speaking", dot: "bg-brand-coral animate-pulse", text: "text-brand-coral" },
   idle: { label: "Paused", dot: "bg-zinc-500", text: "text-zinc-400" },
   error: { label: "Error", dot: "bg-red-500", text: "text-red-400" },
 };
@@ -47,7 +48,7 @@ export function VoicePanel(p: Props) {
             <button
               onClick={p.onConnect}
               disabled={p.connecting}
-              className="rounded-lg bg-sky-600 px-4 py-2 text-base font-semibold text-white hover:bg-sky-500 disabled:opacity-60"
+              className={`${btn.primary} px-4 py-2 text-base`}
             >
               {p.connecting ? "Connecting…" : "Start interview"}
             </button>
@@ -56,15 +57,13 @@ export function VoicePanel(p: Props) {
               <button
                 onClick={p.onToggleMic}
                 aria-pressed={p.micOn}
-                className={`rounded-lg px-4 py-2 text-base font-semibold text-white ${
-                  p.micOn ? "bg-zinc-700 hover:bg-zinc-600" : "bg-emerald-600 hover:bg-emerald-500"
-                }`}
+                className={`${p.micOn ? btn.neutral : btn.secondary} px-4 py-2 text-base`}
               >
                 {p.micOn ? "Mute" : "Unmute"}
               </button>
               <button
                 onClick={p.onEnd}
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-base text-zinc-300 hover:bg-zinc-800"
+                className={`${btn.neutral} px-4 py-2 text-base`}
               >
                 End
               </button>
@@ -115,7 +114,7 @@ export function VoicePanel(p: Props) {
           <li
             key={t.id}
             className={`max-w-[92%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed ${
-              t.speaker === "student" ? "self-end bg-zinc-800 text-zinc-100" : "self-start bg-sky-500/10 text-sky-50"
+              t.speaker === "student" ? "self-end bg-zinc-800 text-zinc-100" : "self-start bg-brand-coral/10 text-zinc-50"
             }`}
           >
             <div className="mb-0.5 text-xs uppercase tracking-wide text-zinc-500">
