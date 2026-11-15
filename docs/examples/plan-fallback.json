@@ -1,0 +1,115 @@
+{
+  "plan": {
+    "planId": "plan_00000000-0000-4000-8000-000000000001",
+    "revision": 1,
+    "createdAt": "2026-11-15T18:00:00.000Z",
+    "source": "role-fallback",
+    "target": {
+      "company": "Synthetic Payments Co",
+      "role": "Backend Engineering Intern",
+      "level": "intern"
+    },
+    "technical": {
+      "problemId": "contains-duplicate",
+      "themeIds": [
+        "th1",
+        "th2",
+        "th3",
+        "th4"
+      ]
+    },
+    "behavioral": {
+      "focus": {
+        "project": {
+          "name": "CampusEats Orders Service",
+          "summary": "Built the order API for a student food-delivery app."
+        },
+        "focus": {
+          "skill": "Debugging production issues"
+        }
+      },
+      "themeIds": [
+        "th5",
+        "th6",
+        "th7",
+        "th8"
+      ]
+    },
+    "themes": [
+      {
+        "id": "th1",
+        "round": "technical",
+        "label": "Efficiency at scale",
+        "detail": "The listing stresses scale or performance, so expect time and space trade-off questions.",
+        "provenance": {
+          "kind": "job-listing"
+        }
+      },
+      {
+        "id": "th2",
+        "round": "technical",
+        "label": "Data structures behind fast lookups",
+        "detail": "Backend roles often probe hash-based lookups and their costs.",
+        "provenance": {
+          "kind": "job-listing"
+        }
+      },
+      {
+        "id": "th3",
+        "round": "technical",
+        "label": "Hash-based lookups and duplicates",
+        "detail": "A common early screen for software roles; you will explain the approach and its cost.",
+        "provenance": {
+          "kind": "role-default"
+        }
+      },
+      {
+        "id": "th4",
+        "round": "technical",
+        "label": "Time and space trade-offs",
+        "detail": "Interviewers usually ask you to compare a brute-force and a faster approach.",
+        "provenance": {
+          "kind": "role-default"
+        }
+      },
+      {
+        "id": "th5",
+        "round": "behavioral",
+        "label": "A decision on your own project",
+        "detail": "From the project you confirmed: what you built, why, and what happened.",
+        "provenance": {
+          "kind": "candidate-resume"
+        }
+      },
+      {
+        "id": "th6",
+        "round": "behavioral",
+        "label": "Debugging a production problem",
+        "detail": "The listing mentions owning or debugging live systems.",
+        "provenance": {
+          "kind": "job-listing"
+        }
+      },
+      {
+        "id": "th7",
+        "round": "behavioral",
+        "label": "Working through a disagreement",
+        "detail": "The listing emphasizes collaboration.",
+        "provenance": {
+          "kind": "job-listing"
+        }
+      },
+      {
+        "id": "th8",
+        "round": "behavioral",
+        "label": "A hard bug you debugged",
+        "detail": "A common engineering-story opener: what you personally did and how you knew it worked.",
+        "provenance": {
+          "kind": "role-default"
+        }
+      }
+    ],
+    "citations": [],
+    "fallbackReason": "research_unavailable"
+  }
+}
