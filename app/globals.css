@@ -20,11 +20,13 @@
   --color-brand-hover: #dc1f3d;
   --color-brand-coral: #fe6b73;
 
-  /* Cream surface, used by the landing page and the behavioral round (the one
-     in-app page with no Monaco editor). The coding room stays dark. */
+  /* Cream surface, used by the landing page, the behavioral round (the one
+     in-app page with no Monaco editor) and the report. The coding room stays
+     dark. */
   --color-cream: #fbf6ec;
   --color-cream-2: #f6eee0;
   --color-cream-3: #f3e8d6;
+  --color-cream-line: #ede2d0;
   --color-ink: #3a302c;
   --color-ink-muted: #75665c;
   --color-maroon: #9b3b50;
