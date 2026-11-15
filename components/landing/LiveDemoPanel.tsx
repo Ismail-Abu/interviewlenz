@@ -1,5 +1,7 @@
 "use client";
 
+import { TypingEditor } from "./TypingEditor";
+
 export function LiveDemoPanel() {
   const bars = [
     { delay: "0s", duration: "0.8s" },
@@ -25,88 +27,8 @@ export function LiveDemoPanel() {
       className="overflow-hidden rounded-2xl border border-border bg-background shadow-lift"
     >
       <div className="grid lg:grid-cols-[1.1fr_1fr]">
-        {/* Left: Code Editor Preview */}
-        <div className="border-b border-border bg-card lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between border-b border-border px-5 py-3">
-            <span className="font-mono text-xs text-muted-foreground">solution.py · v4</span>
-            <div className="flex items-center gap-2">
-              <span className="rounded-md border border-border bg-background px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-                Python 3
-              </span>
-              {/* User requested: Green Run Code button */}
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-white shadow-sm">
-                ▶ Run
-              </span>
-            </div>
-          </div>
-
-          <div className="px-5 py-5">
-            <pre className="overflow-x-auto font-mono text-[12.5px] leading-[1.75] sm:text-[13px]">
-              <code>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">1</span>
-                  <span className="text-syntax-keyword font-semibold">def</span>{" "}
-                  <span className="text-syntax-function font-semibold">contains_duplicate</span>
-                  <span className="text-syntax-plain">(nums):</span>
-                </span>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">2</span>
-                  <span className="text-syntax-plain">    seen = </span>
-                  <span className="text-syntax-builtin">set</span>
-                  <span className="text-syntax-plain">()</span>
-                </span>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">3</span>
-                  <span className="text-syntax-keyword font-semibold">    for</span>{" "}
-                  <span className="text-syntax-plain">n </span>
-                  <span className="text-syntax-keyword font-semibold">in</span>{" "}
-                  <span className="text-syntax-plain">nums:</span>
-                </span>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">4</span>
-                  <span className="text-syntax-keyword font-semibold">        if</span>{" "}
-                  <span className="text-syntax-plain">n </span>
-                  <span className="text-syntax-keyword font-semibold">in</span>{" "}
-                  <span className="text-syntax-plain">seen:</span>
-                </span>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">5</span>
-                  <span className="text-syntax-keyword font-semibold">            return</span>{" "}
-                  <span className="text-syntax-constant font-semibold">True</span>
-                </span>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">6</span>
-                  <span className="text-syntax-plain">        seen.add(n)</span>
-                </span>
-                <span className="block whitespace-pre">
-                  <span className="mr-4 inline-block w-5 select-none text-right text-syntax-gutter">7</span>
-                  <span className="text-syntax-keyword font-semibold">    return</span>{" "}
-                  <span className="text-syntax-constant font-semibold">False</span>
-                </span>
-              </code>
-            </pre>
-
-            <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-success-soft px-3 py-1 text-xs font-semibold text-success border border-emerald-500/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-3.5 w-3.5"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
-              4/4 test cases passed in 14ms
-            </span>
-          </div>
-        </div>
+        {/* Left: Code Editor Preview (types itself out, then runs) */}
+        <TypingEditor />
 
         {/* Right: Transcript Preview */}
         <div className="flex flex-col gap-4 px-5 py-5 sm:px-6">
