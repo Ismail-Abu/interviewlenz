@@ -1,6 +1,6 @@
 import { EndSensitivity, GoogleGenAI, Modality } from "@google/genai";
 import type { ApiError, LiveTokenResponse } from "../../../lib/contract";
-import { containsDuplicate } from "../../../lib/problems";
+import { containsDuplicate, getProblem } from "../../../lib/problems";
 import { interviewerInstructions } from "../../../lib/prompts";
 import { normalizeRoleContext } from "../../../lib/roleContext";
 import { behavioralInstructions, normalizeBehavioralContext } from "../../../lib/behavioral";
@@ -67,15 +67,23 @@ export async function POST(request: Request): Promise<Response> {
   let roleInput: unknown;
   let roundInput: unknown;
   let contextInput: unknown;
+  let problemIdInput: unknown;
   try {
     if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) throw new Error("too large");
     const raw = await request.text();
     if (raw.length > MAX_BODY_BYTES) throw new Error("too large");
-    const body = JSON.parse(raw) as { sessionId?: unknown; roleContext?: unknown } | null;
+    const body = JSON.parse(raw) as {
+      sessionId?: unknown;
+      roleContext?: unknown;
+      roundType?: unknown;
+      behavioralContext?: unknown;
+      problemId?: unknown;
+    } | null;
     sessionId = body?.sessionId;
     roleInput = body?.roleContext;
-    roundInput = (body as { roundType?: unknown } | null)?.roundType;
-    contextInput = (body as { behavioralContext?: unknown } | null)?.behavioralContext;
+    roundInput = body?.roundType;
+    contextInput = body?.behavioralContext;
+    problemIdInput = body?.problemId;
   } catch {
     const error: ApiError = {
       code: "invalid_request",
@@ -118,9 +126,14 @@ export async function POST(request: Request): Promise<Response> {
   // Behavioral: no coding problem; role framing uses title/company/level only
   // (the raw job listing is never part of the behavioral Live session).
   const behavioralRole = role.value && { company: role.value.company, role: role.value.role, level: role.value.level };
+  const codingProblem =
+    typeof problemIdInput === "string"
+      ? (getProblem(problemIdInput) ?? containsDuplicate)
+      : containsDuplicate;
+
   const systemInstruction = behavioral
     ? behavioralInstructions({ roleContext: behavioralRole, context: context.value })
-    : interviewerInstructions(containsDuplicate, role.value);
+    : interviewerInstructions(codingProblem, role.value);
 
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.LIVE_MODEL;

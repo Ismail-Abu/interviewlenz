@@ -339,6 +339,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         round === "behavioral" ? behavioralRole : roleContext,
         behavioralRound?.type,
         behavioralRound?.context,
+        round === "behavioral" ? undefined : problem.id,
       );
       if (!current()) return;
       if (isApiError(token)) {
@@ -601,6 +602,14 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
       setRound("behavioral");
     }
     setView("room");
+  }
+
+  function handleSwitchProblem(next: Problem) {
+    if (next.id === problem.id) return;
+    loadProblem(next);
+    if (live.current && voiceMode === "live") {
+      void handleReconnect();
+    }
   }
 
   // Quick standalone practice: no plan.
@@ -976,7 +985,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         {/* Left Column: Problem description & Live voice console */}
         <section className="flex flex-col border-border lg:min-h-0 lg:border-r bg-background">
           <div className="flex-1 px-5 py-6 sm:px-7 lg:overflow-y-auto">
-            <ProblemPanel problem={problem} />
+            <ProblemPanel problem={problem} onSelectProblem={handleSwitchProblem} />
           </div>
           <VoicePanel
             connected={connected}

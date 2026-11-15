@@ -65,12 +65,19 @@ export async function fetchLiveToken(
   roundType?: "behavioral",
   // The confirmed personalization (behavioral only). Never excerpts or files.
   behavioralContext?: BehavioralContext,
+  problemId?: string,
 ): Promise<LiveTokenResponse | ApiError> {
   try {
     const res = await fetch("/api/live-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, ...(roleContext ? { roleContext } : {}), ...(roundType ? { roundType } : {}), ...(roundType && behavioralContext ? { behavioralContext } : {}) }),
+      body: JSON.stringify({
+        sessionId,
+        ...(roleContext ? { roleContext } : {}),
+        ...(roundType ? { roundType } : {}),
+        ...(roundType && behavioralContext ? { behavioralContext } : {}),
+        ...(problemId ? { problemId } : {}),
+      }),
     });
     const body = await res.json().catch(() => null);
     if (res.ok && body && typeof body.token === "string") return body as LiveTokenResponse;
@@ -106,7 +113,13 @@ export async function openVoice(
   round?: BehavioralRound,
 ): Promise<VoiceConnection> {
   h.onState("connecting");
-  const token = await fetchLiveToken(sessionId, roleContext, round?.type, round?.context);
+  const token = await fetchLiveToken(
+    sessionId,
+    roleContext,
+    round?.type,
+    round?.context,
+    round ? undefined : problem.id,
+  );
 
   const realFactory = testClientFactory() ?? REAL_CLIENT;
   if (!isApiError(token) && realFactory) {
