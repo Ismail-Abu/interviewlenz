@@ -740,3 +740,10 @@ On `b10-behavioral`, `codingSession` is still the arrow function spreading `...a
 - The deployed-site mic check over HTTPS.
 
 Deployment, branch protection, and application features are left to their current owners.
+### Coding-room bug bash • mobile editor, keyboard access, and final coding draft
+
+Branched from behavioral handoff 20bc1a3, which includes PR #16. Coordinated the coding setup disclosure and shared-component scope on that commit. Coding setup now names Gemini and both uses of job details; resume screenshots stay local in the coding path. Behavioral analysis opt-in wording belongs beside its own action.
+
+Changed ProblemRoom, CodeEditor, StartScreen, ReportView and the coding report prompt. Loaded Monaco at 390×844 measured 5 px before and 379 px after. At 1366×768 it measured 377 px both times. Verified in Chrome with the real browser Python worker: typed set solution → 4/4, results visible, Finish reachable. Keyboard exit on macOS: Ctrl+Shift+M, Shift+Tab to Run; keyboard activation and subsequent navigation to Finish passed on both viewport sizes.
+
+Both viewport sizes: a v3 Run scored 2/4; after editing and finishing, the report request included v3 and v4 ISO-dated snapshots and exactly one Run, v3. The report displayed v4 as an unrun draft. An edit followed by Finish with no Runs saved the draft and showed no runs. The report prompt marks snapshots with no matching Run as unrun. Browser checks used the no-key report fallback. Lint, production build, report/token and behavioral regression checks passed.

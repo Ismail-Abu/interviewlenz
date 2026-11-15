@@ -47,17 +47,23 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           ...(behavioralContext ? { behavioralContext } : {}),
         }
       : codingSession();
-  const codingSession = (): CodingSession => ({
-    ...ids(),
-    problemId: problem.id,
-    ...attempt,
-    ...(roleContext ? { roleContext } : {}),
-  });
+  function codingSession(): CodingSession {
+    const draft = latest.current;
+    const lastSnapshot = attempt.snapshots.at(-1);
+    const hasUnrunEdit = draft.codeVersion > 1 && lastSnapshot?.codeVersion !== draft.codeVersion;
+    return {
+      ...ids(),
+      problemId: problem.id,
+      ...attempt,
+      snapshots: hasUnrunEdit
+        ? [...attempt.snapshots, { ...draft, at: new Date().toISOString() }]
+        : attempt.snapshots,
+      ...(roleContext ? { roleContext } : {}),
+    };
+  }
   const [view, setView] = useState<"start" | "room" | "report">("start");
   const [records, setRecords] = useState<AttemptRecord[]>([]);
   const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
-  // From the landing page. Browser-only and display-only: never added to the
-  // Session, the token request, or the Live session (no backend fields for it).
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   // Text fields only, sent to the token route (every connect, incl. Reconnect)
   // and in the Session for the report. Resume screenshots stay local.
@@ -422,8 +428,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
+    <div className="flex min-h-dvh flex-col bg-zinc-950 lg:h-screen text-zinc-100">
+      <header className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-3 sm:gap-4 sm:px-6">
         <Wordmark size={26} />
         <span className="hidden text-base text-zinc-400 md:inline">
           Python · {problem.title}
@@ -433,17 +439,17 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           <span
             className="hidden max-w-xs truncate rounded-full border border-brand-coral/40 bg-brand-coral/10 px-3 py-1 text-sm text-brand-coral lg:inline"
             data-testid="target-role"
-            title="From your setup. Tailored rounds are a preview."
+            title="Role details used for interview framing and feedback."
           >
             Practicing for {profile.job.role.trim() || "your role"}
             {profile.job.company.trim() && ` at ${profile.job.company.trim()}`}
           </span>
         )}
-        <span className="ml-auto text-sm text-zinc-500" data-testid="session-stats">
+        <span className="ml-auto text-sm text-zinc-500 max-sm:sr-only" data-testid="session-stats">
           {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
         </span>
         {DEV && (
-          <details className="relative">
+          <details className="relative max-sm:ml-auto">
             <summary className="cursor-pointer select-none rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
               Dev
             </summary>
@@ -488,7 +494,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         </button>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <main className="grid grid-cols-1 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <div className="flex min-h-0 flex-col border-zinc-800 lg:border-r">
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ProblemPanel problem={problem} />
@@ -498,7 +504,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
         <div className="flex min-h-0 flex-col">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-            <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
+            <div>
+              <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
+              <p className="text-xs text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
+            </div>
             <button
               onClick={handleRun}
               disabled={running}
@@ -516,10 +525,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               )}
             </button>
           </div>
-          <div className="min-h-0 flex-[3] bg-[#1e1e1e]">
+          <div className="h-[45dvh] min-h-80 bg-[#1e1e1e] lg:h-auto lg:min-h-0 lg:flex-[3]">
             <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
-          <div className="h-[38%] min-h-[220px] border-t border-zinc-800">
+          <div className="h-80 min-h-[220px] lg:h-[38%] border-t border-zinc-800">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
         </div>
