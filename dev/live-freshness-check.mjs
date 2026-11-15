@@ -255,11 +255,23 @@ await c.connect(token, problem);
 await new Promise((r) => setTimeout(r, 0));
 drain();
 
-// B1 a silent sync asks nothing.
+// B1 the buffer itself is delivered silently; at most one remark may follow.
 c.syncCode(snap(2));
 const b1 = drain();
-assert("B1 syncCode writes the buffer silently (no question)", b1.length > 0 && b1.every((m) => !m.tc));
-assert("B1 the written buffer is the version just synced", b1.some((m) => m.text.includes("SYNTHETIC_V2")));
+const silentBuffer = b1.find((m) => !m.tc && m.text.includes("SYNTHETIC_V2"));
+assert("B1 the buffer is written silently (turnComplete:false)", !!silentBuffer);
+const remarks = b1.filter((m) => m.tc);
+assert("B1 at most one spoken remark follows an edit", remarks.length <= 1, `${remarks.length}`);
+assert("B1 the remark asks no question", remarks.every((m) => /do not ask a new question/i.test(m.text)));
+endModelTurn();
+drain();
+
+// B1b a second edit on the same version earns no second remark.
+c.syncCode(snap(2));
+const b1b = drain().filter((m) => m.tc);
+assert("B1b the same version is not remarked on twice", b1b.length === 0, `${b1b.length}`);
+endModelTurn();
+drain();
 
 // B2 v3 runs 2/4, then the student edits to v4 without running.
 c.sendRunContext(snap(3), completed(3, 2, 4));
@@ -267,6 +279,7 @@ endModelTurn();
 drain();
 c.syncCode(snap(4));
 const b2 = drain().map((m) => m.text).join("\n");
+endModelTurn();
 assert("B2 the unrun v4 buffer reaches the model", b2.includes("SYNTHETIC_V4"));
 assert("B2 v4 is labelled as not run yet", /\[CODE v4\][^\n]*not run yet/.test(b2));
 assert("B2 no run is attributed to v4", !b2.includes("[RUN v4]"));
