@@ -69,7 +69,7 @@ export function VoicePanel(p: Props) {
                   onClick={p.onReconnect}
                   disabled={p.reconnecting}
                   data-testid="reconnect"
-                  className="rounded-lg bg-amber-500 px-4 py-2 text-base font-semibold text-zinc-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`${btn.primary} px-4 py-2 text-base`}
                 >
                   {p.reconnecting ? "Reconnecting…" : "Reconnect"}
                 </button>
