@@ -400,3 +400,50 @@ Checks (all pass):
 - Direct Gemini (real key, `v1beta`, native-audio; no mic): a fresh-session restore of the v3 2/4 evidence answered "Version 3 passed 2 out of 4 test cases." — identifies v3 2/4 after reconnect. (The 4/4 → 2/4 within one socket was already confirmed.)
 
 Pending (human, in browser) — Hamza wires the reconnect control on PR #10, then the full walkthrough (below in the handoff) is run with a real key + mic.
+
+### B7 • Live interviewer grounding fix — backend (requested by Ismail; branch `b7-live-grounding` from PR #10 `29d03ed`, which contains PR #9 `5b7f31b`)
+
+**Code commit `ff43edb`** (tree `8e9c1f1e2a349e2a18e1bd16f34c945f26faa9e5`). Files: `app/api/live-token/route.ts`, `lib/live.ts`, `lib/prompts.ts`, `dev/live-grounding-check.mjs` (new), plus small updates to `dev/live-{queue,stages,run-evidence,disconnect}-check.mjs`. **No `components/` change and no `lib/contract.ts` change.**
+
+**Root cause, from the code and SDK 3.3.0 (`authTokens.create` docs, "Case 2").** A token minted with `liveConnectConstraints` locks the *entire* `LiveConnectConfig`. `lib/live.ts` set `systemInstruction` only on the client `connect()` config, so it was ignored. That explains why the diagnostic instruction worked in the token config and was ignored client-only. For the same reason, no turn-detection settings ever took effect.
+
+Traced one Run: `ProblemRoom.handleRun` captures `{codeVersion, source}` before awaiting the runner → `sendRunContext` → `latestRun` → `pumpEvidence` (silent `[RUN vN]`) → `pumpFollowup` (`turnComplete:true` ask) → interviewer transcript. Defects reproduced before editing (13/30 of the new checks failed):
+- no instruction or turn detection in the token
+- no opening question
+- a follow-up during an 850 ms pause
+- **a late v6 result replaced v7, so the question was about v6**
+- no reconnect notice
+- no correlation trace
+
+**Fix:**
+1. **Token route** locks `systemInstruction: interviewerInstructions(containsDuplicate)` (one shared builder, canonical problem: function, prompt, examples, constraints) and `realtimeInputConfig.automaticActivityDetection` (`silenceDurationMs: 1200`, `prefixPaddingMs: 300`, `END_SENSITIVITY_LOW`) into the single-use token. The key stays server-side, and the response is still only `{token, model, expiresAt}`. `lib/live.ts` no longer sends an instruction.
+2. **Instruction** covers:
+   - English only; open by asking for the approach; one focused question, then wait; a short mid-sentence pause is not an answer
+   - follow up on an incomplete answer or a contradiction with the code; discuss the supplied Run; complexity → space → edge case when time allows
+   - how `[START]`, `[CODE vN]` (silent, not run), `[RUN vN] P/T` (exact code + observed results; the latest is the highest version), and `[RECONNECTED]` arrive
+   - when asked: give the latest Run version, its score, and a code detail; say exactly what is missing; mention a reconnect only after `[RECONNECTED]`
+3. **`lib/live.ts`:**
+   - one `[START]` opening per attempt (never on reconnect), treated as an outstanding question
+   - an older Run completing late never replaces newer evidence (traced `superseded`); one coalesced follow-up, about the latest Run
+   - follow-up waits `STUDENT_SETTLE_MS` = 1500 ms after the student's last speech, and resumed speech cancels it
+   - one silent `[RECONNECTED]` notice only after an observed drop
+   - the existing epoch guards, single listeners, persistent mic, interruption, and mute are unchanged
+4. **Local correlation trace (opt-in):** set `globalThis.__ILZ_LIVE_TRACE__ = []` in a dev console. Stages: `connected`/`reconnected`, `opening`, `queued`, `superseded`, `written` (evidence on the active socket), `asked` (follow-up written), `confirmed` (the interviewer reply names that version or score), `turn`. Each carries connection id, run id, version, and score. **Metadata only:** no audio, source, transcript text, or tokens. Off unless the array exists.
+5. `createLiveClient({ followupSettleMs })` is optional (default 1500), used by the deterministic checks. The UI call site is unchanged.
+
+**Commands and results** (no key needed):
+- `node --experimental-strip-types dev/live-grounding-check.mjs` → **30/30 pass**:
+  - token locks the builder's instruction for the canonical problem, single-use, no key in the response
+  - turn detection 1200 ms > 850 ms; no diagnostic phrases
+  - one opening on first connect, none on reconnect
+  - Run while a question is outstanding → evidence only, no second question
+  - **850 ms mid-sentence pause → no follow-up; resumed speech re-arms the wait; then exactly one follow-up (v5 4/4)**
+  - trace v5 queued → written → confirmed, metadata only
+  - **two rapid Runs → one question, about v7 2/4; late v6 never replaces v7**
+  - **edit after Run → `[CODE v8] not run yet`, latest Run evidence still v7**
+  - **reconnect with a pending Run → one `[RECONNECTED]`, v9 evidence restored, one follow-up (after the settle window), no opening, stale socket ignored**
+- All seven existing checks pass: `live-transcript`, `live-queue`, `live-stages`, `live-run-evidence`, `live-disconnect`, `live-reconnect`, `live-turnid`. The queue, stages, run-evidence, and disconnect stubs now complete the opening exchange and use settle 0; their original assertions are unchanged.
+- Frontend suites (test LiveClient) on this branch: sync 25/25, reconnect 30/30. The no-key regression is unchanged (503 → labeled fallbacks; real `lib/live.ts` opens the `v1beta` socket and falls back cleanly).
+- `npm run lint` clean; `npm run build` passes.
+
+**Spoken acceptance: PENDING. There's no key or mic on this machine, so no human has heard it.** Browser steps for Ismail are in the PR. Expected trace while doing them: `connected` → `opening` → for each Run `queued` → `written` → `asked` → `confirmed`; after Wi-Fi off/on + Reconnect, `reconnected` and the latest Run `written` again.
