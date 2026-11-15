@@ -35,7 +35,6 @@ export async function requestReport(session: Session, mode: ReportMode = DEFAULT
   if (mode === "auto") {
     const real = await postReport(session);
     if (real.kind === "not-configured" || real.kind === "route-missing") {
-      await delay(400);
       return {
         ok: true,
         report: fixtureForSession(session),
@@ -45,16 +44,11 @@ export async function requestReport(session: Session, mode: ReportMode = DEFAULT
     }
     return toOutcome(real);
   }
-  await delay(900);
   if (mode === "fixture-error" && !failedOnce.has(session.attemptId)) {
     failedOnce.add(session.attemptId);
     return { ok: false, error: UNAVAILABLE };
   }
   return { ok: true, report: fixtureForSession(session), fromFixture: true };
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // What the report route said, classified for the fallback decision.

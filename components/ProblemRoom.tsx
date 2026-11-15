@@ -22,7 +22,7 @@ import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
-import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
+import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
@@ -246,6 +246,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             if (!current()) return;
             turnCount.current += 1;
             setAttempt((s) => ({ ...s, turns: [...s.turns, t] }));
+            setTimeout(() => schedulePreload(), 100);
           },
           onError: (e: ApiError) => current() && setLiveError(e),
         },
@@ -382,8 +383,53 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       if (live.current) {
         lastSyncedVersion.current = Math.max(lastSyncedVersion.current ?? 0, snapshot.codeVersion);
       }
+      setTimeout(() => schedulePreload(), 100);
     } finally {
       setRunning(false);
+    }
+  }
+
+  // Speculative report preloader: evaluates in the background while candidate speaks/codes
+  const preloadedReportRef = useRef<{
+    attemptId: string;
+    key: string;
+    promise: Promise<ReportOutcome>;
+    outcome: ReportOutcome | null;
+  } | null>(null);
+
+  function schedulePreload() {
+    try {
+      const s = fullSession();
+      const isBeh = isBehavioralSession(s);
+      // Need minimum context to evaluate:
+      // For coding: at least 1 test run or 2 spoken turns
+      // For behavioral: at least 2 spoken turns
+      if (!isBeh && s.runs.length === 0 && s.turns.length < 2) return;
+      if (isBeh && s.turns.length < 2) return;
+
+      const lastSnap = !isBeh && s.snapshots.length > 0 ? s.snapshots[s.snapshots.length - 1].codeVersion : 0;
+      const lastRun = !isBeh && s.runs.length > 0 ? s.runs[s.runs.length - 1].codeVersion : 0;
+      const key = `${s.attemptId}:snap${lastSnap}:run${lastRun}:turns${s.turns.length}`;
+
+      if (preloadedReportRef.current?.key === key) return;
+
+      const promise = requestReport(s, reportMode)
+        .then((res) => {
+          if (preloadedReportRef.current?.key === key) {
+            preloadedReportRef.current.outcome = res;
+          }
+          return res;
+        })
+        .catch(() => null as unknown as ReportOutcome);
+
+      preloadedReportRef.current = {
+        attemptId: s.attemptId,
+        key,
+        promise,
+        outcome: null,
+      };
+    } catch {
+      // Preload is non-blocking
     }
   }
 
@@ -394,10 +440,25 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       else setCodingRecords(fn);
     };
 
-    updateRecords((rs) =>
-      rs.map((r) => (r.session.attemptId === target.attemptId ? { session: target, status: "loading" } : r)),
-    );
-    const outcome = await requestReport(target, reportMode);
+    const cached = preloadedReportRef.current;
+    let outcome: ReportOutcome | null = null;
+
+    // Check if a preloaded report is ready or in-flight for this attempt
+    if (cached && cached.attemptId === target.attemptId) {
+      if (cached.outcome && cached.outcome.ok) {
+        outcome = cached.outcome;
+      } else if (cached.promise) {
+        outcome = await cached.promise;
+      }
+    }
+
+    if (!outcome || !outcome.ok) {
+      updateRecords((rs) =>
+        rs.map((r) => (r.session.attemptId === target.attemptId ? { session: target, status: "loading" } : r)),
+      );
+      outcome = await requestReport(target, reportMode);
+    }
+
     if (outcome.ok) {
       const job = profile?.job;
       const role = job && hasJob(job) ? [job.role.trim(), job.company.trim()].filter(Boolean).join(" at ") : undefined;
