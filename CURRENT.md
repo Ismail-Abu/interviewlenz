@@ -283,3 +283,22 @@ Checks:
 - `npm run lint` clean; `npm run build` passes.
 
 Pending (human, in browser): claim linear + run passing code → worst-case question and wait; answer + switch to a set → space-usage follow-up; then an edge-case question; and confirm an extra Run while answering does not skip a stage or add a second question. The gate is verified deterministically above; the spoken multi-turn flow is the live confirmation.
+
+### B6 • Run-evidence delivery + disconnect preservation (PR #9, continues from d62133b) — Ismail
+
+Fixes two cases from Ismail's browser retest.
+
+1. **Stale score (Gemini reported the latest run as 4/4 when v3 scored 2/4).** The client now *separates sending completed-Run evidence from requesting a spoken follow-up*. On every Run it sends `[RUN vN] score + line-numbered source` as **silent** context (`turnComplete:false`) immediately — even while a question is outstanding — so the model's run state is always accurate (version + source + score kept together in one message). The spoken follow-up (`turnComplete:true`) is a separate, gated step. A version that has run is never also labeled `[CODE vN] not run yet`.
+2. **Lost Run on disconnect.** `sendRunContext`/`syncCode` now record the Run/buffer even with no open socket. An unexpected close or a send failure exposes the disconnected state (`onState("error")` + a retryable `onError`) and **preserves** the latest Run for the attempt; `connect()` on the same client restores the buffer + latest Run to the fresh session and re-asks. `end()` (and therefore Retry) clears it.
+
+Partial-transcript safety: the follow-up fires only after a *completed* student turn and never while `pendingInput` is non-empty, so an interim transcript cannot trigger a question mid-answer.
+
+Deterministic regression tests — all pass:
+- `dev/live-run-evidence-check.mjs` (new): v3 2/4 evidence delivered promptly while outstanding; v3 never re-labeled "not run yet"; version+source+score in one message; follow-up after the answer states 2/4 (not 4/4); partial transcript triggers nothing, completed answer raises one follow-up.
+- `dev/live-disconnect-check.mjs` (new): socket close and send failure both expose the error state; a Run while disconnected is not transmitted but is restored (evidence + one grounded follow-up) on reconnect; `end()` clears it.
+- `dev/live-queue-check.mjs` (updated to the separated evidence/ask protocol), `dev/live-stages-check.mjs` and `dev/live-transcript-check.mjs` (unchanged): all pass. The commit-1 transcription fix is untouched.
+- `npm run lint` clean; `npm run build` passes.
+
+Gemini-side verification (real key, v1beta, native-audio; mic/browser not used): after v2 4/4 then a silent `[RUN v3] 2/4`, asked "most recent run version and score?" → **"Version 3 passed 2/4 tests."** (no longer 4/4). On a reconnect that re-delivers the v3 evidence, the interviewer grounded its question in the v3 set implementation (it asked about complexity rather than restating the score verbatim, which is acceptable).
+
+Pending (human, in browser) — left to Ismail: on one real socket, claim linear, run v2 4/4, edit to v3, run v3 2/4 while answering, and confirm Gemini identifies v3 as 2/4 and asks one question grounded in that code; then force a socket close, run again, and confirm the evidence and a grounded question survive the reconnect.

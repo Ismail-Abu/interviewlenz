@@ -38,10 +38,16 @@ export function interviewerInstructions(problem: Problem): string {
     .join("\n");
 }
 
-// The run-context message sent into the Live session after each Run, following
-// the template in docs/CONTRACT.md. The Python source is line-numbered so the
-// interviewer can refer to specific lines.
-export function formatRunContext(snapshot: CodeSnapshot, result: RunResult): string {
+// Completed-Run evidence: version, score, failing cases, and line-numbered
+// source kept together in one message, following docs/CONTRACT.md. Sent as
+// silent context (no question) so the model's run state is always accurate,
+// independent of whether a spoken follow-up is requested. `currentBufferVersion`
+// lets a run that has been edited past be labeled historical.
+export function formatRunEvidence(
+  snapshot: CodeSnapshot,
+  result: RunResult,
+  currentBufferVersion: number = result.codeVersion,
+): string {
   const lines: string[] = [];
 
   if (result.status === "completed") {
@@ -58,9 +64,30 @@ export function formatRunContext(snapshot: CodeSnapshot, result: RunResult): str
     lines.push(`[RUN v${result.codeVersion}] error ${result.error.code}${where}: ${result.error.message}`);
   }
 
+  if (result.codeVersion < currentBufferVersion) {
+    lines.push(
+      `(These results are from version ${result.codeVersion}; the current buffer is version ${currentBufferVersion}.)`,
+    );
+  }
+
   lines.push("Code:", "```python", numberLines(snapshot.source), "```");
-  lines.push("Ask one short question about this specific code and result.");
   return lines.join("\n");
+}
+
+// A spoken-follow-up request about the most recent completed Run. Kept separate
+// from the evidence above and restating the version and score, so the
+// interviewer grounds its one question in THIS run rather than an earlier one.
+export function formatRunFollowup(
+  result: RunResult,
+  currentBufferVersion: number = result.codeVersion,
+): string {
+  const v = result.codeVersion;
+  const outcome =
+    result.status === "completed"
+      ? `passed ${result.passed}/${result.total}`
+      : `failed (${result.error.code}${result.error.line ? ` on line ${result.error.line}` : ""})`;
+  const buffer = v < currentBufferVersion ? ` The current buffer is version ${currentBufferVersion}.` : "";
+  return `[RUN v${v}] The most recent run is version ${v}, which ${outcome}.${buffer} Discuss this version and ask one focused question grounded in its code and results.`;
 }
 
 // A silent code-context update: makes the current working buffer available to
