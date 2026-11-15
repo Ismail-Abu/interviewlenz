@@ -150,9 +150,28 @@ body {
 
 @media (max-width: 1023px) {
   .mobile-editor-pane {
-    min-height: 360px !important;
-    height: 360px !important;
+    min-height: 280px !important;
+    height: 280px !important;
     flex-shrink: 0 !important;
+    touch-action: pan-y !important;
+  }
+  .mobile-editor-pane .monaco-editor,
+  .mobile-editor-pane .monaco-editor .overflow-guard,
+  .mobile-editor-pane .monaco-editor .monaco-scrollable-element,
+  .mobile-editor-pane .monaco-editor .view-lines {
+    touch-action: pan-y !important;
+  }
+  .mobile-results-pane {
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .mobile-results-pane > section {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .mobile-results-pane .flex-1 {
+    overflow: visible !important;
   }
 }
 

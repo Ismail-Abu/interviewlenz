@@ -64,6 +64,13 @@ export default function CodeEditor({ value, onChange, errorLine, errorMessage }:
         tabSize: 4,
         automaticLayout: true,
         padding: { top: 12 },
+        scrollbar: {
+          alwaysConsumeMouseWheel: false,
+          vertical: "auto",
+          horizontal: "auto",
+        },
+        overviewRulerLanes: 0,
+        hideCursorInOverviewRuler: true,
       }}
     />
   );

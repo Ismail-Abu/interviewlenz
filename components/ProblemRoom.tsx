@@ -996,11 +996,51 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         </div>
       </header>
 
-      <main className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] bg-background">
+      {/* Mobile Sticky Quick Switcher (Mobile Only) */}
+      <div className="sticky top-[57px] z-10 flex items-center justify-between border-b border-border bg-card/95 backdrop-blur px-4 py-2 sm:hidden shadow-sm">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          Workspace View
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              document.getElementById("problem-pane")?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted cursor-pointer active:scale-95 transition-all"
+            data-testid="mobile-jump-problem"
+          >
+            <span>📝 Problem</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              document.getElementById("code-pane")?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary-soft text-primary px-2.5 py-1 text-xs font-semibold hover:bg-primary/10 cursor-pointer active:scale-95 transition-all"
+            data-testid="mobile-jump-code"
+          >
+            <span>💻 Code &amp; Run ↓</span>
+          </button>
+        </div>
+      </div>
+
+      <main className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] bg-background min-w-0 max-w-full overflow-x-hidden">
         {/* Left Column: Problem description & Live voice console */}
-        <section className="flex flex-col border-border lg:min-h-0 lg:border-r bg-background">
+        <section id="problem-pane" className="flex flex-col border-border lg:min-h-0 lg:border-r bg-background min-w-0 max-w-full">
           <div className="flex-1 px-5 py-6 sm:px-7 lg:overflow-y-auto">
             <ProblemPanel problem={problem} onSelectProblem={handleSwitchProblem} />
+            <div className="mt-5 pt-3 border-t border-border/60 sm:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  document.getElementById("code-pane")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-2.5 px-4 text-xs font-semibold shadow-cta hover:bg-primary-hover active:translate-y-px transition-all cursor-pointer"
+              >
+                <span>💻 Continue to Code Editor &amp; Run Tests ↓</span>
+              </button>
+            </div>
           </div>
           <VoicePanel
             connected={connected}
@@ -1022,7 +1062,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         </section>
 
         {/* Right Column: Code editor, test results, and GREEN Run Code button */}
-        <section className="flex flex-col border-t border-border lg:min-h-0 lg:border-t-0 bg-background">
+        <section id="code-pane" className="flex flex-col border-t border-border lg:min-h-0 lg:border-t-0 bg-background min-w-0 max-w-full">
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 bg-background">
             <div className="flex items-center gap-2 font-mono text-xs text-foreground">
               <span className="font-semibold text-foreground">solution.py · v{codeVersion}</span>
@@ -1037,17 +1077,17 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
           </div>
 
           {/* Monaco Editor Pane */}
-          <div className="mobile-editor-pane min-h-[300px] flex-1 overflow-hidden bg-card border-b border-border lg:h-auto lg:min-h-0">
+          <div className="mobile-editor-pane min-h-[280px] flex-1 overflow-hidden bg-card border-b border-border lg:h-auto lg:min-h-0">
             <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
 
           {/* Results Panel */}
-          <div className="min-h-[200px] shrink-0 border-b border-border lg:h-[35%] lg:shrink overflow-hidden">
+          <div className="mobile-results-pane min-h-[160px] shrink-0 border-b border-border lg:h-[35%] lg:shrink lg:overflow-hidden overflow-visible">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
 
           {/* Bottom Bar: Tip + GREEN RUN BUTTON */}
-          <div className="border-t border-border bg-background">
+          <div className="border-t border-border bg-background sticky bottom-0 z-10 shadow-lift sm:static sm:shadow-none">
             <div className="flex items-center justify-between gap-3 px-5 py-3">
               <span className="text-xs text-muted-foreground">Tip: explain your idea out loud before you run.</span>
               <button
