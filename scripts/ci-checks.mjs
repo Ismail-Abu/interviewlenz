@@ -29,6 +29,7 @@ const CHECKS = [
   "report-check.mjs",
   "unrun-draft-check.mjs",
   "score-check.mjs",
+  "sponsor-check.mjs",
   "behavioral-check.mjs",
   "tailoring-check.mjs",
   "role-context-check.mjs",
