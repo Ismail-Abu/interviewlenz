@@ -1,212 +1,205 @@
 "use client";
 
-import type { Finding, Report, RoundType } from "@/lib/contract";
-import {
-  BAND_LABEL, complexityAssessment, nextAction, runFacts, scoreOverall, scoreRound,
-  type Band, type DimensionScore, type RoundScore, type RunFacts,
-} from "@/lib/score";
+// Executive debrief scorecard: the band (never a percentage), per-dimension
+// meters, and the coding run facts. All numbers come from lib/score.ts:
+// unassessed dimensions are shown as a dash and left out of every band, never
+// counted as zero, and runtime is never presented as complexity evidence.
+import type { RoundType } from "@/lib/contract";
+import { BAND_LABEL, type Band, type DimensionScore, type OverallScore, type RoundScore, type RunFacts } from "@/lib/score";
+import { categoryLabel, RATING_WORD, TRACK_LABEL } from "./debrief";
 
-const SHADOW = "shadow-[0_10px_18px_-6px_rgb(90_68_50/0.13)]";
+export const SHADOW = "shadow-[0_10px_18px_-6px_rgb(90_68_50/0.13)]";
 
-const BAND_TONE: Record<Band, { text: string; bar: string; chip: string }> = {
-  strong: { text: "text-[#2E7D4F]", bar: "bg-[#2E7D4F]", chip: "bg-[#2E7D4F]/12 text-[#2E7D4F]" },
-  solid: { text: "text-[#B07A1E]", bar: "bg-[#B07A1E]", chip: "bg-[#B07A1E]/12 text-[#B07A1E]" },
-  developing: { text: "text-maroon", bar: "bg-maroon", chip: "bg-maroon/12 text-maroon-deep" },
-  insufficient: { text: "text-ink-muted", bar: "bg-ink-muted", chip: "bg-cream-3 text-ink-muted" },
+// Fills: strong = burgundy, solid = warm ochre, developing = warm sand. The
+// rating word is always printed beside the meter, so colour is never the only cue.
+const FILL: Record<Exclude<Band, "insufficient">, string> = {
+  strong: "bg-maroon",
+  solid: "bg-[#C08A2E]",
+  developing: "bg-[#D6BC8E]",
+};
+const SEGMENTS: Record<Exclude<Band, "insufficient">, number> = { strong: 3, solid: 2, developing: 1 };
+
+const BADGE: Record<Band, string> = {
+  strong: "bg-maroon text-white",
+  solid: "bg-[#F1DFBC] text-[#6E4A0E]",
+  developing: "bg-[#EEE2CC] text-[#5E4B36]",
+  insufficient: "bg-cream-3 text-[#5F5249]",
+};
+export const BAND_TEXT: Record<Band, string> = {
+  strong: "text-maroon",
+  solid: "text-[#8A5A12]",
+  developing: "text-[#6B5640]",
+  insufficient: "text-[#5F5249]",
 };
 
-const CATEGORY_LABEL: Record<string, string> = {
-  correctness: "Correctness",
-  clarification: "Clarifying questions",
-  approach: "Approach",
-  complexity: "Complexity reasoning",
-  testing: "Testing",
-  code_clarity: "Code clarity",
-  spoken_reasoning: "Spoken reasoning",
-  specificity: "Specificity",
-  personal_contribution: "Personal contribution",
-  reasoning: "Reasoning",
-  outcome: "Outcome",
-};
-const label = (c: string) => CATEGORY_LABEL[c] ?? c.replace(/_/g, " ");
+const ratingBand = (d: DimensionScore): Band =>
+  d.rating === "strong" ? "strong" : d.rating === "ok" ? "solid" : d.rating === "needs_work" ? "developing" : "insufficient";
 
-// A rubric bar. Never colour alone: the rating word is always beside it, and the
-// bar carries its own text alternative.
-function RubricBar({ d }: { d: DimensionScore }) {
-  const band: Band = d.level === null ? "insufficient" : d.level >= 0.75 ? "strong" : d.level >= 0.45 ? "solid" : "developing";
-  const tone = BAND_TONE[band];
-  const pct = d.level === null ? 0 : Math.round(d.level * 100);
-  const word = d.rated ? d.rating.replace(/_/g, " ") : "insufficient evidence";
+export function BandBadge({ band, testId, size = "sm" }: { band: Band; testId?: string; size?: "sm" | "lg" }) {
   return (
-    <li className="flex flex-col gap-1.5" data-testid={`rubric-${d.category}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full font-bold ${BADGE[band]} ${size === "lg" ? "px-4 py-1.5 text-sm" : "px-3 py-1 text-xs"}`}
+      data-testid={testId}
+    >
+      {band !== "insufficient" && <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${band === "strong" ? "bg-white" : "bg-current"}`} />}
+      {BAND_LABEL[band]}
+    </span>
+  );
+}
+
+// One assessed dimension: label, rating word, and a three-step meter.
+function Meter({ d }: { d: DimensionScore }) {
+  const band = ratingBand(d);
+  const word = RATING_WORD[d.rating];
+  const name = categoryLabel(d.category);
+  return (
+    <div role="listitem" className="flex flex-col gap-1.5" data-testid={`rubric-${d.category}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-ink">{label(d.category)}</span>
-        <span className={`text-xs font-semibold ${tone.text}`}>{word}</span>
+        <span className="text-sm font-medium text-ink">{name}</span>
+        <span className="text-xs font-semibold text-ink-muted">{word}</span>
       </div>
-      <div
-        className="h-2 w-full overflow-hidden rounded-full bg-cream-3"
-        role="img"
-        aria-label={`${label(d.category)}: ${word}`}
-      >
-        {d.level !== null ? (
-          <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${pct}%` }} />
-        ) : (
-          // Hatched, not empty: an unrated dimension is not a zero-length bar.
-          <div className="h-full w-full bg-[repeating-linear-gradient(135deg,#E3D3B8_0_6px,transparent_6px_12px)]" />
+      <div className="grid grid-cols-3 gap-1" role="img" aria-label={`${name}: ${word}`}>
+        {[0, 1, 2].map((i) =>
+          band === "insufficient" ? (
+            // A dash, not an empty bar: unassessed is not zero.
+            <span key={i} className="h-2 rounded-full border border-dashed border-[#BFAE97]" />
+          ) : (
+            <span key={i} className={`h-2 rounded-full ${i < SEGMENTS[band] ? FILL[band] : "bg-cream-3"}`} />
+          ),
         )}
       </div>
-    </li>
+    </div>
   );
 }
 
-function RoundBlock({ score, facts }: { score: RoundScore; facts?: RunFacts }) {
-  const tone = BAND_TONE[score.band];
+export function DimensionMeters({ score }: { score: RoundScore }) {
+  if (score.dimensions.length === 0) return null;
+  // De-duplicate repeated categories (keep the first, as lib/score lists them).
+  const seen = new Set<string>();
+  const dims = score.dimensions.filter((d) => (seen.has(d.category) ? false : (seen.add(d.category), true)));
   return (
-    <section className={`rounded-[26px] bg-cream-2 p-5 ${SHADOW}`} data-testid={`score-round-${score.round}`}>
-      <header className="flex flex-wrap items-center gap-3">
-        <h3 className="text-base font-bold capitalize text-ink">{score.round}</h3>
-        <span className={`rounded-full px-3 py-1 text-xs font-bold ${tone.chip}`} data-testid={`score-band-${score.round}`}>
-          {BAND_LABEL[score.band]}
-        </span>
-        <span className="ml-auto text-xs text-ink-muted">
-          {score.ratedCount} of {score.totalCount} dimensions assessed
-        </span>
-      </header>
-
-      {score.caveat && (
-        <p className="mt-2 text-xs leading-relaxed text-ink-muted" data-testid={`score-caveat-${score.round}`}>
-          {score.caveat}
-        </p>
-      )}
-
-      {score.dimensions.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-3">
-          {score.dimensions.map((d) => (
-            <RubricBar key={d.category} d={d} />
-          ))}
-        </ul>
-      )}
-
-      {facts && <RunFactsBlock facts={facts} complexity={score.dimensions.find((d) => d.category === "complexity")} />}
-    </section>
+    <div role="list" aria-label={`${TRACK_LABEL[score.round]} dimensions`} className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+      {dims.map((d) => (
+        <Meter key={d.category} d={d} />
+      ))}
+    </div>
   );
 }
 
-// Four facts, kept four facts. Runtime is labelled as an observation so it is
-// not read as evidence of asymptotic complexity.
-function RunFactsBlock({ facts, complexity }: { facts: RunFacts; complexity?: DimensionScore }) {
+// Four coding facts kept apart: tests, observed runtime, complexity (rubric),
+// and an unrun final draft.
+export function RunFactsBlock({ facts, complexity }: { facts: RunFacts; complexity?: DimensionScore }) {
   const hasRun = facts.testedVersion !== null;
+  const cell = "rounded-[16px] bg-white/70 px-3.5 py-3";
   return (
-    <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-cream-3 pt-4 text-sm" data-testid="run-facts">
-      <div>
-        <dt className="text-xs text-ink-muted">Tests passed</dt>
-        <dd className="font-semibold text-ink">
+    <div className="grid grid-cols-2 gap-2.5 text-sm" data-testid="run-facts">
+      <div className={cell}>
+        <div className="text-xs text-ink-muted">Tests passed</div>
+        <div className="font-semibold text-ink">
           {facts.passed !== null ? `${facts.passed}/${facts.total}` : "Not run"}
           {hasRun && <span className="ml-1 font-normal text-ink-muted">on v{facts.testedVersion}</span>}
-        </dd>
+        </div>
       </div>
-      <div>
-        <dt className="text-xs text-ink-muted">Observed runtime</dt>
-        <dd className="font-semibold text-ink">
+      <div className={cell}>
+        <div className="text-xs text-ink-muted">Observed runtime</div>
+        <div className="font-semibold text-ink">
           {facts.observedMs !== null ? `${facts.observedMs} ms` : "—"}
           <span className="ml-1 font-normal text-ink-muted">on these cases</span>
-        </dd>
+        </div>
       </div>
-      <div>
-        <dt className="text-xs text-ink-muted">Complexity (from the rubric)</dt>
-        <dd className="font-semibold text-ink">
-          {complexity ? complexity.rating.replace(/_/g, " ") : "Not assessed"}
-        </dd>
+      <div className={cell}>
+        <div className="text-xs text-ink-muted">Complexity (from the rubric)</div>
+        <div className="font-semibold text-ink">{complexity ? RATING_WORD[complexity.rating] : "Not assessed"}</div>
       </div>
-      <div>
-        <dt className="text-xs text-ink-muted">Final draft</dt>
-        <dd className="font-semibold text-ink" data-testid="score-unrun-draft">
-          {facts.unrunDraftVersion !== null ? `v${facts.unrunDraftVersion} — never run` : "Same as tested"}
-        </dd>
+      <div className={cell}>
+        <div className="text-xs text-ink-muted">Final draft</div>
+        <div className="font-semibold text-ink" data-testid="score-unrun-draft">
+          {facts.unrunDraftVersion !== null ? `v${facts.unrunDraftVersion}, never run` : "Same as tested"}
+        </div>
       </div>
       <p className="col-span-2 text-xs leading-relaxed text-ink-muted">
-        Runtime is what these four small cases took here. It is not a measure of
-        how the solution scales — that is the complexity rating above.
+        Runtime is what these small test cases took here. It doesn&apos;t measure how the solution scales; that is the complexity rating.
       </p>
-    </dl>
+    </div>
   );
 }
 
-export interface ScorecardProps {
+const HEADLINE: Record<Band, string> = {
+  strong: "Strong performance",
+  solid: "Solid performance",
+  developing: "Developing, with a clear path forward",
+  insufficient: "Not enough evidence to score yet",
+};
+const SUBLINE: Record<Band, string> = {
+  strong: "You showed strong signals in everything that was assessed. Keep the habits that got you here.",
+  solid: "A solid showing, with specific things to sharpen below.",
+  developing: "A clear starting point. The action plan below says exactly what to practice.",
+  insufficient: "The interview didn't capture enough to rate. The evaluations below say what was missing.",
+};
+
+// The executive summary at the top of the debrief.
+export function DebriefHero({
+  overall,
+  rounds,
+  roleLabel,
+}: {
+  overall: OverallScore;
+  rounds: { round: RoundType; score: RoundScore | null; state: "done" | "loading" | "error" | "missing" }[];
   roleLabel?: string;
-  coding?: { report: Report | null; lastRun?: Parameters<typeof runFacts>[0]; draftVersion?: number | null };
-  behavioral?: { report: Report | null };
-  onPractice?: (round: RoundType) => void;
-}
-
-export function Scorecard({ roleLabel, coding, behavioral, onPractice }: ScorecardProps) {
-  const rounds: RoundScore[] = [];
-  if (coding) rounds.push(scoreRound("coding", (coding.report?.findings ?? []) as Finding[]));
-  if (behavioral) rounds.push(scoreRound("behavioral", (behavioral.report?.findings ?? []) as Finding[]));
-  const overall = scoreOverall(rounds);
-  const tone = BAND_TONE[overall.band];
-
-  // One recommended action: from the weaker scorable round, else whichever has findings.
-  const weaker = [...rounds].filter((r) => r.level !== null).sort((a, b) => (a.level as number) - (b.level as number))[0];
-  const src = weaker?.round === "behavioral" ? behavioral?.report : coding?.report;
-  const action = nextAction(src ?? coding?.report ?? behavioral?.report ?? null);
-  const actionRound: RoundType = weaker?.round ?? "coding";
-
-  const facts = coding ? runFacts(coding.lastRun ?? null, coding.draftVersion ?? null) : undefined;
-  void complexityAssessment; // complexity is surfaced through the round's own dimension
-
+}) {
+  const scored = overall.rounds.filter((r) => r.level !== null).length;
   return (
-    <div data-surface="cream" className="flex flex-col gap-5" data-testid="scorecard">
-      {/* 1. How did this interview go? */}
-      <section className={`rounded-[30px] bg-cream-2 p-7 ${SHADOW}`}>
-        {roleLabel && (
-          <p className="text-xs font-bold uppercase tracking-[0.1em] text-maroon" data-testid="score-role">
-            {roleLabel}
-          </p>
-        )}
-        <div className="mt-2 flex flex-wrap items-baseline gap-3">
-          <h2 className={`text-[34px] font-bold leading-tight ${tone.text}`} data-testid="score-overall-band">
-            {BAND_LABEL[overall.band]}
-          </h2>
+    <section className={`relative overflow-hidden rounded-[30px] bg-cream-2 p-6 sm:p-8 ${SHADOW}`} data-testid="scorecard">
+      {/* Soft decorative glow; no information in it. */}
+      <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-maroon-soft/25 blur-3xl" />
+      <div className="relative">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-maroon-deep" data-testid="score-role">
+          {roleLabel ?? "Your interview debrief"}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <BandBadge band={overall.band} size="lg" testId="score-overall-band" />
           <span className="text-sm text-ink-muted">
-            {overall.level !== null
-              ? `across ${overall.rounds.filter((r) => r.level !== null).length} scored round${
-                  overall.rounds.filter((r) => r.level !== null).length === 1 ? "" : "s"
-                }`
-              : "not enough evidence to score"}
+            {overall.level !== null ? `across ${scored} scored evaluation${scored === 1 ? "" : "s"}` : "no evaluation could be scored"}
           </span>
         </div>
+        <h1 className={`mt-3 font-brand text-[30px] font-bold leading-tight tracking-tight sm:text-[38px] ${BAND_TEXT[overall.band]}`}>
+          {HEADLINE[overall.band]}
+        </h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-ink-muted">{SUBLINE[overall.band]}</p>
         {overall.caveat && (
-          <p className="mt-3 rounded-[18px] bg-cream-3 px-4 py-3 text-sm leading-relaxed text-ink-muted" data-testid="score-overall-caveat">
+          <p className="mt-4 rounded-[18px] bg-cream-3 px-4 py-3 text-sm leading-relaxed text-ink" data-testid="score-overall-caveat">
             {overall.caveat}
           </p>
         )}
 
-        {/* 3. What should I practice next? */}
-        {action && (
-          <div className="mt-5 border-t border-cream-3 pt-5" data-testid="score-next-action">
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">Practice next</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{label(action.category)}</p>
-            <p className="mt-1 text-sm leading-relaxed text-ink-muted">{action.why}</p>
-            {onPractice && (
-              <button
-                onClick={() => onPractice(actionRound)}
-                className="mt-4 inline-flex items-center justify-center rounded-[18px] bg-maroon px-6 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-maroon-hover"
-                data-testid="score-practice-weaker"
-              >
-                Practice the {actionRound} round again
-              </button>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* 2. What evidence supports that? — per-round rubric + facts */}
-      <div className="grid gap-5 md:grid-cols-2">
-        {rounds.map((r) => (
-          <RoundBlock key={r.round} score={r} facts={r.round === "coding" ? facts : undefined} />
-        ))}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {rounds.map(({ round, score, state }) => (
+            <a
+              key={round}
+              href={`#track-${round}`}
+              className="group flex flex-col gap-2 rounded-[22px] bg-white/75 p-4 transition-colors hover:bg-white"
+              data-testid={`score-round-${round}`}
+            >
+              <span className="text-xs font-bold uppercase tracking-[0.08em] text-ink-muted">{TRACK_LABEL[round]}</span>
+              <span className="flex flex-wrap items-center gap-2">
+                {score ? (
+                  <BandBadge band={score.band} testId={`score-band-${round}`} />
+                ) : (
+                  <span className="text-sm font-semibold text-ink-muted">
+                    {state === "loading" ? "Evaluation in progress…" : state === "error" ? "Evaluation unavailable" : "Not completed"}
+                  </span>
+                )}
+                {score && (
+                  <span className="text-xs text-ink-muted">
+                    {score.ratedCount} of {score.totalCount} dimensions assessed
+                  </span>
+                )}
+              </span>
+              <span className="text-xs font-semibold text-maroon-deep group-hover:underline">See the evidence ↓</span>
+            </a>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

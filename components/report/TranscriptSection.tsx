@@ -43,7 +43,7 @@ export function TranscriptSection({ session, selected, turnRefs }: Props) {
                     : "bg-[#EFE3CF] text-ink"
                 }`}
               >
-                <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-maroon/90">
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-maroon-deep">
                   {t.speaker === "student" ? "You" : "Interviewer"} · {t.id}
                 </div>
                 <div className="text-ink">{t.text}</div>
