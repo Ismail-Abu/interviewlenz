@@ -32,7 +32,7 @@
   --color-maroon: #9b3b50; /* buttons, accents */
   --color-maroon-hover: #b04a60;
   --color-maroon-deep: #8c2f43; /* link text on cream, 7.0:1 */
-  --color-maroon-soft: #c77d8c; /* underlines, focus ring; decorative only */
+  --color-maroon-soft: #c77d8c; /* underlines; decorative only (2.9:1 on cream) */
   --color-panel: #1c1817; /* demo panel: warm dark */
   --color-panel-2: #2a2422;
   --shadow-warm: 0 10px 18px -6px rgb(90 68 50 / 0.13); /* cards, buttons */
@@ -49,13 +49,15 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Coral on the dark coding room (unchanged). maroon-soft would be only ~2.9:1
+   on cream, under the 3:1 focus-indicator minimum, so cream surfaces use
+   maroon-deep below. */
 :focus-visible {
-  outline: 2px solid var(--color-maroon-soft);
+  outline: 2px solid #fe6b73;
   outline-offset: 2px;
 }
 
-/* Coral is nearly invisible on cream, so cream surfaces get a maroon ring.
-   Scoped, so the dark rooms keep the coral outline unchanged. */
+/* Coral is nearly invisible on cream, so cream surfaces get a maroon ring. */
 [data-surface="cream"] :focus-visible {
   outline-color: #8c2f43;
 }

@@ -3,7 +3,7 @@ import { COMPANIES } from "./companyLogos";
 export function CompanyRail() {
   return (
     <section aria-label="Practice in the style of" className="w-full">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div>
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 sm:gap-4 mb-4">
           <div>
             <h2 className="text-xl sm:text-[22px] font-bold text-ink font-brand tracking-tight">
@@ -22,17 +22,19 @@ export function CompanyRail() {
         </div>
       </div>
 
-      <div className="relative mx-auto max-w-6xl overflow-hidden px-4 sm:px-6">
+      {/* Bleeds into the page gutter: at rest the fades sit over empty margin and
+          the first tile lines up with the heading; scrolled tiles fade at the edges. */}
+      <div className="relative -mx-5 sm:-mx-8 lg:-mx-10">
         {/* Left edge gradient fade */}
         <div
           aria-hidden="true"
-          className="absolute left-0 top-0 bottom-0 w-12 sm:w-20 bg-gradient-to-r from-cream to-transparent pointer-events-none z-10"
+          className="absolute left-0 top-0 bottom-0 w-10 sm:w-12 lg:w-16 bg-gradient-to-r from-cream to-transparent pointer-events-none z-10"
         />
 
         {/* Right edge gradient fade */}
         <div
           aria-hidden="true"
-          className="absolute right-0 top-0 bottom-0 w-16 sm:w-24 bg-gradient-to-l from-cream to-transparent pointer-events-none z-10"
+          className="absolute right-0 top-0 bottom-0 w-12 sm:w-16 lg:w-20 bg-gradient-to-l from-cream to-transparent pointer-events-none z-10"
         />
 
         {/* Native scrollable region */}
@@ -40,13 +42,13 @@ export function CompanyRail() {
           role="region"
           aria-label="Company styles, scrollable"
           tabIndex={0}
-          className="overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-4 -my-4 px-1 rounded-[26px]"
+          className="overflow-x-auto snap-x snap-mandatory scroll-px-5 sm:scroll-px-8 lg:scroll-px-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-5 -my-1 rounded-[26px]"
         >
-          <ul role="list" className="flex items-center gap-4 w-max">
+          <ul role="list" className="flex items-center gap-4 w-max px-5 sm:px-8 lg:px-10">
             {COMPANIES.map((company) => (
               <li
                 key={company.name}
-                className="flex flex-col items-center justify-center rounded-[24px] bg-white shadow-warm w-[128px] sm:w-[156px] h-[104px] sm:h-[114px] p-3 sm:p-4 shrink-0 snap-start select-none"
+                className="flex flex-col items-center justify-center rounded-[24px] bg-white shadow-warm w-[128px] sm:w-[164px] h-[104px] sm:h-[114px] p-3 sm:p-4 shrink-0 snap-start select-none"
               >
                 <div className="flex items-center justify-center h-10 sm:h-11 w-full mb-1 sm:mb-2">
                   {company.logo}
