@@ -60,6 +60,6 @@ export function sendPreview(target: ApplicationTarget): SendItem[] {
   ].filter((x): x is string => Boolean(x));
   return [
     { destination: "Interviewlenz plan research (Google Gemini, public web sources)", fields: fields.length ? fields : ["nothing yet"] },
-    { destination: "Not sent", fields: ["resume images (only TailorPanel's Prepare step sends them, after its own notice)", "contact details"] },
+    { destination: "Not sent", fields: ["resume images (they are sent only if you choose Prepare my interview above, which explains what it sends)", "contact details"] },
   ];
 }
