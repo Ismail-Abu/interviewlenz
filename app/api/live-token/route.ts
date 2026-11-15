@@ -2,12 +2,14 @@ import { EndSensitivity, GoogleGenAI, Modality } from "@google/genai";
 import type { ApiError, LiveTokenResponse } from "../../../lib/contract";
 import { containsDuplicate } from "../../../lib/problems";
 import { interviewerInstructions } from "../../../lib/prompts";
+import { normalizeRoleContext } from "../../../lib/roleContext";
 
 // The interviewer instruction for the canonical problem, built by the shared
 // builder. A token minted with liveConnectConstraints locks the ENTIRE Live
 // config (SDK 3.3.0 authTokens.create docs, "Case 2"), so a client-side
 // systemInstruction or realtimeInputConfig is ignored: both must live here.
-const SYSTEM_INSTRUCTION = interviewerInstructions(containsDuplicate);
+// Built per request from the optional, validated roleContext (absent -> the
+// canonical instruction, exactly as before).
 
 // Server turn detection: require 1.2 s of silence before ending the student's
 // turn, so a natural ~850 ms pause mid-sentence does not hand the turn to the
@@ -54,18 +56,21 @@ const NOT_CONFIGURED: ApiError = {
 const TIMED_OUT: ApiError = { code: "timeout", message: "Voice token request timed out. Try again.", retryable: true };
 
 // The body is just {sessionId}; anything larger is rejected before any provider call.
-const MAX_BODY_BYTES = 1_024;
+// {sessionId, roleContext?}; a pasted job description is at most 4,000 chars.
+const MAX_BODY_BYTES = 16_384;
 const SESSION_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const MINT_TIMEOUT_MS = Number(process.env.LIVE_TOKEN_TIMEOUT_MS) || 10_000;
 
 export async function POST(request: Request): Promise<Response> {
   let sessionId: unknown;
+  let roleInput: unknown;
   try {
     if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) throw new Error("too large");
     const raw = await request.text();
     if (raw.length > MAX_BODY_BYTES) throw new Error("too large");
-    const body = JSON.parse(raw) as { sessionId?: unknown } | null;
+    const body = JSON.parse(raw) as { sessionId?: unknown; roleContext?: unknown } | null;
     sessionId = body?.sessionId;
+    roleInput = body?.roleContext;
   } catch {
     const error: ApiError = {
       code: "invalid_request",
@@ -83,6 +88,13 @@ export async function POST(request: Request): Promise<Response> {
     };
     return json(error, 400);
   }
+
+  const role = normalizeRoleContext(roleInput);
+  if (!role.ok) {
+    const error: ApiError = { code: "invalid_request", message: role.message, retryable: false };
+    return json(error, 400);
+  }
+  const systemInstruction = interviewerInstructions(containsDuplicate, role.value);
 
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.LIVE_MODEL;
@@ -121,7 +133,7 @@ export async function POST(request: Request): Promise<Response> {
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             sessionResumption: {},
-            systemInstruction: SYSTEM_INSTRUCTION,
+            systemInstruction,
             realtimeInputConfig: TURN_DETECTION,
           },
         },

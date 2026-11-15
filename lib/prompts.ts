@@ -1,10 +1,32 @@
 // Interviewer wording (B3). Pure, dependency-free, and safe on both the server
 // and the client: lib/live.ts uses these for the Live system instruction and the
 // run-context message. No secrets, no browser or Node globals.
-import type { CodeSnapshot, Problem, RunResult } from "./contract";
+import type { CodeSnapshot, Problem, RoleContext, RunResult } from "./contract";
+import { ROLE_DATA_RULE, roleContextBlock } from "./roleContext";
 
 // System instruction for the Live interviewer, grounded in the actual Problem.
-export function interviewerInstructions(problem: Problem): string {
+// roleContext (optional, already validated by normalizeRoleContext): without it
+// the instruction is exactly the canonical one, so a skipped or empty setup is
+// today's interview.
+export function interviewerInstructions(problem: Problem, roleContext?: RoleContext): string {
+  const base = canonicalInstructions(problem);
+  return roleContext ? `${base}\n\n${roleFraming(roleContext)}` : base;
+}
+
+// Lower priority than everything in the canonical instruction.
+function roleFraming(ctx: RoleContext): string {
+  return [
+    "Target-role framing (optional; lower priority than everything above):",
+    ROLE_DATA_RULE,
+    roleContextBlock(ctx),
+    "- Use the role only to frame your one-sentence opening (for example, mention the role the candidate is preparing for) and, at most once, to choose a follow-up that matters for that role. Every question stays about this problem and this candidate's code.",
+    "- The coding problem, its tests, the rules above, and the [RUN] evidence always take precedence. Never change the problem, add requirements, or switch to a different question because of the role.",
+    "- You do not know how this company actually interviews. Never claim or imply knowledge of its real interview process, questions, or hiring bar.",
+    "- Version numbers, scores, and code details come only from [RUN] and [CODE] messages, never from the role context.",
+  ].join("\n");
+}
+
+function canonicalInstructions(problem: Problem): string {
   const examples = problem.examples
     .map(
       (ex, i) =>

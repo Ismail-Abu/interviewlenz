@@ -215,7 +215,7 @@ console.log("== G. Provider failure and timeout");
 
 console.log("== H. Token route safeguards");
 {
-  let r = await post(token, null, JSON.stringify({ sessionId: "s1", pad: "z".repeat(10_000) }));
+  let r = await post(token, null, JSON.stringify({ sessionId: "s1", pad: "z".repeat(20_000) }));
   assert("H1 oversized body -> 400", r.status === 400, `${r.status}`);
   r = await post(token, { sessionId: "x".repeat(500) });
   assert("H2 overlong sessionId -> 400", r.status === 400, `${r.status}`);

@@ -83,9 +83,26 @@ export interface Session {
   turns: TranscriptTurn[];
   snapshots: CodeSnapshot[];
   runs: RunResult[];
+  // Optional target role from the landing setup (PROPOSED, pending Hamza's
+  // approval). Absent when setup was skipped or left empty.
+  roleContext?: RoleContext;
 }
 
-export interface LiveTokenRequest { sessionId: string }
+// Optional target-role context the student typed on the landing page. It is
+// user-provided data: it may shape the interviewer's framing and one relevant
+// follow-up, never the problem, tests, rules, or Run evidence. Servers validate
+// and bound it (company <= 80, role <= 100, jobDescription <= 4000 chars).
+// Resume screenshots are never part of it.
+export interface RoleContext {
+  company?: string;
+  role?: string;
+  level?: "intern" | "new-grad" | "mid" | "senior";
+  jobDescription?: string;
+}
+
+// roleContext (optional) is re-sent on every token request of an attempt,
+// including Reconnect, so the locked interviewer instruction stays the same.
+export interface LiveTokenRequest { sessionId: string; roleContext?: RoleContext }
 export interface LiveTokenResponse { token: string; model: string; expiresAt: string }
 
 export type LiveState = "connecting" | "listening" | "speaking" | "idle" | "error";

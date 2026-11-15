@@ -12,6 +12,8 @@ import type {
   TranscriptTurn,
 } from "../../../lib/contract";
 import { getProblem } from "../../../lib/problems";
+import { normalizeRoleContext, ROLE_DATA_RULE, roleContextBlock } from "../../../lib/roleContext";
+import type { RoleContext } from "../../../lib/contract";
 
 // Runs on the default Node.js runtime so GEMINI_API_KEY stays server-side.
 
@@ -232,11 +234,20 @@ const SYSTEM_INSTRUCTION = [
   "Return JSON matching the provided schema. No prose outside the JSON.",
 ].join("\n");
 
-function buildPrompt(session: Session): string {
+function buildPrompt(session: Session, role?: RoleContext): string {
   const problem = getProblem(session.problemId);
   const parts: string[] = [];
   parts.push(`Problem: ${problem ? `${problem.title} — ${problem.prompt}` : session.problemId}`);
   if (problem) parts.push(`Function: ${problem.functionName}`);
+  if (role) {
+    // Only present when the candidate entered a target role; absent -> prompt unchanged.
+    parts.push(
+      "\n=== Candidate's target role (context only) ===",
+      ROLE_DATA_RULE,
+      roleContextBlock(role),
+      "Mention the target role only where it explains feedback that the evidence below already supports (for example, why a complexity gap matters for that role). It is never evidence, never cited, and never a reason for a finding by itself. Do not claim to know how this company actually interviews.",
+    );
+  }
 
   parts.push("\n=== Transcript turns (cite with kind:turn, turnId) ===");
   if (session.turns.length === 0) parts.push("(none) No transcript was captured for this attempt. Do not describe anything the student said.");
@@ -392,6 +403,9 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (!getProblem(session.problemId)) return invalid(`Unknown problem: ${session.problemId.slice(0, 64)}`, "unknown_problem");
 
+  const role = normalizeRoleContext((session as { roleContext?: unknown }).roleContext);
+  if (!role.ok) return invalid(role.message);
+
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.REPORT_MODEL;
   if (!apiKey || !model) return json(NOT_CONFIGURED, 503);
@@ -409,7 +423,7 @@ export async function POST(request: Request): Promise<Response> {
     const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: PROVIDER_TIMEOUT_MS } });
     const call = ai.models.generateContent({
       model,
-      contents: buildPrompt(session),
+      contents: buildPrompt(session, role.value),
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
