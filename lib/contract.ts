@@ -88,6 +88,10 @@ interface SessionBase {
   // Optional target role from the landing setup (PROPOSED, pending Hamza's
   // approval). Absent when setup was skipped or left empty.
   roleContext?: RoleContext;
+  // Application-first flow (PROPOSED): the plan this attempt ran with. Absent
+  // for quick standalone practice. CodingSession.problemId must equal the
+  // plan's technical.problemId for a technical round.
+  plan?: PlanRef;
 }
 
 export interface CodingSession extends SessionBase {
@@ -211,4 +215,99 @@ export interface Report {
   findings: Finding[];
   nextStep: string;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Application-first flow (PROPOSED, feature/application-first-flow).
+// Home -> What are you applying for? -> Review your interview plan ->
+// Technical -> Behavioral -> Score and evidence.
+//
+// Two kinds of material, kept apart on purpose:
+// - PRIVATE candidate material: the pasted listing (RoleContext.jobDescription)
+//   and the resume context the student confirmed (BehavioralContext). Sent only
+//   to our own routes, bounded by normalizeRoleContext / normalizeBehavioralContext.
+// - PUBLIC research: citations to public pages about how a company interviews.
+//   Only PlanCitation carries URLs; nothing private is ever stored in it.
+// ---------------------------------------------------------------------------
+
+// What the student is applying for, as confirmed in setup. Reuses the existing
+// types: RoleContext (normalizeRoleContext) and BehavioralContext
+// (normalizeBehavioralContext, from POST /api/analyze-tailoring + edits).
+// Resume images never appear here; they go only to /api/analyze-tailoring.
+export interface ApplicationTarget {
+  roleContext: RoleContext; // company, role, level, jobDescription (pasted listing)
+  resumeContext?: BehavioralContext; // candidate-confirmed project / focus
+}
+
+// Where a likely question theme came from. Private kinds name the source only;
+// they never carry excerpts of the listing or resume.
+export type ThemeProvenance =
+  | { kind: "public-research"; citationIds: string[] } // ids in plan.citations
+  | { kind: "job-listing" } // derived from the pasted listing (private)
+  | { kind: "candidate-resume" } // derived from confirmed resume context (private)
+  | { kind: "role-default" }; // generic for the role and level (fallback)
+
+export interface PlanTheme {
+  id: `th${number}`; // stable within a plan: th1, th2, ...
+  round: "technical" | "behavioral";
+  label: string; // <= 80 chars, e.g. "Hash-based lookups and duplicates"
+  detail?: string; // <= 240 chars, why it is likely
+  provenance: ThemeProvenance;
+}
+
+// A public source. Never private material: no listing text, no resume text.
+export interface PlanCitation {
+  id: `c${number}`; // c1, c2, ...
+  title: string; // <= 160 chars
+  url: string; // https only
+  publisher?: string; // <= 80 chars
+  retrievedAt: string; // ISO
+}
+
+export interface InterviewPlan {
+  planId: string; // "plan_" + uuid; minted once, never changes for this plan
+  revision: number; // 1 when created; +1 for each student edit before start
+  createdAt: string; // ISO
+  source: "researched" | "role-fallback";
+  // Target WITHOUT the listing text: company, role, level only.
+  target: Pick<RoleContext, "company" | "role" | "level">;
+  technical: {
+    problemId: Problem["id"]; // selected problem; one problem exists today
+    themeIds: PlanTheme["id"][];
+  };
+  behavioral: {
+    // Candidate-confirmed focus (private, from the resume context or typed).
+    // Passed to the behavioral round as LiveTokenRequest.behavioralContext.
+    focus?: BehavioralContext;
+    themeIds: PlanTheme["id"][];
+  };
+  themes: PlanTheme[]; // at most 8
+  citations: PlanCitation[]; // public research only; empty for role-fallback
+  // Set when the plan is a fallback: why research was not used (shown to the student).
+  fallbackReason?: "research_unavailable" | "not_configured" | "timeout" | "no_public_sources" | "manual";
+}
+
+// POST /api/interview-plan (Gemini #1). Server-side research; returns a
+// researched plan, or a role-fallback plan when research is unavailable.
+// Clients MUST also build a fallback themselves (lib/plan.ts buildFallbackPlan)
+// on any error, timeout (20 s), 404, or zero-key 503, keeping the inputs.
+// Request body <= 16 KB. Uploaded resume images are never sent here.
+// PRIVACY: public web-search queries may use ONLY target company, role, and
+// level. The listing text and resume context may inform themes server-side but
+// never leave in a search query, and never appear in citations or logs.
+export interface InterviewPlanRequest {
+  application: ApplicationTarget;
+}
+export interface InterviewPlanResponse {
+  plan: InterviewPlan;
+}
+
+// Which plan an attempt used. Frozen when the round starts: Reconnect, report
+// retry, and reviewing an earlier attempt read THIS, not the latest plan.
+// A student edit after a round started creates a new revision for later
+// rounds only; the finished attempt keeps the revision it ran with.
+export interface PlanRef {
+  planId: InterviewPlan["planId"];
+  revision: number;
+  round: "technical" | "behavioral";
 }
