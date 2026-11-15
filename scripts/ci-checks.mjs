@@ -26,6 +26,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CHECKS = [
   "runner-check.mjs",
   "report-check.mjs",
+  "unrun-draft-check.mjs",
   "behavioral-check.mjs",
   "tailoring-check.mjs",
   "role-context-check.mjs",
