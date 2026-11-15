@@ -809,3 +809,6 @@ Validation: lint and production build passed, all 18 CI checks passed. Chrome at
 Ismail requested that spoken behavioral questions use available candidate information. Confirmed project and practice focus take priority, followed by the target position. Without those inputs the existing generic interview remains available. The real Live setup and scripted fallback now use the same question builder. ElevenLabs replays the current interviewer turn verbatim through the existing speaker control.
 
 Changes: lib/behavioral.ts, components/liveAdapter.ts, components/ProblemRoom.tsx, dev/tailoring-check.mjs. Lint, production build and 18 CI suites passed. Local Chrome checked project + skill, role only, and empty setup with scripted voice; all three sent the displayed question verbatim to the speech endpoint.
+## Remember me • November 15
+
+Production lacks the public SSOJet issuer and client ID. Ismail requested a working Remember me fallback. NavAuth now saves a display name in this browser, supports editing or forgetting it, and shows Sign in when SSOJet is configured. This local preference does not authenticate a user. Mobile Chrome verified save, reload, cancel, removal and cross-tab updates. Lint, production build and all 19 CI suites passed.

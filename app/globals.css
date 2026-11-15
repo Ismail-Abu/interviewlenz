@@ -147,3 +147,15 @@ body {
     flex-shrink: 0 !important;
   }
 }
+
+/* Landing demo editor caret (components/landing/TypingEditor.tsx) */
+@keyframes demo-caret-blink {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
+.demo-caret {
+  animation: demo-caret-blink 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-caret { animation: none; }
+}

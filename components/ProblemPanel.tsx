@@ -41,7 +41,8 @@ export function ProblemPanel({ problem }: { problem: Problem }) {
           >
             <div>
               <span className="text-muted-foreground">Input: </span>
-              <span className="text-foreground">nums = {py(ex.input)}</span>
+              {/* The example names its own parameters, so the panel adds none. */}
+              <span className="text-foreground">{py(ex.input)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Output: </span>
