@@ -40,7 +40,7 @@ const MIC_MESSAGE: Record<Exclude<MicStatus, "unchecked">, { icon: string; text:
 interface Props {
   micStatus: MicStatus;
   onMicStatus: (s: MicStatus) => void;
-  // The profile stays in the browser; ProblemRoom only displays it.
+  // ProblemRoom selects the job fields for the chosen round.
   onStart: (profile: CandidateProfile, round?: RoundType) => void;
 }
 
@@ -173,7 +173,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
         <section id="setup" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
           <h2 className="font-brand text-3xl font-bold tracking-tight">Set up your interview</h2>
           <p className="mt-2 max-w-2xl text-base text-zinc-400">
-            Add resume screenshots, enter the job, or both. Resume screenshots stay in this browser tab. Role details you type (title, company, level, and the listing for coding rounds) are sent to the interviewer to frame questions.
+            For coding practice, job details you enter are sent to Gemini to personalize questions and feedback. Resume screenshots stay in this browser tab during coding practice.
           </p>
 
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -205,7 +205,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
               <span className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300">
                 PREVIEW
               </span>
-              <span className="text-sm text-zinc-500">Tailoring isn&apos;t live yet. The coding round runs today.</span>
+              <span className="text-sm text-zinc-500">Preview of the interview rounds for this role.</span>
             </div>
             <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {rounds.map((r, i) => (

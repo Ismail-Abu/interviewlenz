@@ -81,6 +81,9 @@ function ReportCard({
   onRetryReport: (attemptId: string) => void;
 }) {
   const { session, report } = record;
+  const lastSnapshot = isBehavioralSession(session) ? undefined : session.snapshots.at(-1);
+  const lastRun = isBehavioralSession(session) ? undefined : session.runs.at(-1);
+  const unrunDraft = lastSnapshot && lastSnapshot.codeVersion !== lastRun?.codeVersion ? lastSnapshot : undefined;
   const [selected, setSelected] = useState<EvidenceRef | null>(null);
   const turnRefs = useRef(new Map<string, HTMLLIElement>());
 
@@ -115,6 +118,17 @@ function ReportCard({
             : `${session.snapshots.length} snapshots · ${session.runs.length} runs · ${session.turns.length} turns`}
         </span>
       </header>
+
+      {unrunDraft && (
+        <details className="rounded-md border border-zinc-700 p-3 text-sm">
+          <summary className="cursor-pointer">
+            Unrun draft · v{unrunDraft.codeVersion}
+            {lastRun ? ` · Last run: v${lastRun.codeVersion}` : " · No runs this attempt"}
+            {lastRun?.status === "completed" && ` (${lastRun.passed}/${lastRun.total} passed)`}
+          </summary>
+          <pre className="mt-2 overflow-x-auto">{unrunDraft.source}</pre>
+        </details>
+      )}
 
       {record.status === "loading" && (
         <ReportSkeleton />
