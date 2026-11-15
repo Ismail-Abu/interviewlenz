@@ -48,9 +48,12 @@ interface Props {
   // mode: "coding" | "behavioral" | "full-mock"
   // context: confirmed behavioral personalization from TailorPanel
   onStart: (profile: CandidateProfile, mode: PracticeMode, context?: BehavioralContext) => void;
+  // Primary action: open "What are you applying for?" (application-first flow).
+  // Optional so the screen still works standalone (then it scrolls to the modes).
+  onApply?: () => void;
 }
 
-export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
+export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props) {
   const [starting, setStarting] = useState(false);
   const [resume, setResume] = useState<ResumeImage[]>([]);
   const [job, setJob] = useState<JobInfo>(EMPTY_JOB);
@@ -109,9 +112,15 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <a href="#practice-modes" data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-44`}>
-                Start practice
-              </a>
+              {onApply ? (
+                <button type="button" onClick={onApply} data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-44`}>
+                  Start practice
+                </button>
+              ) : (
+                <a href="#practice-modes" data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-44`}>
+                  Start practice
+                </a>
+              )}
               <button
                 type="button"
                 onClick={() => start("behavioral")}

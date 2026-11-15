@@ -1,0 +1,28 @@
+{
+  "plan": {
+    "planId": "plan_7b6f2c1e-4a8d-4f2b-9c3e-1d5a6b7c8d9e",
+    "revision": 1,
+    "createdAt": "2026-11-15T18:00:00.000Z",
+    "source": "researched",
+    "target": { "company": "Synthetic Payments Co", "role": "Backend Engineering Intern", "level": "intern" },
+    "technical": { "problemId": "contains-duplicate", "themeIds": ["th1", "th2", "th3"] },
+    "behavioral": {
+      "focus": {
+        "project": { "name": "CampusEats Orders Service", "summary": "Built the order API for a student food-delivery app." },
+        "focus": { "skill": "Debugging production issues" }
+      },
+      "themeIds": ["th4", "th5"]
+    },
+    "themes": [
+      { "id": "th1", "round": "technical", "label": "Hash-based lookups", "detail": "Public interview write-ups for this company describe an early array/hash screen.", "provenance": { "kind": "public-research", "citationIds": ["c1"] } },
+      { "id": "th2", "round": "technical", "label": "Time and space trade-offs", "detail": "Interviewers are described as asking candidates to compare approaches out loud.", "provenance": { "kind": "public-research", "citationIds": ["c1", "c2"] } },
+      { "id": "th3", "round": "technical", "label": "Efficiency at scale", "detail": "The listing stresses throughput.", "provenance": { "kind": "job-listing" } },
+      { "id": "th4", "round": "behavioral", "label": "A decision on your own project", "detail": "From the project you confirmed.", "provenance": { "kind": "candidate-resume" } },
+      { "id": "th5", "round": "behavioral", "label": "Debugging a production problem", "detail": "Engineering-blog posts describe on-call ownership for interns.", "provenance": { "kind": "public-research", "citationIds": ["c2"] } }
+    ],
+    "citations": [
+      { "id": "c1", "title": "ILLUSTRATIVE ONLY: How we interview software engineers", "url": "https://example.com/careers/how-we-interview", "publisher": "example.com", "retrievedAt": "2026-11-15T17:59:30.000Z" },
+      { "id": "c2", "title": "ILLUSTRATIVE ONLY: Intern on-call at scale", "url": "https://example.com/blog/intern-on-call", "publisher": "example.com", "retrievedAt": "2026-11-15T17:59:31.000Z" }
+    ]
+  }
+}

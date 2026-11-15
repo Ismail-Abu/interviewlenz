@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { ApiError, BehavioralContext, CodeSnapshot, CodingSession, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
+import type { ApiError, ApplicationTarget, BehavioralContext, CodeSnapshot, CodingSession, InterviewPlan, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
 import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
@@ -10,13 +10,19 @@ import { BehavioralRoom } from "./BehavioralRoom";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { FullMockSummary } from "./FullMockSummary";
 import { StartScreen, type MicStatus, type PracticeMode } from "./StartScreen";
-import { hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
+import { EMPTY_JOB, hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
+import { ApplicationSetup } from "./flow/ApplicationSetup";
+import { PlanReview } from "./flow/PlanReview";
+import { sendPreview, type ApplicationDraft, type SetupStatus } from "./flow/types";
+import { requestPlan } from "./planAdapter";
+import { planRef, revisePlan } from "@/lib/plan";
 import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
 import { btn } from "./ui/buttons";
 
@@ -31,6 +37,12 @@ type AttemptIds = Pick<Session, "sessionId" | "attemptId" | "priorAttemptId">;
 type AttemptData = Pick<CodingSession, "turns" | "snapshots" | "runs">;
 const EMPTY_ATTEMPT: AttemptData = { turns: [], snapshots: [], runs: [] };
 
+// Upper bound on how long the newest editor version can wait before it is
+// written to the active Live session. Also the floor on the gap between two
+// code-context messages, so continuous typing cannot produce one message per
+// keystroke.
+const SYNC_INTERVAL_MS = DEFAULT_SYNC_INTERVAL_MS;
+
 export function ProblemRoom({ problem }: { problem: Problem }) {
   // One Session per attempt, kept in browser memory (CONTRACT.md). IDs are
   // minted on first use in an event handler: Cache Components forbids random
@@ -41,7 +53,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("coding");
   const [round, setRound] = useState<RoundType>("coding");
-  const [view, setView] = useState<"start" | "room" | "report" | "transition" | "summary">("start");
+  const [view, setView] = useState<"start" | "setup" | "plan" | "room" | "report" | "transition" | "summary">("start");
   const [codingRecords, setCodingRecords] = useState<AttemptRecord[]>([]);
   const [behavioralRecords, setBehavioralRecords] = useState<AttemptRecord[]>([]);
 
@@ -76,6 +88,24 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     ? [behavioralContext.project?.name, behavioralContext.focus?.skill].filter(Boolean).join(" · ")
     : undefined;
 
+  // --- Application-first flow (plan/session wiring) ------------------------
+  // `plan` is editable on the review screen. `activePlan` is the revision
+  // frozen at Start: every attempt's Session.plan, Reconnect, report retry, and
+  // Practice again use it until the student starts a new plan. Quick standalone
+  // practice clears it, so those sessions carry no plan.
+  const [draft, setDraft] = useState<ApplicationDraft>({ job: EMPTY_JOB, resume: [] });
+  const [setupStatus, setSetupStatus] = useState<SetupStatus>({ kind: "editing" });
+  const [plan, setPlan] = useState<InterviewPlan | null>(null);
+  const [activePlan, setActivePlan] = useState<InterviewPlan | null>(null);
+  // Every started revision, by "planId@revision", for reviewing earlier attempts.
+  const startedPlans = useRef(new Map<string, InterviewPlan>());
+  const planRequest = useRef(0);
+  const application = (): ApplicationTarget => ({
+    roleContext: toRoleContext(draft.job) ?? {},
+    ...(draft.resumeContext ? { resumeContext: draft.resumeContext } : {}),
+  });
+  const planMarker = activePlan ? { "data-plan-id": activePlan.planId, "data-plan-revision": activePlan.revision } : {};
+
   const fullSession = (): Session =>
     round === "behavioral"
       ? {
@@ -84,6 +114,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           turns: attempt.turns,
           ...(behavioralRole ? { roleContext: behavioralRole } : {}),
           ...(behavioralContext ? { behavioralContext } : {}),
+          ...(activePlan ? { plan: planRef(activePlan, "behavioral") } : {}),
         }
       : codingSession();
 
@@ -99,6 +130,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         ? [...attempt.snapshots, { ...draft, at: new Date().toISOString() }]
         : attempt.snapshots,
       ...(roleContext ? { roleContext } : {}),
+      ...(activePlan ? { plan: planRef(activePlan, "technical") } : {}),
     };
   }
 
@@ -140,17 +172,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   // timer or a just-resolved connect always sees the latest buffer.
   const latest = useRef({ codeVersion: 1, source: problem.starterCode });
   const lastSyncedVersion = useRef<number | null>(null);
-  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncEnabled = useRef(false); // true only while a real (non-mock) client is connected
   // Bumped whenever a voice connection ends. Callbacks and a connect that
   // resolves late check it, so nothing from an ended connection reaches the
   // current attempt.
   const connGen = useRef(0);
-
-  function cancelPendingSync() {
-    if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = null;
-  }
 
   function syncLatest() {
     if (!live.current || !syncEnabled.current) return;
@@ -158,6 +184,27 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     if (lastSyncedVersion.current === cur.codeVersion) return;
     live.current.syncCode?.({ codeVersion: cur.codeVersion, source: cur.source, at: new Date().toISOString() });
     lastSyncedVersion.current = cur.codeVersion;
+  }
+
+  // Leading send + bounded trailing flush; see lib/codeSync.ts for why.
+  // Built on first use from an event handler or the connect path, never during
+  // render. syncLatest reads only refs, so the captured closure always sees the
+  // current buffer.
+  const syncer = useRef<CodeSyncScheduler | null>(null);
+  function sync(): CodeSyncScheduler {
+    if (syncer.current == null) {
+      syncer.current = new CodeSyncScheduler(syncLatest, SYNC_INTERVAL_MS);
+    }
+    return syncer.current;
+  }
+
+  function cancelPendingSync() {
+    sync().cancel();
+  }
+
+  function scheduleSync() {
+    if (!syncEnabled.current) return;
+    sync().schedule();
   }
 
   async function handleConnect() {
@@ -197,6 +244,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       voiceModeRef.current = conn.mode;
       syncEnabled.current = conn.mode === "live";
       lastSyncedVersion.current = null;
+      sync().reset();
       if (round === "coding") syncLatest();
       setVoiceMode(conn.mode);
       setMockReason(conn.mockReason);
@@ -288,10 +336,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     latest.current = { codeVersion: v, source: next };
     setSource(next);
     setCodeVersion(v);
-    if (syncEnabled.current) {
-      cancelPendingSync();
-      syncTimer.current = setTimeout(syncLatest, 2000);
-    }
+    scheduleSync();
   }
 
   async function handleRun() {
@@ -399,6 +444,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
     if (round === "coding") {
       lastSyncedVersion.current = null;
+      sync().reset();
       latest.current = { codeVersion: 1, source: problem.starterCode };
       setSource(problem.starterCode);
       setCodeVersion(1);
@@ -418,6 +464,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
     if (targetRound === "coding") {
       lastSyncedVersion.current = null;
+      sync().reset();
       latest.current = { codeVersion: 1, source: problem.starterCode };
       setSource(problem.starterCode);
       setCodeVersion(1);
@@ -430,23 +477,91 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setView("room");
   }
 
+  // Quick standalone practice: no plan.
+  function startQuick(p: CandidateProfile, m: PracticeMode, ctx?: BehavioralContext) {
+    setActivePlan(null);
+    setProfile(p);
+    setPracticeMode(m);
+    setBehavioralContext(ctx);
+    if (m === "behavioral") {
+      setRound("behavioral");
+    } else {
+      // "coding" or "full-mock" starts with coding
+      setRound("coding");
+    }
+    setView("room");
+  }
+
+  // "Build my interview plan": research or a role-based fallback. Never blocks;
+  // inputs stay in `draft` whatever happens.
+  async function handleBuildPlan() {
+    const id = ++planRequest.current;
+    setSetupStatus({ kind: "analyzing" });
+    const outcome = await requestPlan(application());
+    if (id !== planRequest.current) return; // Back or a newer request
+    setPlan(outcome.plan);
+    setSetupStatus(outcome.fellBack && outcome.notice ? { kind: "fell-back", message: outcome.notice } : { kind: "editing" });
+    setView("plan");
+  }
+
+  // "Start technical round": freeze this revision for the whole journey.
+  function handleStartPlan() {
+    if (!plan) return;
+    startedPlans.current.set(`${plan.planId}@${plan.revision}`, plan);
+    setActivePlan(plan);
+    setProfile({ resume: draft.resume, job: draft.job });
+    setBehavioralContext(plan.behavioral.focus);
+    setPracticeMode("full-mock");
+    // The room renders one problem today; a plan always names it (lib/plan.ts).
+    if (plan.technical.problemId !== problem.id) console.warn("plan problem differs from the loaded problem");
+    if (idsRef.current) handlePracticeAgain("coding"); // fresh attempt, editor reset
+    else {
+      setRound("coding");
+      setView("room");
+    }
+  }
+
+  if (view === "setup") {
+    const target = application();
+    const j = draft.job;
+    return (
+      <ApplicationSetup
+        draft={draft}
+        onDraftChange={setDraft}
+        status={setupStatus}
+        sendPreview={sendPreview(target)}
+        canAnalyze={Boolean(j.role.trim() || j.listing.trim() || j.company.trim())}
+        onAnalyze={handleBuildPlan}
+        onBack={() => {
+          planRequest.current += 1;
+          setSetupStatus({ kind: "editing" });
+          setView("start");
+        }}
+        onQuickPractice={(m) => startQuick({ resume: draft.resume, job: draft.job }, m, m === "coding" ? undefined : draft.resumeContext)}
+      />
+    );
+  }
+
+  if (view === "plan" && plan) {
+    return (
+      <PlanReview
+        plan={plan}
+        application={application()}
+        onEdit={(edits) => setPlan((p) => (p ? revisePlan(p, edits) : p))}
+        onStart={handleStartPlan}
+        onBack={() => setView("setup")}
+        starting={false}
+      />
+    );
+  }
+
   if (view === "start") {
     return (
       <StartScreen
         micStatus={micStatus}
         onMicStatus={setMicStatus}
-        onStart={(p, m, ctx) => {
-          setProfile(p);
-          setPracticeMode(m);
-          setBehavioralContext(ctx);
-          if (m === "behavioral") {
-            setRound("behavioral");
-          } else {
-            // "coding" or "full-mock" starts with coding
-            setRound("coding");
-          }
-          setView("room");
-        }}
+        onApply={() => setView("setup")}
+        onStart={startQuick}
       />
     );
   }
@@ -458,7 +573,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     const codingReportStatus = lastCodingRecord?.status;
 
     return (
-      <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100" data-testid="full-mock-transition">
+      <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100" data-testid="full-mock-transition" {...planMarker}>
         <header className="flex items-center gap-4 border-b border-zinc-800 bg-zinc-950/95 px-6 py-3">
           <Wordmark size={26} />
           <span className="text-base text-zinc-400">Full Mock Interview · Transition</span>
@@ -593,17 +708,14 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
   if (round === "behavioral") {
     return (
-      <BehavioralRoom
-        voice={voiceProps}
-        attemptNumber={attemptNumber}
-        focusLabel={focusLabel}
-        onFinish={handleFinish}
-      />
+      <div className="contents" {...planMarker}>
+        <BehavioralRoom voice={voiceProps} attemptNumber={attemptNumber} focusLabel={focusLabel} onFinish={handleFinish} />
+      </div>
     );
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-zinc-950 lg:h-screen text-zinc-100">
+    <div className="flex min-h-dvh flex-col bg-zinc-950 lg:h-screen text-zinc-100" {...planMarker}>
       <header className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-3 sm:gap-4 sm:px-6">
         <Wordmark size={26} />
         <span className="hidden text-base text-zinc-400 md:inline">

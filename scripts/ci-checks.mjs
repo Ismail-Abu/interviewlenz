@@ -30,6 +30,7 @@ const CHECKS = [
   "behavioral-check.mjs",
   "tailoring-check.mjs",
   "role-context-check.mjs",
+  "live-freshness-check.mjs",
   "live-grounding-check.mjs",
   "live-queue-check.mjs",
   "live-stages-check.mjs",
@@ -38,6 +39,7 @@ const CHECKS = [
   "live-reconnect-check.mjs",
   "live-disconnect-check.mjs",
   "live-run-evidence-check.mjs",
+  "plan-check.mjs",
 ];
 
 // Needs real credentials or a human; never run unattended.
