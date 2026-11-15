@@ -677,3 +677,8 @@ Also on `5419848`:
   - Regression: the Step 1 behavioral, landing, sync, reconnect, role, and report-retry drivers, plus all stubbed dev checks; lint; `next build`. Zero-key: the real route answers "not configured", and the panel offers manual or generic.
   - The too-large browser case stubs the canvas encoder: real synthetic noise pages still compress under the cap at 1100 px.
 - **Needs a human (real key):** extraction quality on a real resume screenshot and listing, and hearing an opening about the corrected project.
+
+#### Step 3 — verification: **in progress** (on `b752373`, no app code changed)
+- Done: coding regression in the browser (`drive-b10-coding` 10/10). With a confirmed tailoring context on the landing page, Start practice still sends a coding token with no `roundType` or `behavioralContext`; set solution 4/4 (v2) and unconditional `return False` 2/4 (v3) both reach Live with the latest version and source; the report session is the old coding shape; the F9 zero-key fixture fallback and zero-key mock voice still work; no analysis request is made.
+- Already covered by Steps 1–2: four input combinations, oversized/unreadable/too many pages, timeout, edit/remove, duplicate clicks, stale responses, manual fallback, instruction selection, opening, reconnect, report for both rounds, two attempts with different t1 quotes, rejection of invented and interviewer turn IDs.
+- Left: move the scratchpad browser drivers into the repo (`dev/`), post the B9/B10 contract proposal for Hamza, write a real-mic walkthrough for Ismail with two contrasting answers, and open the focused PR with the tested SHA, screenshots, and remaining manual acceptance.
