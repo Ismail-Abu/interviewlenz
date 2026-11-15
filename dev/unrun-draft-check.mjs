@@ -188,7 +188,12 @@ console.log("\n== B. Evidence validation: draft citable as code, never as a run"
 const refs = (a.json?.findings ?? []).flatMap((f) => f.evidence ?? []);
 const has = (ref) => refs.some((r) => JSON.stringify(r) === JSON.stringify(ref));
 
-assert("B1 a code citation of the v4 draft survives", has({ kind: "code", codeVersion: 4, lineStart: 2, lineEnd: 6 }));
+// The route normalizes a model's lineStart/lineEnd into lines: [start, end].
+assert(
+  "B1 a code citation of the v4 draft survives",
+  refs.some((r) => r.kind === "code" && r.codeVersion === 4 && String(r.lines) === "2,6"),
+  JSON.stringify(refs.filter((r) => r.kind === "code")),
+);
 assert("B2 a run citation of v4 is dropped", !refs.some((r) => r.kind === "run" && r.codeVersion === 4));
 assert("B3 the real v3 run citation survives", has({ kind: "run", codeVersion: 3, caseId: "c1" }));
 assert("B4 both findings are kept", (a.json?.findings ?? []).length === 2, `${(a.json?.findings ?? []).length}`);
