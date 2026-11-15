@@ -24,7 +24,7 @@ import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAda
 import { preloadRunner } from "@/lib/runner";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
-import { btn } from "./ui/buttons";
+import { btn, coverBtnSm } from "./ui/buttons";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -662,15 +662,15 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
   if (view === "report") {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+      <div data-surface="cream" className="min-h-screen bg-cream text-ink flex flex-col [color-scheme:light]">
         {practiceMode === "full-mock" && round === "coding" && (
-          <div className="bg-brand-coral/10 border-b border-brand-coral/30 px-6 py-2.5 flex items-center justify-between text-sm">
-            <span className="text-zinc-300 text-xs sm:text-sm">
+          <div className="bg-cream-2 border-b border-cream-line px-6 py-3 flex items-center justify-between text-sm shadow-sm">
+            <span className="text-ink-muted text-xs sm:text-sm font-medium">
               Round 1 (Coding) feedback. Ready for Round 2?
             </span>
             <button
               onClick={handleContinueToBehavioral}
-              className={`${btn.primary} px-3.5 py-1.5 text-xs font-semibold`}
+              className={`${coverBtnSm.primary} px-4 py-1.5 text-xs font-semibold`}
               data-testid="report-continue-behavioral"
             >
               Continue to Behavioral Round →
@@ -715,17 +715,27 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-zinc-950 lg:h-screen text-zinc-100" {...planMarker}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-3 sm:gap-4 sm:px-6">
-        <Wordmark size={26} />
-        <span className="hidden text-base text-zinc-400 md:inline">
-          Python · {problem.title}
-          {attemptNumber > 1 && ` · Attempt ${attemptNumber}`}
-          {practiceMode === "full-mock" && " · Round 1 of 2"}
-        </span>
+    <div data-surface="cream" className="flex min-h-dvh flex-col bg-cream text-ink lg:h-screen [color-scheme:light]" {...planMarker}>
+      <header className="flex flex-wrap items-center gap-2 border-b border-cream-line bg-cream-2/90 px-4 py-3 sm:gap-4 sm:px-6 shadow-sm">
+        <Wordmark size={26} tone="light" />
+        <div className="hidden items-center gap-2 md:flex">
+          <span className="font-semibold text-ink">
+            Python · {problem.title}
+          </span>
+          {attemptNumber > 1 && (
+            <span className="rounded-full bg-cream-3 px-2 py-0.5 text-xs font-medium text-ink-muted">
+              Attempt {attemptNumber}
+            </span>
+          )}
+          {practiceMode === "full-mock" && (
+            <span className="rounded-full bg-maroon/10 px-2.5 py-0.5 text-xs font-bold text-maroon">
+              Round 1 of 2: Technical
+            </span>
+          )}
+        </div>
         {profile && hasJob(profile.job) && (
           <span
-            className="hidden max-w-xs truncate rounded-full border border-brand-coral/40 bg-brand-coral/10 px-3 py-1 text-sm text-brand-coral lg:inline"
+            className="hidden max-w-xs truncate rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-maroon-deep lg:inline"
             data-testid="target-role"
             title="Role details used for interview framing and feedback."
           >
@@ -733,21 +743,21 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             {profile.job.company.trim() && ` at ${profile.job.company.trim()}`}
           </span>
         )}
-        <span className="ml-auto text-sm text-zinc-500 max-sm:sr-only" data-testid="session-stats">
+        <span className="ml-auto text-sm text-ink-muted max-sm:sr-only" data-testid="session-stats">
           {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
         </span>
         {DEV && (
           <details className="relative max-sm:ml-auto">
-            <summary className="cursor-pointer select-none rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+            <summary className="cursor-pointer select-none rounded-[12px] border border-cream-line bg-cream-3 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#EFE0CA]">
               Dev
             </summary>
-            <div className="absolute right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl">
-              <label className="flex flex-col gap-1 text-sm text-zinc-400">
+            <div className="absolute right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-[18px] border border-cream-line bg-cream-2 p-4 shadow-xl">
+              <label className="flex flex-col gap-1 text-xs font-bold text-ink">
                 Run with
                 <select
                   value={mode}
                   onChange={(e) => setMode(e.target.value as RunMode)}
-                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200"
+                  className="rounded-lg border border-cream-line bg-white px-2 py-1.5 text-ink text-sm"
                 >
                   <option value="real">Python runner</option>
                   <option value="cycle">Fixtures: cycle all four</option>
@@ -757,12 +767,12 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
                   <option value="unavailable">Fixture: runner unavailable</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-sm text-zinc-400">
+              <label className="flex flex-col gap-1 text-xs font-bold text-ink">
                 Report
                 <select
                   value={reportMode}
                   onChange={(e) => setReportMode(e.target.value as ReportMode)}
-                  className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200"
+                  className="rounded-lg border border-cream-line bg-white px-2 py-1.5 text-ink text-sm"
                 >
                   <option value="auto">Auto: /api/report, else fixture</option>
                   <option value="fixture">Fixture only</option>
@@ -776,15 +786,15 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         <button
           onClick={handleFinish}
           disabled={running}
-          className={`${btn.secondary} px-5 py-2 text-base`}
+          className={`${coverBtnSm.secondary} px-5 py-2 text-sm`}
           data-testid="finish-btn"
         >
           Finish
         </button>
       </header>
 
-      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="flex shrink-0 flex-col border-zinc-800 lg:min-h-0 lg:shrink lg:border-r">
+      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] p-2 sm:p-4 gap-3 bg-cream">
+        <div className="flex shrink-0 flex-col overflow-hidden rounded-[22px] bg-[#1C1817] text-zinc-100 shadow-warm border border-cream-line/40 lg:min-h-0 lg:shrink">
           <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0}>
             <ProblemPanel problem={problem} />
           </div>
@@ -807,11 +817,23 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           />
         </div>
 
-        <div className="flex flex-col lg:min-h-0">
-          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
+        <div className="flex flex-col overflow-hidden rounded-[22px] bg-[#1C1817] text-zinc-100 shadow-warm border border-cream-line/40 lg:min-h-0">
+          <div className="flex flex-wrap items-center justify-between border-b border-zinc-800 bg-[#241F1D] px-4 py-2.5 gap-2">
             <div>
-              <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
-              <p className="text-xs text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
+              <div className="flex flex-wrap items-center gap-2 font-mono text-xs sm:text-sm text-[#9A8C84]">
+                <span className="font-semibold text-zinc-200">solution.py · v{codeVersion}</span>
+                {result?.status === "completed" && (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3A28] px-2.5 py-0.5 text-xs font-semibold text-[#6EE7A0]">
+                      <span>{result.passed} / {result.total} passed</span>
+                      <span>·</span>
+                      <span>{result.durationMs} ms</span>
+                    </span>
+                  </>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
             </div>
             <button
               onClick={handleRun}

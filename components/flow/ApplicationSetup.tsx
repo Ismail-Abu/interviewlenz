@@ -1,8 +1,7 @@
 "use client";
 
-// "What are you applying for?" Functional version so the flow runs end to end.
-// PRESENTATION OWNER: Gemini #2. Replace the markup freely; keep the props
-// (components/flow/types.ts) and the data-testids.
+// "What are you applying for?"
+// PRESENTATION OWNER: Gemini #2. Controlled component: renders props and calls callbacks.
 import { Wordmark } from "../Logo";
 import { JobForm } from "../landing/JobForm";
 import { ResumeDrop } from "../landing/ResumeDrop";
@@ -10,37 +9,83 @@ import { TailorPanel } from "../landing/TailorPanel";
 import { coverBtn, coverBtnSm } from "../ui/buttons";
 import type { ApplicationSetupProps } from "./types";
 
-export function ApplicationSetup({ draft, onDraftChange, status, sendPreview, canAnalyze, onAnalyze, onBack, onQuickPractice }: ApplicationSetupProps) {
+export function ApplicationSetup({
+  draft,
+  onDraftChange,
+  status,
+  sendPreview,
+  canAnalyze,
+  onAnalyze,
+  onBack,
+  onQuickPractice,
+}: ApplicationSetupProps) {
   const busy = status.kind === "analyzing";
+
   return (
-    <div data-surface="cream" className="min-h-screen bg-cream text-ink [color-scheme:light]" data-testid="application-setup">
-      <main className="mx-auto flex max-w-5xl flex-col gap-6 px-5 py-8 sm:px-8">
+    <div
+      data-surface="cream"
+      className="min-h-screen bg-cream text-ink [color-scheme:light]"
+      data-testid="application-setup"
+    >
+      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
+        {/* Navigation Bar */}
         <div className="flex items-center justify-between gap-3">
           <Wordmark size={26} tone="light" />
-          <button type="button" onClick={onBack} className={coverBtnSm.neutral} data-testid="setup-back">
+          <button
+            type="button"
+            onClick={onBack}
+            className={coverBtnSm.neutral}
+            data-testid="setup-back"
+          >
             ← Home
           </button>
         </div>
+
+        {/* Page Heading */}
         <div>
-          <h1 className="font-brand text-3xl font-bold tracking-tight">What are you applying for?</h1>
-          <p className="mt-2 text-[15px] text-ink-muted">
-            Paste the job listing or just type the role. Adding your resume is optional. Next you&apos;ll review your interview plan
-            before anything starts.
+          <span className="inline-flex items-center gap-2 rounded-full bg-cream-3 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-maroon-deep">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-maroon" />
+            Application Setup
+          </span>
+          <h1 className="mt-3 font-brand text-3xl font-bold tracking-tight sm:text-4xl text-ink">
+            What are you applying for?
+          </h1>
+          <p className="mt-2 max-w-2xl text-[16px] leading-relaxed text-ink-muted">
+            Paste the job listing or just type the role. Adding your resume is optional. Next you&apos;ll review your
+            tailored two-round interview plan before anything starts.
           </p>
         </div>
 
-        <fieldset disabled={busy} className="grid gap-5 lg:grid-cols-2">
-          <section className="rounded-[22px] bg-white/70 p-5 shadow-warm">
-            <h2 className="mb-3 text-base font-semibold">The role</h2>
-            <JobForm job={draft.job} onChange={(job) => onDraftChange({ ...draft, job })} />
+        {/* Role & Resume Input Sections */}
+        <fieldset disabled={busy} className="grid gap-6 lg:grid-cols-2">
+          <section className="flex flex-col justify-between rounded-[26px] bg-white/80 p-6 shadow-warm border border-cream-line/60">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-ink">The role</h2>
+                <span className="text-xs font-semibold text-maroon-deep uppercase tracking-wider">Required</span>
+              </div>
+              <p className="mb-4 text-xs text-ink-muted">
+                Company name, role title, level, or full listing text.
+              </p>
+              <JobForm job={draft.job} onChange={(job) => onDraftChange({ ...draft, job })} />
+            </div>
           </section>
-          <section className="rounded-[22px] bg-white/70 p-5 shadow-warm">
-            <h2 className="mb-1 text-base font-semibold">Your resume (optional)</h2>
-            <p className="mb-3 text-sm text-ink-muted">Used only to suggest a project for the behavioral round, and only if you choose Prepare below.</p>
-            <ResumeDrop images={draft.resume} onChange={(resume) => onDraftChange({ ...draft, resume })} />
+
+          <section className="flex flex-col justify-between rounded-[26px] bg-white/80 p-6 shadow-warm border border-cream-line/60">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-ink">Your resume</h2>
+                <span className="rounded-full bg-cream-3 px-2.5 py-0.5 text-xs font-semibold text-ink-muted">Optional</span>
+              </div>
+              <p className="mb-4 text-xs text-ink-muted">
+                Used only to suggest a project for the behavioral round, and only if you choose Prepare below.
+              </p>
+              <ResumeDrop images={draft.resume} onChange={(resume) => onDraftChange({ ...draft, resume })} />
+            </div>
           </section>
         </fieldset>
 
+        {/* Behavioral Tailor Panel */}
         <TailorPanel
           resume={draft.resume}
           job={draft.job}
@@ -48,40 +93,87 @@ export function ApplicationSetup({ draft, onDraftChange, status, sendPreview, ca
           onStartGeneric={() => onQuickPractice("behavioral")}
         />
 
-        <section className="rounded-[22px] bg-cream-2 p-5 shadow-warm" data-testid="send-preview">
-          <h2 className="text-base font-semibold">What happens when you build your plan</h2>
-          <ul className="mt-2 flex flex-col gap-2 text-sm">
+        {/* Disclosure & What Will Be Sent */}
+        <section
+          className="rounded-[26px] bg-cream-2/90 p-6 shadow-warm border border-cream-line/50"
+          data-testid="send-preview"
+        >
+          <div className="flex items-center gap-2">
+            <span aria-hidden className="text-base text-maroon">ℹ</span>
+            <h2 className="text-base font-bold text-ink">What happens when you build your plan</h2>
+          </div>
+          <ul className="mt-3 flex flex-col gap-2.5 text-sm">
             {sendPreview.map((item) => (
-              <li key={item.destination}>
-                <span className="font-semibold">{item.destination}:</span> <span className="text-ink-muted">{item.fields.join(", ")}</span>
+              <li key={item.destination} className="flex flex-col gap-1 sm:flex-row sm:items-baseline">
+                <span className="font-semibold text-ink sm:min-w-44">{item.destination}:</span>
+                <span className="text-ink-muted">{item.fields.join(", ")}</span>
               </li>
             ))}
           </ul>
         </section>
 
+        {/* Fallback Notice */}
         {status.kind === "fell-back" && (
-          <p role="status" className="rounded-[18px] bg-[#fbe9c8] p-3 text-sm text-[#7a4600]" data-testid="setup-fallback">
-            {status.message}
-          </p>
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-[20px] bg-[#FDF6E2] border border-[#E8D196] p-4 text-sm text-[#7A4600]"
+            data-testid="setup-fallback"
+          >
+            <span aria-hidden className="text-base font-bold">⚠️</span>
+            <div className="flex-1 font-medium">{status.message}</div>
+          </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={onAnalyze} disabled={!canAnalyze || busy} className={coverBtn.primary} data-testid="build-plan">
-            {busy ? "Building your plan…" : "Build my interview plan"}
-          </button>
-          {!canAnalyze && <span className="text-sm text-ink-muted">Enter a role or paste a listing first.</span>}
+        {/* Primary CTA and helper text */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              onClick={onAnalyze}
+              disabled={!canAnalyze || busy}
+              className={`${coverBtn.primary} min-w-56`}
+              data-testid="build-plan"
+            >
+              {busy ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+                  <span>Building your plan…</span>
+                </>
+              ) : (
+                "Build my interview plan"
+              )}
+            </button>
+            {!canAnalyze && (
+              <span className="text-sm text-ink-muted font-medium">
+                Enter a role or paste a listing to generate your customized plan.
+              </span>
+            )}
+          </div>
         </div>
 
-        <p className="text-sm text-ink-muted">
-          Just want to practice?{" "}
-          <button type="button" onClick={() => onQuickPractice("coding")} className="font-semibold text-maroon-deep underline-offset-4 hover:underline" data-testid="setup-quick-coding">
-            Quick coding round
-          </button>{" "}
-          ·{" "}
-          <button type="button" onClick={() => onQuickPractice("behavioral")} className="font-semibold text-maroon-deep underline-offset-4 hover:underline" data-testid="setup-quick-behavioral">
-            Quick behavioral round
-          </button>
-        </p>
+        {/* Secondary Standalone Quick Practice */}
+        <div className="border-t border-cream-line/60 pt-6">
+          <p className="text-sm text-ink-muted">
+            Prefer a quick standalone practice without a plan?{" "}
+            <button
+              type="button"
+              onClick={() => onQuickPractice("coding")}
+              className="font-semibold text-maroon-deep underline-offset-4 hover:underline"
+              data-testid="setup-quick-coding"
+            >
+              Quick coding round
+            </button>{" "}
+            ·{" "}
+            <button
+              type="button"
+              onClick={() => onQuickPractice("behavioral")}
+              className="font-semibold text-maroon-deep underline-offset-4 hover:underline"
+              data-testid="setup-quick-behavioral"
+            >
+              Quick behavioral round
+            </button>
+          </p>
+        </div>
       </main>
     </div>
   );
