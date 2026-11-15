@@ -302,3 +302,19 @@ Deterministic regression tests — all pass:
 Gemini-side verification (real key, v1beta, native-audio; mic/browser not used): after v2 4/4 then a silent `[RUN v3] 2/4`, asked "most recent run version and score?" → **"Version 3 passed 2/4 tests."** (no longer 4/4). On a reconnect that re-delivers the v3 evidence, the interviewer grounded its question in the v3 set implementation (it asked about complexity rather than restating the score verbatim, which is acceptable).
 
 Pending (human, in browser) — left to Ismail: on one real socket, claim linear, run v2 4/4, edit to v3, run v3 2/4 while answering, and confirm Gemini identifies v3 as 2/4 and asks one question grounded in that code; then force a socket close, run again, and confirm the evidence and a grounded question survive the reconnect.
+
+### B6 • Browser reconnect + attempt-scoped transcript IDs (PR #9) — Ismail
+
+Addresses Hamza's two PR #9 findings (the queue 4d "failure" was a stale B5 expectation, already fixed at `7285bbb`).
+
+Changed files (branch `b6-transcription-stages`): `lib/live.ts` (reconnect + turn-ID), `docs/CONTRACT.md` (new "Live code context, reconnect, and transcript IDs" section), `CURRENT.md`, and new `dev/live-reconnect-check.mjs` + `dev/live-turnid-check.mjs`. No frontend, token-route, `f5-polish`, `live-context-wip`, or `lib/contract.ts` changes.
+
+- **Reconnect** now runs on the current attempt's existing client. `connect()` doubles as reconnect: it is epoch-guarded so a double-click, a failed retry, or late open/message/error/close events from a superseded socket cannot overwrite the new connection or append turns to a finished attempt. One mic + one playback path persist across a reconnect (no second `startMic()`), preserving mute. An unexpected close/send-failure exposes `onState("error")` + a retryable `onError` and preserves the latest Run (incl. a Run completed offline); `connect(freshToken, problem)` restores the buffer + latest-Run evidence, then one grounded follow-up. `end()` clears it and invalidates any in-flight reconnect.
+- **Transcript IDs** are attempt-scoped: `createLiveClient(options?: { turnSeed?: number })`. Reconnecting the same client continues numbering; an End→Start within the attempt builds a fresh client seeded with `turnSeed = turns-so-far`; a new attempt (Retry) seeds 0. No global counter.
+
+Checks (all pass):
+- Deterministic (7 suites): `live-transcript`, `live-queue`, `live-stages`, `live-run-evidence`, `live-disconnect`, and new `live-reconnect` (restore after fresh-token reconnect with correct version/source/score/cases + one follow-up; double-reconnect keeps only the latest socket and ignores stale callbacks; failed retry preserves the Run; End during reconnect restores nothing and old events add no turns; cleared evidence does not replay) and `live-turnid` (unique t1..t4 across reconnect and End→Start; Retry may restart).
+- `npm run lint` clean; `npm run build` passes.
+- Direct Gemini (real key, `v1beta`, native-audio; no mic): a fresh-session restore of the v3 2/4 evidence answered "Version 3 passed 2 out of 4 test cases." — identifies v3 2/4 after reconnect. (The 4/4 → 2/4 within one socket was already confirmed.)
+
+Pending (human, in browser) — Hamza wires the reconnect control on PR #10, then the full walkthrough (below in the handoff) is run with a real key + mic.

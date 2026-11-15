@@ -55,6 +55,8 @@ class BrowserLiveClient implements LiveClient {
 
   private state: LiveState = "idle";
   private turnSeq = 0;
+  // A new epoch per connect(); late callbacks from a superseded socket are ignored.
+  private connectionSeq = 0;
 
   private pendingInput = "";
   private pendingOutput = "";
@@ -86,6 +88,13 @@ class BrowserLiveClient implements LiveClient {
   private disconnected = false;
   private ending = false;
 
+  constructor(turnSeed = 0) {
+    // Attempt-scoped seed: a client rebuilt within the same attempt continues
+    // numbering (t{turnSeed+1}, ...), so transcript IDs stay unique across
+    // reconnects and voice-mode switches. A new attempt (Retry) starts at 0.
+    this.turnSeq = turnSeed;
+  }
+
   // Microphone input graph.
   private micStream: MediaStream | null = null;
   private inputCtx: AudioContext | null = null;
@@ -110,9 +119,25 @@ class BrowserLiveClient implements LiveClient {
     this.errorCb = cb;
   }
 
+  // connect() doubles as reconnect: call it again on the SAME client (after an
+  // unexpected close or send failure) with a fresh token to restore the attempt.
   async connect(token: LiveTokenResponse, problem: Problem): Promise<void> {
-    this.setState("connecting");
+    const epoch = ++this.connectionSeq; // this attempt's current socket
+    const current = () => this.connectionSeq === epoch;
     this.ending = false;
+    this.setState("connecting");
+
+    // Replace any existing socket. Its callbacks carry an older epoch, so late
+    // open/message/error/close events from it are ignored below.
+    const previous = this.session;
+    this.session = null;
+    if (previous) {
+      try {
+        previous.close();
+      } catch {
+        // ignore
+      }
+    }
 
     const systemInstruction = interviewerInstructions(problem);
 
@@ -122,13 +147,20 @@ class BrowserLiveClient implements LiveClient {
         httpOptions: { apiVersion: LIVE_API_VERSION },
       });
 
-      this.session = await ai.live.connect({
+      const session = await ai.live.connect({
         model: token.model,
         callbacks: {
-          onopen: () => this.setState(this.micActive ? "listening" : "idle"),
-          onmessage: (message: LiveServerMessage) => this.handleMessage(message),
-          onerror: (event: ErrorEvent) => this.emitError(event?.message ?? "Live connection error"),
+          onopen: () => {
+            if (current()) this.setState(this.micActive ? "listening" : "idle");
+          },
+          onmessage: (message: LiveServerMessage) => {
+            if (current()) this.handleMessage(message);
+          },
+          onerror: (event: ErrorEvent) => {
+            if (current()) this.emitError(event?.message ?? "Live connection error");
+          },
           onclose: () => {
+            if (!current()) return; // a superseded socket closing; ignore
             if (this.ending) this.session = null;
             else this.markDisconnected();
           },
@@ -142,9 +174,22 @@ class BrowserLiveClient implements LiveClient {
         },
       });
 
-      // A fresh session knows nothing yet: reset per-session delivery trackers
+      if (!current()) {
+        // A newer connect() or an end() landed while we awaited; discard this
+        // socket so it never becomes active or appends to a finished attempt.
+        try {
+          session.close();
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      // A fresh Gemini session knows nothing: reset per-session delivery trackers
       // and conversation state, but keep the preserved buffer + latest Run and
-      // re-deliver them now. This restores Run evidence after a reconnect.
+      // re-deliver them now. This restores the Run evidence (and one follow-up)
+      // after a reconnect; prior transcript turns are not replayed to the model.
+      this.session = session;
       this.deliveredRunEpoch = 0;
       this.lastSentBufferVersion = 0;
       this.modelTurnActive = false;
@@ -154,6 +199,7 @@ class BrowserLiveClient implements LiveClient {
       this.pendingOutput = "";
       this.pump();
     } catch (error) {
+      if (!current()) return; // superseded; stay quiet
       this.session = null;
       this.emitError(error instanceof Error ? error.message : "Could not connect to voice provider");
       throw error;
@@ -325,6 +371,7 @@ class BrowserLiveClient implements LiveClient {
 
   end(): void {
     this.ending = true;
+    this.connectionSeq += 1; // invalidate any in-flight connect() / stale socket callbacks
     this.micActive = false;
     this.cleanupMic();
     this.stopPlayback();
@@ -523,8 +570,16 @@ class BrowserLiveClient implements LiveClient {
   }
 }
 
-export function createLiveClient(): LiveClient {
-  return new BrowserLiveClient();
+export interface CreateLiveClientOptions {
+  // Seed the transcript-turn counter so a client rebuilt within the SAME attempt
+  // continues numbering (t{turnSeed + 1}, ...). Pass the number of turns already
+  // in the attempt (e.g. session.turns.length), for the real client and the
+  // scripted fallback alike. A new attempt (Retry) starts a client at 0.
+  turnSeed?: number;
+}
+
+export function createLiveClient(options?: CreateLiveClientOptions): LiveClient {
+  return new BrowserLiveClient(options?.turnSeed ?? 0);
 }
 
 export { BrowserLiveClient };
