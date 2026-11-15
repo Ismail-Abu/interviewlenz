@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { ApiError, CodeSnapshot, CodingSession, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
+import type { ApiError, BehavioralContext, CodeSnapshot, CodingSession, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
 import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
@@ -16,6 +16,7 @@ import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { behavioralOpeningExtra } from "@/lib/behavioral";
 import { btn } from "./ui/buttons";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
@@ -38,7 +39,13 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [attempt, setAttempt] = useState<AttemptData>(EMPTY_ATTEMPT);
   const fullSession = (): Session =>
     round === "behavioral"
-      ? { ...ids(), roundType: "behavioral", turns: attempt.turns, ...(behavioralRole ? { roleContext: behavioralRole } : {}) }
+      ? {
+          ...ids(),
+          roundType: "behavioral",
+          turns: attempt.turns,
+          ...(behavioralRole ? { roleContext: behavioralRole } : {}),
+          ...(behavioralContext ? { behavioralContext } : {}),
+        }
       : codingSession();
   const codingSession = (): CodingSession => ({
     ...ids(),
@@ -64,7 +71,19 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     void jobDescription;
     return Object.keys(rest).length ? rest : undefined;
   })();
-  const behavioralRound: BehavioralRound | undefined = round === "behavioral" ? { type: "behavioral" } : undefined;
+  // Personalization confirmed on the landing page (no files, listing, or
+  // excerpts). Kept for Reconnect and Practice again; never re-analyzed.
+  const [behavioralContext, setBehavioralContext] = useState<BehavioralContext | undefined>(undefined);
+  const behavioralRound: BehavioralRound | undefined =
+    round === "behavioral"
+      ? {
+          type: "behavioral",
+          ...(behavioralContext ? { context: behavioralContext, openingExtra: behavioralOpeningExtra(behavioralContext) } : {}),
+        }
+      : undefined;
+  const focusLabel = behavioralContext
+    ? [behavioralContext.project?.name, behavioralContext.focus?.skill].filter(Boolean).join(" · ")
+    : undefined;
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -224,6 +243,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         ids().sessionId,
         round === "behavioral" ? behavioralRole : roleContext,
         behavioralRound?.type,
+        behavioralRound?.context,
       );
       if (!current()) return;
       if (isApiError(token)) {
@@ -363,9 +383,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       <StartScreen
         micStatus={micStatus}
         onMicStatus={setMicStatus}
-        onStart={(p, r) => {
+        onStart={(p, r, ctx) => {
           setProfile(p);
           setRound(r ?? "coding");
+          setBehavioralContext(r === "behavioral" ? ctx : undefined);
           setView("room");
         }}
       />
@@ -397,7 +418,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   };
 
   if (round === "behavioral") {
-    return <BehavioralRoom voice={voiceProps} attemptNumber={attemptNumber} onFinish={handleFinish} />;
+    return <BehavioralRoom voice={voiceProps} attemptNumber={attemptNumber} focusLabel={focusLabel} onFinish={handleFinish} />;
   }
 
   return (

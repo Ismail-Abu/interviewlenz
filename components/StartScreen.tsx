@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Wordmark } from "./Logo";
 import { ResumeDrop } from "./landing/ResumeDrop";
 import { JobForm } from "./landing/JobForm";
+import { TailorPanel } from "./landing/TailorPanel";
 import { EMPTY_JOB, hasJob, previewLoop, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
 import { btn } from "./ui/buttons";
-import type { RoundType } from "@/lib/contract";
+import type { BehavioralContext, RoundType } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
 
@@ -41,7 +42,8 @@ interface Props {
   micStatus: MicStatus;
   onMicStatus: (s: MicStatus) => void;
   // The profile stays in the browser; ProblemRoom only displays it.
-  onStart: (profile: CandidateProfile, round?: RoundType) => void;
+  // context: the personalization the student confirmed (behavioral only).
+  onStart: (profile: CandidateProfile, round?: RoundType, context?: BehavioralContext) => void;
 }
 
 const FEATURES = [
@@ -71,6 +73,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   const [starting, setStarting] = useState(false);
   const [resume, setResume] = useState<ResumeImage[]>([]);
   const [job, setJob] = useState<JobInfo>(EMPTY_JOB);
+  const [context, setContext] = useState<BehavioralContext | undefined>(undefined);
 
   const provided = resume.length > 0 || hasJob(job);
   const rounds = previewLoop(job);
@@ -81,13 +84,14 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   }
 
   // Check the mic on the way in if it hasn't been checked, but never block on it.
-  async function start(round: RoundType = "coding") {
+  // Skip buttons start a generic round; the setup button uses the confirmed context.
+  async function start(round: RoundType = "coding", ctx?: BehavioralContext) {
     setStarting(true);
     if (micStatus === "unchecked") {
       onMicStatus("checking");
       onMicStatus(await checkMicrophone());
     }
-    onStart({ resume, job }, round);
+    onStart({ resume, job }, round, round === "behavioral" ? ctx : undefined);
   }
 
   const msg = micStatus === "unchecked" ? null : MIC_MESSAGE[micStatus];
@@ -173,7 +177,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
         <section id="setup" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
           <h2 className="font-brand text-3xl font-bold tracking-tight">Set up your interview</h2>
           <p className="mt-2 max-w-2xl text-base text-zinc-400">
-            Add resume screenshots, enter the job, or both. Resume screenshots stay in this browser tab. Role details you type (title, company, level, and the listing for coding rounds) are sent to the interviewer to frame questions.
+            Add resume screenshots, enter the job, or both. Role details you type (title, company, level, and the listing for coding rounds) are sent to the interviewer to frame questions. Resume screenshots stay in this browser tab unless you choose Prepare my interview under Tailor this interview below.
           </p>
 
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -205,7 +209,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
               <span className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300">
                 PREVIEW
               </span>
-              <span className="text-sm text-zinc-500">Tailoring isn&apos;t live yet. The coding round runs today.</span>
+              <span className="text-sm text-zinc-500">The loop is an illustration. Coding and behavioral rounds run today.</span>
             </div>
             <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {rounds.map((r, i) => (
@@ -240,6 +244,8 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             </ol>
           </div>
 
+          <TailorPanel resume={resume} job={job} onContextChange={setContext} onStartGeneric={() => start("behavioral")} />
+
           {/* Start */}
           <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <button
@@ -253,12 +259,12 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => start("behavioral")}
+              onClick={() => start("behavioral", context)}
               disabled={starting}
               data-testid="start-behavioral"
               className={`${btn.secondary} rounded-xl px-8 py-3.5 text-lg`}
             >
-              Start behavioral round
+              {context ? "Start tailored behavioral round" : "Start behavioral round"}
             </button>
             <span className="text-sm text-zinc-400" data-testid="setup-summary">
               {provided

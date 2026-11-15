@@ -1,10 +1,9 @@
 import type { RoleContext } from "@/lib/contract";
 
-// What the student tells us on the landing page. Frontend-only: it stays in
-// this browser tab and is never sent to /api/live-token, /api/report, or the
-// Live session. The contract (lib/contract.ts, docs/CONTRACT.md) has no resume
-// or job fields, and job/resume tailoring is a labeled preview (CURRENT.md,
-// "Mocked for demo").
+// What the student tells us on the landing page. Role fields go to the routes
+// as RoleContext (B9). Resume images stay in this tab unless the student selects
+// "Prepare my interview" (B10), which sends compressed pages and the listing to
+// /api/analyze-tailoring; only the confirmed BehavioralContext reaches Live.
 
 export interface ResumeImage {
   id: string;

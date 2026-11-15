@@ -101,7 +101,36 @@ export interface CodingSession extends SessionBase {
 // evidence is what the student said.
 export interface BehavioralSession extends SessionBase {
   roundType: "behavioral";
+  // The project and practice focus the student confirmed (B10 step 2). It
+  // guides the question; it is never evidence of performance.
+  behavioralContext?: BehavioralContext;
 }
+
+// Confirmed personalization for a behavioral round (PROPOSED with B10). Only
+// what the student confirmed or typed: never original files, raw listings,
+// contact details, or source excerpts. Servers validate and bound it
+// (name/skill <= 80 chars, summary/detail <= 240).
+export interface BehavioralContext {
+  project?: { name: string; summary?: string };
+  focus?: { skill: string; detail?: string };
+}
+
+// POST /api/analyze-tailoring (PROPOSED with B10). Sent only when the student
+// selects "Prepare my interview". The complete serialized request must be at
+// most 3,500,000 bytes (checked in the browser and on the server).
+export type TailoringImageType = "image/png" | "image/jpeg" | "image/webp";
+export interface TailoringRequest {
+  images?: { mimeType: TailoringImageType; data: string }[]; // base64, at most 4 pages
+  jobListing?: string; // at most 8,000 chars
+  roleContext?: Pick<RoleContext, "company" | "role" | "level">;
+}
+// At most one suggestion of each kind; a field is omitted when unsupported.
+// excerpt is a short verbatim source quote shown to the student only.
+export interface TailoringSuggestion {
+  project?: { name: string; summary?: string; excerpt: string };
+  focus?: { skill: string; detail?: string; excerpt: string };
+}
+export interface TailoringResponse { suggestion: TailoringSuggestion }
 
 export type Session = CodingSession | BehavioralSession;
 
@@ -121,7 +150,13 @@ export interface RoleContext {
 // including Reconnect, so the locked interviewer instruction stays the same.
 // roundType defaults to "coding"; "behavioral" selects the behavioral
 // interviewer instruction locked into the token.
-export interface LiveTokenRequest { sessionId: string; roleContext?: RoleContext; roundType?: RoundType }
+export interface LiveTokenRequest {
+  sessionId: string;
+  roleContext?: RoleContext;
+  roundType?: RoundType;
+  // Behavioral only: the confirmed personalization (re-sent on Reconnect).
+  behavioralContext?: BehavioralContext;
+}
 export interface LiveTokenResponse { token: string; model: string; expiresAt: string }
 
 export type LiveState = "connecting" | "listening" | "speaking" | "idle" | "error";
