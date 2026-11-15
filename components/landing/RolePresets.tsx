@@ -1,21 +1,28 @@
 "use client";
 
+// One-click quick-fill for the target role. Replaces the generic company logo
+// rail: instead of showing a student logos they have no relationship with, this
+// fills in a concrete target they can edit.
+//
+// Each preset writes company, role and level into the same JobInfo the form
+// edits, so picking one and then typing behaves exactly like typing from
+// scratch. The listing is deliberately left alone — a preset is a starting
+// point, not a claim about a real posting.
+
 import { EMPTY_JOB, type JobInfo, type Level } from "./profile";
 
 export interface RolePreset {
   id: string;
   company: string;
   role: string;
-  displayRole?: string;
   level: Level;
 }
 
 export const ROLE_PRESETS: RolePreset[] = [
-  { id: "solana-fintech", company: "Solana", role: "FinTech Engineer", level: "mid" },
-  { id: "stripe-backend", company: "Stripe", role: "Backend Engineer", displayRole: "Backend Engineer", level: "mid" },
-  { id: "google-swe-intern", company: "Google", role: "Software Engineer Intern", displayRole: "SWE Intern", level: "intern" },
-  { id: "amazon-distsys", company: "Amazon", role: "Distributed Systems Engineer", displayRole: "Distributed Systems", level: "mid" },
-  { id: "meta-systems", company: "Meta", role: "Systems & Infrastructure Engineer", displayRole: "Systems", level: "senior" },
+  { id: "stripe-backend", company: "Stripe", role: "Backend Engineer", level: "mid" },
+  { id: "google-swe-intern", company: "Google", role: "Software Engineer Intern", level: "intern" },
+  { id: "amazon-distsys", company: "Amazon", role: "Distributed Systems Engineer", level: "mid" },
+  { id: "meta-systems", company: "Meta", role: "Systems & Infrastructure Engineer", level: "senior" },
 ];
 
 export function applyPreset(job: JobInfo, preset: RolePreset): JobInfo {
@@ -25,55 +32,55 @@ export function applyPreset(job: JobInfo, preset: RolePreset): JobInfo {
 interface Props {
   job: JobInfo;
   onPick: (job: JobInfo) => void;
+  /** "hero" is compact; "setup" sits above the form fields. */
   tone?: "hero" | "setup";
   className?: string;
 }
 
-export function RolePresets({ job, onPick, className = "" }: Props) {
+export function RolePresets({ job, onPick, tone = "setup", className = "" }: Props) {
   const selected = ROLE_PRESETS.find((p) => p.company === job.company && p.role === job.role);
 
   return (
-    <fieldset className={className} data-testid="role-presets">
-      <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Practicing for
-      </legend>
-      <div className="mt-3 flex flex-wrap gap-2">
+    <div className={className} data-testid="role-presets">
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-zinc-400">
+        {tone === "hero" ? "Practising for" : "Quick-fill a target"}
+      </p>
+      <ul className="mt-2.5 flex flex-wrap gap-2">
         {ROLE_PRESETS.map((p) => {
           const active = selected?.id === p.id;
           return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => onPick(applyPreset(job, p))}
-              aria-pressed={active}
-              data-testid={`role-preset-${p.id}`}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                active
-                  ? "border-foreground bg-foreground text-background shadow-sm"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              }`}
-            >
-              <span className={active ? "text-background/70 font-medium" : "text-muted-foreground"}>
-                {p.company}
-              </span>
-              <span aria-hidden="true" className={active ? "text-background/40" : "text-border"}>
-                ·
-              </span>
-              <span className="font-semibold">{p.displayRole || p.role}</span>
-            </button>
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => onPick(applyPreset(job, p))}
+                aria-pressed={active}
+                data-testid={`role-preset-${p.id}`}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-left text-[13px] font-semibold transition-colors ${
+                  active
+                    ? "bg-[#E11D48] text-white"
+                    : "bg-white/[0.06] text-zinc-100 hover:bg-white/[0.1] hover:text-rose-200"
+                }`}
+              >
+                <span className={active ? "text-white/70" : "text-rose-400"}>{p.company}</span>
+                <span aria-hidden className={active ? "text-white/40" : "text-zinc-400"}>·</span>
+                <span>{p.role}</span>
+              </button>
+            </li>
           );
         })}
         {selected && (
-          <button
-            type="button"
-            onClick={() => onPick({ ...job, ...EMPTY_JOB, listing: job.listing })}
-            data-testid="role-preset-clear"
-            className="inline-flex items-center rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted"
-          >
-            Clear
-          </button>
+          <li>
+            <button
+              type="button"
+              onClick={() => onPick({ ...job, ...EMPTY_JOB, listing: job.listing })}
+              data-testid="role-preset-clear"
+              className="inline-flex items-center rounded-full px-3 py-2 text-[13px] font-semibold text-zinc-400 transition-colors hover:text-white hover:bg-zinc-900/60"
+            >
+              Clear
+            </button>
+          </li>
         )}
-      </div>
-    </fieldset>
+      </ul>
+    </div>
   );
 }

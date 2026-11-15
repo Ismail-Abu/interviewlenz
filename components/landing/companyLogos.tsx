@@ -75,7 +75,7 @@ export function AmazonLogo() {
         fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         fontWeight="800"
         fontSize="19"
-        fill="#232F3E"
+        fill="#F4F4F5"
         letterSpacing="-0.04em"
       >
         amazon
@@ -163,7 +163,7 @@ export function RampLogo() {
     <svg
       viewBox="282 0 104 88"
       aria-hidden="true"
-      className="h-8 w-8 text-[#0C0A08]"
+      className="h-8 w-8 text-zinc-100"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -177,7 +177,7 @@ export function VercelLogo() {
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className="h-7 w-7 text-ink"
+      className="h-7 w-7 text-zinc-100"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -191,7 +191,7 @@ export function NotionLogo() {
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className="h-8 w-8 text-ink"
+      className="h-8 w-8 text-zinc-100"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -219,7 +219,7 @@ export function LinearLogo() {
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className="h-8 w-8 text-ink"
+      className="h-8 w-8 text-zinc-100"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
     >

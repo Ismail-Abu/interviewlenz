@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ResumeDrop } from "./landing/ResumeDrop";
-import { JobForm } from "./landing/JobForm";
-import { TailorPanel } from "./landing/TailorPanel";
-import { EMPTY_JOB, hasJob, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
+import { useState } from "react";
+import { Wordmark } from "./Logo";
+import { EMPTY_JOB, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
+import { BentoGrid } from "./landing/BentoGrid";
+import { writeSetupSeed } from "./landing/setupSeed";
+import { studio, studioBtn, studioBtnSm } from "./landing/studioUi";
 import { LiveDemoPanel } from "./landing/LiveDemoPanel";
 import { RolePresets } from "./landing/RolePresets";
 import { CompanyRail } from "./landing/CompanyRail";
-import { NavAuth } from "./NavAuth";
-import { SessionHistory } from "./SessionHistory";
 import type { BehavioralContext } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
@@ -20,15 +18,6 @@ export type PracticeMode = "coding" | "behavioral" | "full-mock";
 export async function checkMicrophone(): Promise<MicStatus> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return "unsupported";
   try {
-    if (typeof navigator.permissions?.query === "function") {
-      try {
-        const queryRes = await navigator.permissions.query({ name: "microphone" as PermissionName });
-        if (queryRes.state === "granted") return "granted";
-        if (queryRes.state === "denied") return "denied";
-      } catch {
-        // Fall back to getUserMedia if permissions.query throws (e.g. Safari)
-      }
-    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((t) => t.stop());
     return "granted";
@@ -38,49 +27,38 @@ export async function checkMicrophone(): Promise<MicStatus> {
 }
 
 const MIC_MESSAGE: Record<Exclude<MicStatus, "unchecked">, { icon: string; text: string; tone: string }> = {
-  checking: { icon: "…", text: "Checking your microphone…", tone: "text-muted-foreground" },
-  granted: { icon: "✓", text: "Microphone ready.", tone: "text-emerald-600" },
+  checking: { icon: "…", text: "Checking your microphone…", tone: "text-zinc-300" },
+  granted: { icon: "✓", text: "Microphone ready.", tone: "text-emerald-400" },
   denied: {
     icon: "!",
     text: "Microphone access was blocked. You can still practice: the interviewer will run in scripted mode. To talk out loud, allow the mic from your browser's address bar and reload.",
-    tone: "text-amber-700",
+    tone: "text-amber-300",
   },
   unsupported: {
     icon: "!",
     text: "This browser can't use a microphone here (it needs HTTPS or localhost). You can still practice in scripted mode.",
-    tone: "text-amber-700",
+    tone: "text-amber-300",
   },
 };
 
 interface Props {
   micStatus: MicStatus;
   onMicStatus: (s: MicStatus) => void;
+  // profile: local profile with optional job/resume info
+  // mode: "coding" | "behavioral" | "full-mock"
+  // context: confirmed behavioral personalization from TailorPanel
   onStart: (profile: CandidateProfile, mode: PracticeMode, context?: BehavioralContext) => void;
+  // Primary action: open "What are you applying for?" (application-first flow).
+  // Optional so the screen still works standalone (then it scrolls to the modes).
   onApply?: () => void;
 }
 
-export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
+export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props) {
   const [starting, setStarting] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<PracticeMode>("coding");
-  const [resume, setResume] = useState<ResumeImage[]>([]);
+  const [resume] = useState<ResumeImage[]>([]);
   const [job, setJob] = useState<JobInfo>(EMPTY_JOB);
-  const [context, setContext] = useState<BehavioralContext | undefined>(undefined);
-
-  // Proactively request microphone permission on page load so candidates never get interrupted during navigation
-  useEffect(() => {
-    if (micStatus === "unchecked") {
-      let active = true;
-      onMicStatus("checking");
-      void checkMicrophone().then((status) => {
-        if (active) onMicStatus(status);
-      });
-      return () => {
-        active = false;
-      };
-    }
-  }, [micStatus, onMicStatus]);
-
-  const provided = resume.length > 0 || hasJob(job);
+  // No tailoring on the homepage any more; behavioral context comes from setup.
+  const context: BehavioralContext | undefined = undefined;
 
   async function testMic() {
     onMicStatus("checking");
@@ -88,7 +66,7 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   }
 
   // Check the mic on the way in if unchecked, but never block on it.
-  async function start(mode: PracticeMode = selectedMode, ctx?: BehavioralContext) {
+  async function start(mode: PracticeMode = "coding", ctx?: BehavioralContext) {
     setStarting(true);
     if (micStatus === "unchecked") {
       onMicStatus("checking");
@@ -100,375 +78,111 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
 
   const msg = micStatus === "unchecked" ? null : MIC_MESSAGE[micStatus];
 
+  // The setup screen's draft lives outside this component, so a preset picked
+  // here is handed over for this tab only (components/landing/setupSeed.ts).
+  function buildInterview() {
+    if (job.role.trim() || job.company.trim()) writeSetupSeed(job);
+    onApply?.();
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground [color-scheme:light]">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
-          <div className="flex items-center gap-4">
-            <Link
-              className="inline-flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Interviewlenz home"
-              href="/"
-            >
-              <svg
-                className="shrink-0 text-primary h-[22px] w-5"
-                viewBox="0 0 356 394"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M170 0a170 170 0 1 0 0 340a170 170 0 1 0 0-340zm0 39a131 131 0 1 1 0 262a131 131 0 1 1 0-262z"
-                />
-                <path
-                  d="M232 316 L324 246 L352 383 Q353 391 345 388 Z"
-                  stroke="currentColor"
-                  strokeWidth="6"
-                  strokeLinejoin="round"
-                />
-                <rect x="83" y="136" width="27" height="66" rx="13.5" />
-                <rect x="130" y="98" width="27" height="139" rx="13.5" />
-                <rect x="177" y="121" width="27" height="96" rx="13.5" />
-                <rect x="223" y="146" width="27" height="48" rx="13.5" />
-              </svg>
-              <span className="text-[17px] font-semibold tracking-tight text-foreground font-brand">
-                Interviewlenz
-              </span>
-            </Link>
-
-            <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  micStatus === "granted"
-                    ? "bg-success"
-                    : micStatus === "checking"
-                    ? "bg-amber-500 animate-pulse"
-                    : micStatus === "denied"
-                    ? "bg-rose-500"
-                    : "bg-success live-dot"
-                }`}
-                aria-hidden="true"
-              />
-              {micStatus === "checking"
-                ? "Connecting Microphone…"
-                : micStatus === "granted"
-                ? "Microphone Connected"
-                : micStatus === "denied"
-                ? "Mic Blocked (Scripted Mode)"
-                : "Live Voice Engine Ready"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <NavAuth />
-            <button
-              type="button"
-              onClick={() => start(selectedMode)}
-              disabled={starting}
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px rounded-md text-xs h-9 px-4"
-            >
-              Start Interview
-            </button>
-          </div>
-        </div>
+    <div className={studio.page}>
+      <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 pt-6 sm:px-8 lg:px-10">
+        <Wordmark size={28} tone="dark" />
+        <span className="hidden items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] text-zinc-300 sm:inline-flex">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
+          No sign-up · Python in your browser · Free
+        </span>
       </header>
 
-      <main>
-        {/* Hero Section */}
-        <section className="mx-auto max-w-6xl px-5 pb-14 pt-12 sm:px-8 sm:pt-16 lg:pb-20">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:hidden">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                micStatus === "granted"
-                  ? "bg-success"
-                  : micStatus === "checking"
-                  ? "bg-amber-500 animate-pulse"
-                  : micStatus === "denied"
-                  ? "bg-rose-500"
-                  : "bg-success live-dot"
-              }`}
-              aria-hidden="true"
-            />
-            {micStatus === "checking"
-              ? "Connecting Microphone…"
-              : micStatus === "granted"
-              ? "Microphone Connected"
-              : micStatus === "denied"
-              ? "Mic Blocked (Scripted Mode)"
-              : "Live Voice Engine Ready"}
-          </span>
-
-          <h1 className="mt-5 max-w-3xl text-[42px] font-semibold leading-[1.02] tracking-[-0.035em] text-foreground sm:mt-0 sm:text-6xl lg:text-[72px]">
-            The mock interview that actually{" "}
-            <span className="font-display text-[1.08em] font-normal italic tracking-[-0.01em]">
-              listens.
+      <main className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+        {/* Hero */}
+        <section className="grid items-center gap-10 pb-14 pt-10 lg:grid-cols-[46fr_54fr] lg:gap-12 lg:pt-16">
+          <div className="flex min-w-0 flex-col items-start">
+            <span className={studio.eyebrow}>
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.9)]" />
+              Live voice interview
             </span>
-          </h1>
 
-          <p className="mt-6 max-w-2xl text-[17px] leading-relaxed text-muted-foreground sm:text-lg">
-            Practice coding and behavioral rounds with an AI interviewer that hears your reasoning out loud, evaluates
-            your code, and asks realistic follow-up questions in real time.
-          </p>
+            <h1 className="mt-6 font-brand text-[40px] font-bold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[52px]">
+              It asks you
+              <br />
+              the{" "}
+              <span className="whitespace-nowrap bg-gradient-to-r from-[#FB7185] to-[#F43F5E] bg-clip-text text-transparent [filter:drop-shadow(0_0_18px_rgba(244,63,94,0.45))]">
+                follow-up
+              </span>
+              <br />
+              question.
+            </h1>
 
-          <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div className="flex flex-col gap-7">
-              <RolePresets job={job} onPick={setJob} />
+            <p className="mt-6 max-w-[30rem] text-[17px] leading-relaxed text-zinc-300">
+              Not a grader. An interviewer that hears your reasoning, reads the code you just ran, and pushes back when the two
+              disagree.
+            </p>
 
-              <div role="radiogroup" aria-label="Interview mode" className="flex flex-col gap-2 sm:flex-row">
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedMode === "coding"}
-                  onClick={() => {
-                    setSelectedMode("coding");
-                    start("coding");
-                  }}
-                  data-testid="start-coding"
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
-                    selectedMode === "coding"
-                      ? "border-foreground bg-background text-foreground shadow-card"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded-full border ${
-                      selectedMode === "coding" ? "border-foreground" : "border-muted-foreground/50"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {selectedMode === "coding" && <span className="h-2 w-2 rounded-full bg-foreground" />}
-                  </span>
-                  Technical Coding Interview (Python)
+            <RolePresets job={job} onPick={setJob} tone="hero" className="mt-8 w-full" />
+
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              {onApply ? (
+                <button type="button" onClick={buildInterview} data-testid="hero-start-practice" className={`${studioBtn.primary} min-w-52`}>
+                  Build My Interview <span aria-hidden>→</span>
                 </button>
-
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedMode === "behavioral"}
-                  onClick={() => {
-                    setSelectedMode("behavioral");
-                    start("behavioral");
-                  }}
-                  data-testid="start-behavioral"
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
-                    selectedMode === "behavioral"
-                      ? "border-foreground bg-background text-foreground shadow-card"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded-full border ${
-                      selectedMode === "behavioral" ? "border-foreground" : "border-muted-foreground/50"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {selectedMode === "behavioral" && <span className="h-2 w-2 rounded-full bg-foreground" />}
-                  </span>
-                  Behavioral Deep-Dive Interview
-                </button>
-
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedMode === "full-mock"}
-                  onClick={() => {
-                    setSelectedMode("full-mock");
-                    start("full-mock");
-                  }}
-                  data-testid="start-full-mock"
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
-                    selectedMode === "full-mock"
-                      ? "border-foreground bg-background text-foreground shadow-card"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded-full border ${
-                      selectedMode === "full-mock" ? "border-foreground" : "border-muted-foreground/50"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {selectedMode === "full-mock" && <span className="h-2 w-2 rounded-full bg-foreground" />}
-                  </span>
-                  Full Mock Loop
-                </button>
-              </div>
+              ) : (
+                <a href="#bento-heading" data-testid="hero-start-practice" className={`${studioBtn.primary} min-w-52`}>
+                  Build My Interview <span aria-hidden>→</span>
+                </a>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => start(selectedMode)}
-              disabled={starting}
-              data-testid="hero-start-practice"
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px h-12 rounded-xl px-6 text-[15px] font-semibold w-full sm:w-auto"
-            >
-              Launch Interview Session
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-arrow-right"
-                aria-hidden="true"
-              >
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
-              </svg>
-            </button>
+            {/* Quick standalone rounds (no plan). */}
+            <div className="mt-5 flex flex-wrap items-center gap-2" aria-label="Quick rounds without a plan">
+              <span className="mr-1 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Quick round</span>
+              <button type="button" onClick={() => start("coding")} disabled={starting} data-testid="start-coding" className={studioBtnSm.secondary}>
+                Technical coding
+              </button>
+              <button type="button" onClick={() => start("behavioral")} disabled={starting} data-testid="start-behavioral" className={studioBtnSm.secondary}>
+                Behavioral
+              </button>
+              <button type="button" onClick={() => start("full-mock")} disabled={starting} data-testid="start-full-mock" className={studioBtnSm.secondary}>
+                Full mock
+              </button>
+              {/* Hooks for scripts that start a round directly. */}
+              <button type="button" onClick={() => start("coding")} disabled={starting} data-testid="start-practice" className="sr-only" tabIndex={-1}>
+                Start a coding round now
+              </button>
+            </div>
           </div>
 
-          {/* Proactive mic status feedback */}
-          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            {micStatus === "granted" && (
-              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Microphone connected and ready for live voice interview
-              </span>
-            )}
-            {micStatus === "checking" && (
-              <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                Prompting for microphone permission…
-              </span>
-            )}
-            {micStatus === "denied" && (
-              <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
-                Microphone blocked — practice runs seamlessly in interactive text mode
-              </span>
-            )}
+          <div className="min-w-0">
+            <LiveDemoPanel />
           </div>
-
-          {/* Hidden helper links for browser automation / direct anchors */}
-          <button
-            type="button"
-            onClick={() => start("coding")}
-            disabled={starting}
-            data-testid="start-practice"
-            className="sr-only"
-          >
-            Start a coding round now
-          </button>
-          <button
-            type="button"
-            onClick={() => start("behavioral")}
-            disabled={starting}
-            data-testid="skip-behavioral"
-            className="sr-only"
-          >
-            Start behavioral round now
-          </button>
         </section>
 
-        <SessionHistory />
-
-        {/* Live Product Preview */}
-        <section aria-label="Live product preview" className="mx-auto max-w-6xl px-5 sm:px-8">
-          <LiveDemoPanel />
-        </section>
-
-        {/* Company Styles Rail */}
         <CompanyRail />
 
-        {/* Optional Tailoring & Mic Test Section */}
-        <section id="setup" className="mx-auto max-w-6xl px-5 sm:px-8 py-8 border-t border-border">
-          <details className="group rounded-2xl border border-border bg-card p-5 shadow-card">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold text-foreground [&::-webkit-details-marker]:hidden">
-              <span className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-semibold">Tailor your interview (optional)</span>
-                {provided && (
-                  <span
-                    className="rounded-full bg-muted border border-border px-3 py-0.5 text-xs font-medium text-foreground"
-                    data-testid="setup-summary"
-                  >
-                    {resume.length > 0 ? `${resume.length} page${resume.length > 1 ? "s" : ""}` : ""}
-                    {resume.length > 0 && hasJob(job) ? " · " : ""}
-                    {hasJob(job) ? job.role.trim() || "job added" : ""}
-                  </span>
-                )}
-              </span>
-              <span aria-hidden className="text-xs text-muted-foreground transition-transform group-open:rotate-180">
-                ▼
-              </span>
-            </summary>
+        <BentoGrid onTryVoice={() => start("behavioral")} disabled={starting} />
+      </main>
 
-            <div className="mt-5 flex flex-col gap-6 pt-2">
-              <div className="grid gap-4 text-xs text-muted-foreground sm:grid-cols-2">
-                <div className="rounded-xl border border-border bg-background p-4">
-                  <div className="mb-1 font-semibold text-foreground">For coding rounds</div>
-                  <p>
-                    Job details personalize your interviewer&apos;s framing and report feedback. Resume images stay local in
-                    your browser.
-                  </p>
-                </div>
-                <div className="rounded-xl border border-border bg-background p-4">
-                  <div className="mb-1 font-semibold text-foreground">For behavioral rounds</div>
-                  <p>
-                    Prepare interview extracts one project and one focus skill from your resume pages and listing. Review
-                    and edit before starting.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-5 lg:grid-cols-2">
-                <div className="rounded-xl border border-border bg-background p-4">
-                  <h3 className="mb-1 text-sm font-semibold text-foreground">Your resume</h3>
-                  <p className="mb-3 text-xs text-muted-foreground">Screenshots of your resume pages (up to 4 pages).</p>
-                  <ResumeDrop images={resume} onChange={setResume} />
-                </div>
-                <div className="rounded-xl border border-border bg-background p-4">
-                  <h3 className="mb-1 text-sm font-semibold text-foreground">Target role</h3>
-                  <p className="mb-3 text-xs text-muted-foreground">Enter your target role or paste the job posting.</p>
-                  <JobForm job={job} onChange={setJob} />
-                </div>
-              </div>
-
-              <TailorPanel
-                resume={resume}
-                job={job}
-                onContextChange={setContext}
-                onStartGeneric={() => start("behavioral")}
-              />
-            </div>
-          </details>
-
-          <div className="mt-4 flex min-h-[2.5rem] items-center">
+      <footer className="border-t border-white/[0.06]">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-sm text-zinc-400 sm:px-8 lg:px-10">
+          <span className="flex items-center gap-3">
+            <Wordmark size={20} tone="dark" />
+            <span>Built for Hack the Nest 2026.</span>
+          </span>
+          <span className="flex min-h-[2rem] items-center">
             {msg ? (
-              <p
-                className={`flex max-w-2xl items-center gap-2 text-xs font-medium ${msg.tone}`}
-                role="status"
-                data-testid="mic-status"
-              >
+              <span className={`flex items-center gap-2 ${msg.tone}`} role="status" data-testid="mic-status">
                 <span aria-hidden className="font-bold">
                   {msg.icon}
                 </span>
                 <span>{msg.text}</span>
-              </p>
+              </span>
             ) : (
-              <button
-                type="button"
-                onClick={testMic}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted"
-              >
-                <span aria-hidden>🎙️</span>
-                <span>Test my microphone</span>
+              <button type="button" onClick={testMic} className="text-zinc-300 underline-offset-4 hover:text-white hover:underline">
+                Test my microphone
               </button>
             )}
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-background">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-sm text-muted-foreground sm:px-8">
-          <span>© 2026 Interviewlenz</span>
-          <span>Hack The Nest 2026</span>
+          </span>
         </div>
       </footer>
     </div>

@@ -8,14 +8,14 @@ interface Props {
 }
 
 const field =
-  "w-full rounded-[14px] bg-white px-3 py-2.5 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] placeholder:text-[#8a7b70] focus:ring-2 focus:ring-maroon-soft";
+  "w-full rounded-[14px] bg-[#0C0D12] px-3 py-2.5 text-base text-zinc-100 ring-1 ring-inset ring-white/15 placeholder:text-zinc-500 focus:ring-2 focus:ring-rose-500/40";
 
 export function JobForm({ job, onChange }: Props) {
   const set = <K extends keyof JobInfo>(k: K, v: JobInfo[K]) => onChange({ ...job, [k]: v });
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-100">
           Company
           <input
             className={field}
@@ -26,7 +26,7 @@ export function JobForm({ job, onChange }: Props) {
             name="company"
           />
         </label>
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-100">
           Role
           <input
             className={field}
@@ -38,7 +38,7 @@ export function JobForm({ job, onChange }: Props) {
           />
         </label>
       </div>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-100">
         Level
         <select className={field} value={job.level} onChange={(e) => set("level", e.target.value as Level)} name="level">
           {LEVELS.map((l) => (
@@ -48,7 +48,7 @@ export function JobForm({ job, onChange }: Props) {
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-100">
         Job listing
         <textarea
           className={`${field} min-h-36 resize-y leading-relaxed`}
@@ -57,7 +57,7 @@ export function JobForm({ job, onChange }: Props) {
           placeholder="Paste the responsibilities and requirements from the posting."
           name="listing"
         />
-        <span className="text-xs font-normal text-ink-muted">{job.listing.trim().split(/\s+/).filter(Boolean).length} words</span>
+        <span className="text-xs font-normal text-zinc-400">{job.listing.trim().split(/\s+/).filter(Boolean).length} words</span>
       </label>
     </div>
   );
