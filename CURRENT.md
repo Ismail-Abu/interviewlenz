@@ -803,3 +803,9 @@ Ismail requested on-demand ElevenLabs audio for behavioral questions and scoreca
 Files: sponsor API routes, lib/solana.ts, optional Report fields, ReadAloud, ReportExtras, the behavioral room, both report views, RolePresets, environment examples, dependency lock and offline sponsor checks. The Run button and existing test IDs are preserved.
 
 Validation: lint and production build passed, all 18 CI checks passed. Chrome at 390×844 selected the Solana preset, replayed the current question, and read the debrief with browser speech stubbed. No horizontal overflow appeared in that report. Local transaction signing was exercised with an ephemeral test issuer and stubbed Devnet RPC. Live ElevenLabs audio and a confirmed Devnet transaction require deployment credentials and a funded Devnet fee payer.
+
+## Line-by-line coding feedback • November 15
+
+Ismail requested immediate code updates on completed lines so Gemini can suggest changes. Monaco now flushes the latest version synchronously on line breaks, multiline replacements/pastes and line joins. Mid-line edits retain the existing bounded 250 ms scheduler. Live retains its turn and reconnect guards. The technical interviewer can give a specific, small alteration at the next coaching turn or on request; unrun drafts carry no test score. No automatic editor changes.
+
+Verified lint, production build and all 19 CI suites, including line-event timing with a virtual clock. In Chrome, Enter and a multiline edit reached the injected Live client before the Monaco event returned. Real Gemini speech latency and hint quality remain unverified.

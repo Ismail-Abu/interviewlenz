@@ -205,7 +205,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   });
 
   // Code-context sync (B5): the real client gets the editor buffer silently via
-  // syncCode, once on connect and after a typing pause. Refs, not state, so a
+  // syncCode, on connect, on line breaks and during typing. Refs, not state, so a
   // timer or a just-resolved connect always sees the latest buffer.
   const latest = useRef({ codeVersion: 1, source: problem.starterCode });
   const lastSyncedVersion = useRef<number | null>(null);
@@ -239,10 +239,6 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     sync().cancel();
   }
 
-  function scheduleSync() {
-    if (!syncEnabled.current) return;
-    sync().schedule();
-  }
 
   async function handleConnect() {
     setLiveError(null);
@@ -369,12 +365,12 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     setLiveError(null);
   }
 
-  function handleEdit(next: string) {
+  function handleEdit(next: string, lineBoundary: boolean) {
     const v = latest.current.codeVersion + 1;
     latest.current = { codeVersion: v, source: next };
     setSource(next);
     setCodeVersion(v);
-    scheduleSync();
+    if (syncEnabled.current) sync().schedule(lineBoundary);
   }
 
   async function handleRun() {

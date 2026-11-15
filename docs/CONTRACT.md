@@ -307,7 +307,7 @@ These describe the browser `LiveClient` (`lib/live.ts`) and the `createLiveClien
 
 ### syncCode (silent code context)
 
-`syncCode(snapshot: CodeSnapshot): void` (optional on `LiveClient`) makes the current code available to the model as silent context (`turnComplete:false`); a typing pause never asks a question. Call it once after a successful `connect` (initial sync) and after a ~2s editing pause. Coalesced to the latest version; a version that has run is sent as run evidence instead of "not run yet".
+`syncCode(snapshot: CodeSnapshot): void` (optional on `LiveClient`) makes the current code available to the model as silent context (`turnComplete:false`); a typing pause never asks a question. The editor syncs on connect and immediately on any change that inserts or removes a line break. Mid-line keystrokes share a 250 ms window. While the model is speaking or the connection is down, the client retains the newest version until delivery can resume. Coalesced to the latest version; a version that has run is sent as run evidence instead of "not run yet".
 
 ### Run evidence vs spoken follow-up
 

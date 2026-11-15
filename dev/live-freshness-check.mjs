@@ -57,7 +57,7 @@ function makeClock() {
   return { clock, advance, time: () => now };
 }
 
-const { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } = await import(
+const { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS, changesLineBoundary } = await import(
   pathToFileURL(join(ROOT, "lib", "codeSync.ts")).href
 );
 
@@ -70,6 +70,23 @@ console.log(`== A. Scheduling (interval ${DEFAULT_SYNC_INTERVAL_MS} ms, virtual 
   const s = new CodeSyncScheduler(() => sends.push(clock.now()), DEFAULT_SYNC_INTERVAL_MS, clock);
   s.schedule();
   assert("A1 first edit after a quiet period is sent immediately", sends.length === 1 && sends[0] === 0);
+}
+
+// A line break immediately replaces a previously scheduled mid-line edit.
+{
+  const { clock, advance, time } = makeClock();
+  const sends = [];
+  const scheduler = new CodeSyncScheduler(() => sends.push(time()), DEFAULT_SYNC_INTERVAL_MS, clock);
+  const change = (text, endLineNumber = 1) => ({ text, range: { startLineNumber: 1, endLineNumber } });
+  scheduler.schedule();
+  advance(10);
+  scheduler.schedule(changesLineBoundary([change("x")]));
+  advance(1);
+  scheduler.schedule(changesLineBoundary([change("\n    ")]));
+  scheduler.schedule(changesLineBoundary([change("x"), change("one\r\ntwo")]));
+  scheduler.schedule(changesLineBoundary([change("", 2)]));
+  advance(DEFAULT_SYNC_INTERVAL_MS);
+  assert("Enter, multiline paste and line deletion each flush immediately without stale trailing sends", JSON.stringify(sends) === "[0,11,11,11]");
 }
 
 // A2 continuous typing: every edit reaches a send within the interval, and the

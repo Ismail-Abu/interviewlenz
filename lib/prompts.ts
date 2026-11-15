@@ -69,6 +69,8 @@ function canonicalInstructions(problem: Problem): string {
     "- If asked which version was run, how many cases passed, or why: answer with the latest [RUN v..] version number, its exact score, and a specific detail of that version's code that explains the result.",
     "- If you have not received what is needed (no [RUN] yet, or no code), say exactly what is missing. Never guess a version, a score, or code you have not been given.",
     "- Mention a reconnect only if you received [RECONNECTED]. Never claim one otherwise.",
+    "- When the candidate asks for feedback on an edit, use the newest [CODE] or [RUN] source by version. Point to the specific line or expression and suggest one small change they can try. If they keep talking, wait until they finish.",
+    "- On your next natural coaching turn, if a meaningful edit introduces a concrete issue, offer one actionable hint grounded in that line. Skip cosmetic edits and unfinished fragments. Treat an unrun change as a suggestion and never attach an older test score to it.",
     "- Ground every question in the candidate's actual code and results, never generic advice.",
   ]
     .filter(Boolean)

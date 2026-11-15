@@ -18,6 +18,16 @@
 // and there is no queue to grow unbounded: the "queue" is a single slot holding
 // the latest version.
 
+// Monaco reports all changes in one transaction for paste, undo and multi-cursor edits.
+export function changesLineBoundary(changes: readonly {
+  text: string;
+  range: { startLineNumber: number; endLineNumber: number };
+}[]): boolean {
+  return changes.some(({ text, range }) =>
+    range.startLineNumber !== range.endLineNumber || /[\r\n]/.test(text)
+  );
+}
+
 export interface SyncClock {
   now(): number;
   setTimeout(fn: () => void, ms: number): unknown;
@@ -51,7 +61,11 @@ export class CodeSyncScheduler {
 
   // Call on every editor change. Sends now when the window is open, otherwise
   // coalesces into the one pending flush.
-  schedule(): void {
+  schedule(lineBoundary = false): void {
+    if (lineBoundary) {
+      this.flushNow();
+      return;
+    }
     const since = this.clock.now() - this.lastSentAt;
     if (since >= this.intervalMs) {
       this.cancel();
