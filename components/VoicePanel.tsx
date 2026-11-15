@@ -28,17 +28,28 @@ interface Props {
 const STATE_STYLE: Record<LiveState, { label: string; dot: string; text: string }> = {
   connecting: { label: "Connecting…", dot: "bg-amber-400 animate-pulse", text: "text-amber-300" },
   listening: { label: "Listening", dot: "bg-emerald-400 animate-pulse", text: "text-emerald-300" },
-  speaking: { label: "Interviewer speaking", dot: "bg-brand-coral animate-pulse", text: "text-brand-coral" },
+  speaking: { label: "Interviewer speaking", dot: "bg-maroon-soft animate-pulse", text: "text-maroon-soft" },
   idle: { label: "Paused", dot: "bg-zinc-500", text: "text-zinc-400" },
   error: { label: "Error", dot: "bg-red-500", text: "text-red-400" },
 };
 
 export function VoicePanel(p: Props) {
   const listRef = useRef<HTMLOListElement>(null);
+  // Follow the newest turn, but don't yank the view back if the student has
+  // scrolled up to re-read something. Measured before the paint that adds the
+  // new turn, so "was at the bottom" means the state they were in.
+  const wasAtBottom = useRef(true);
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (wasAtBottom.current) el.scrollTop = el.scrollHeight;
   }, [p.turns.length]);
+
+  function onScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    wasAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }
 
   const s = p.disconnected
     ? p.reconnecting
@@ -103,7 +114,10 @@ export function VoicePanel(p: Props) {
           </span>
         )}
         {s && (
-          <span className={`flex items-center gap-2 text-sm font-medium ${s.text}`} aria-live="polite">
+          <span
+            className={`inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-3 py-1 text-sm font-medium ${s.text}`}
+            aria-live="polite"
+          >
             <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} aria-hidden />
             {s.label}
           </span>
@@ -117,7 +131,13 @@ export function VoicePanel(p: Props) {
         </div>
       )}
 
-      <ol ref={listRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 pb-4">
+      <ol
+        ref={listRef}
+        onScroll={onScroll}
+        tabIndex={0}
+        aria-label="Interview transcript"
+        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-6 pb-4"
+      >
         {p.turns.length === 0 && (
           <li className="text-base text-zinc-500">
             {p.connected
@@ -130,19 +150,26 @@ export function VoicePanel(p: Props) {
             )}
           </li>
         )}
-        {p.turns.map((t) => (
-          <li
-            key={t.id}
-            className={`max-w-[92%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed ${
-              t.speaker === "student" ? "self-end bg-zinc-800 text-zinc-100" : "self-start bg-brand-coral/10 text-zinc-50"
-            }`}
-          >
-            <div className="mb-0.5 text-xs uppercase tracking-wide text-zinc-500">
-              {t.speaker === "student" ? "You" : "Interviewer"} · {t.id}
-            </div>
-            {t.text}
-          </li>
-        ))}
+        {p.turns.map((t) => {
+          const student = t.speaker === "student";
+          return (
+            <li
+              key={t.id}
+              className={`max-w-[88%] rounded-[22px] px-4 py-3 text-[15px] leading-relaxed ${
+                student ? "self-end bg-[#332C29] text-zinc-100" : "self-start bg-maroon text-[#FFF4F6]"
+              }`}
+            >
+              <div
+                className={`mb-1 text-[10.5px] font-bold uppercase tracking-[0.08em] ${
+                  student ? "text-zinc-400" : "text-[#F2C9D2]"
+                }`}
+              >
+                {student ? "You" : "Interviewer"} · {t.id}
+              </div>
+              {t.text}
+            </li>
+          );
+        })}
       </ol>
     </section>
   );
