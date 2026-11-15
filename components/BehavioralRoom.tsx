@@ -6,6 +6,7 @@ import { ReadAloud } from "./ReadAloud";
 import { VoicePanel } from "./VoicePanel";
 import { Wordmark } from "./Logo";
 import { AudioVisualizer } from "./behavioral/AudioVisualizer";
+import { FINAL_WARN_AT_MS, WARN_AT_MS, describeClock, formatClock } from "./roundClock";
 
 type VoiceProps = ComponentProps<typeof VoicePanel>;
 
@@ -15,6 +16,30 @@ interface Props {
   // Shown under the title when the interview was tailored (confirmed focus only).
   focusLabel?: string;
   onFinish: () => void;
+  // Countdown for this attempt. It starts with the interview and finishes the
+  // round at zero (ProblemRoom owns the clock and the auto-finish).
+  clock: { started: boolean; elapsedMs: number; limitMs: number };
+}
+
+function Countdown({ clock }: { clock: Props["clock"] }) {
+  const left = Math.max(0, clock.limitMs - clock.elapsedMs);
+  const tone = !clock.started
+    ? "border-border bg-card text-muted-foreground"
+    : left <= FINAL_WARN_AT_MS
+      ? "border-red-200 bg-red-50 text-red-700"
+      : left <= WARN_AT_MS
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-border bg-card text-foreground";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 font-mono text-sm font-semibold tabular-nums ${tone}`}
+      data-testid="round-clock"
+      role="timer"
+      aria-label={clock.started ? `${describeClock(left)} left of ${describeClock(clock.limitMs)}` : `${describeClock(clock.limitMs)} limit, starts with the interview`}
+    >
+      <span aria-hidden="true">{clock.started ? `${formatClock(left)} left` : `${formatClock(clock.limitMs)} limit`}</span>
+    </span>
+  );
 }
 
 // Whose turn it is, in words, from the live state.
@@ -27,7 +52,16 @@ function turnLabel(connected: boolean, state: LiveState | null, disconnected: bo
   return { text: "Your turn — speak naturally out loud", visualizerState: "listening" as const, tone: "text-emerald-700 bg-emerald-50 border-emerald-200" };
 }
 
-export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: Props) {
+export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish, clock }: Props) {
+  const left = clock.limitMs - clock.elapsedMs;
+  // One message per stage, so a screen reader announces each change once.
+  const warning = !clock.started
+    ? null
+    : left <= FINAL_WARN_AT_MS
+      ? "Less than a minute left. Wrap up your answer; the round ends automatically at 0:00."
+      : left <= WARN_AT_MS
+        ? "Two minutes left. Start bringing your answer to its result."
+        : null;
   const question = [...voice.turns].reverse().find((t: TranscriptTurn) => t.speaker === "interviewer");
   const turn = turnLabel(voice.connected, voice.state, voice.disconnected, voice.micOn);
   const studentTurns = voice.turns.filter((t) => t.speaker === "student").length;
@@ -40,9 +74,9 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: P
       {/* Header Bar */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <Wordmark size={22} tone="light" />
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-0.5 text-xs font-semibold text-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-0.5 text-xs font-semibold text-foreground max-sm:hidden">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               Behavioral Deep-Dive Interview
             </span>
@@ -54,6 +88,7 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: P
           </div>
 
           <div className="flex items-center gap-3">
+            <Countdown clock={clock} />
             <span className="text-xs text-muted-foreground max-sm:sr-only" data-testid="session-stats">
               {voice.turns.length} turns · {studentTurns} responses
             </span>
@@ -64,7 +99,8 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: P
               className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium cursor-pointer transition-all bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px py-2 h-9 px-4"
               data-testid="finish-btn"
             >
-              Finish Interview
+              <span className="sm:hidden">Finish</span>
+              <span className="hidden sm:inline">Finish Interview</span>
             </button>
           </div>
         </div>
@@ -72,6 +108,19 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: P
 
       {/* Main Arena */}
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
+        <div role="status" aria-live="polite">
+          {warning && (
+            <p
+              className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                left <= FINAL_WARN_AT_MS ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+              data-testid="time-warning"
+            >
+              {warning}
+            </p>
+          )}
+        </div>
+
         {/* Tailored Focus Chip */}
         {focusLabel && (
           <div className="flex items-center gap-2">
@@ -135,7 +184,8 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish }: P
             <strong className="font-semibold text-foreground">Interview Advice (STAR Method):</strong> Clearly describe
             the <strong>Situation</strong>, the <strong>Task</strong> at hand, your specific individual{" "}
             <strong>Actions</strong>, and the quantifiable <strong>Result</strong>. Click Finish whenever you have
-            completed your responses.
+            completed your responses. You have {formatClock(clock.limitMs)} once the interview starts; the round ends and is
+            scored automatically when time runs out.
           </div>
         </footer>
       </main>
