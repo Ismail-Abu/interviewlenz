@@ -795,3 +795,15 @@ Both viewport sizes: a v3 Run scored 2/4; after editing and finishing, the repor
 1. **Coding Practice:** Start Coding round with mic enabled → Speak initial approach ("I plan to use a hash set") → Interviewer speaks prompt → Run set solution (4/4) → Interviewer asks about space-time complexity.
 2. **Behavioral Practice:** Start Behavioral round → Interviewer asks opening question → Speak engineering project story → Interviewer asks specific follow-up probing a detail from your answer.
 3. **Full Mock:** Complete both rounds back-to-back, verify dual summary cards and quote evidence.
+
+## Sponsor integrations • November 15
+
+Ismail requested on-demand ElevenLabs audio for behavioral questions and scorecard debriefs, a Solana FinTech role preset, and a Devnet proof for each passing round. This branch extends the editorial build at e0ed346. The report route signs only after deriving Solid or Strong from normalized findings. The verify route reads the confirmed memo and issuer. Failures leave the report available. The browser submits no grades to the verification endpoint.
+
+Files: sponsor API routes, lib/solana.ts, optional Report fields, ReadAloud, ReportExtras, the behavioral room, both report views, RolePresets, environment examples, dependency lock and offline sponsor checks. The Run button and existing test IDs are preserved.
+
+Validation: lint and production build passed, all 18 CI checks passed. Chrome at 390×844 selected the Solana preset, replayed the current question, and read the debrief with browser speech stubbed. No horizontal overflow appeared in that report. Local transaction signing was exercised with an ephemeral test issuer and stubbed Devnet RPC. Live ElevenLabs audio and a confirmed Devnet transaction require deployment credentials and a funded Devnet fee payer.
+
+## Remember me • November 15
+
+Production lacks the public SSOJet issuer and client ID. Ismail requested a working Remember me fallback. NavAuth now saves a display name in this browser, supports editing or forgetting it, and shows Sign in when SSOJet is configured. This local preference does not authenticate a user. Mobile Chrome verified save, reload, cancel, removal and cross-tab updates. Lint, production build and all 19 CI suites passed.

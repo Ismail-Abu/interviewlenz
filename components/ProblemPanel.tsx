@@ -11,48 +11,45 @@ function py(value: unknown): string {
 
 export function ProblemPanel({ problem }: { problem: Problem }) {
   return (
-    <section className="flex flex-col gap-6 overflow-y-auto p-6 text-zinc-100">
-      {/* Problem Header */}
-      <div>
-        <div className="mb-2 flex items-center gap-2">
-          <span className="rounded-full bg-maroon/20 border border-maroon/40 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-maroon-soft">
-            Technical Problem
-          </span>
-          <span className="rounded-full bg-white/[0.07] px-2.5 py-0.5 text-[11px] font-mono font-medium text-zinc-400">
-            Python 3
-          </span>
-        </div>
-        <h1 className="font-brand text-2xl sm:text-3xl font-bold tracking-tight text-zinc-50">
-          {problem.title}
-        </h1>
+    <article className="flex flex-col text-foreground">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <span className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+          Python 3
+        </span>
+        <span className="text-xs text-muted-foreground">Easy · Arrays &amp; hashing</span>
       </div>
 
-      {/* Problem Prompt */}
-      <div className="text-[15px] leading-relaxed text-zinc-300 [&_code]:rounded [&_code]:bg-white/[0.08] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_code]:text-[#F4EBE2] [&_p]:mb-3 [&_strong]:text-zinc-50">
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+        {problem.title}
+      </h1>
+
+      {/* Prompt */}
+      <div className="mt-3 text-[15px] leading-relaxed text-secondary-foreground/90 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_p]:mb-3">
         <Markdown>{problem.prompt}</Markdown>
       </div>
 
       {/* Examples */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-[#A89C94]">
-          Examples
-        </h2>
+      <h2 className="mt-7 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Examples
+      </h2>
+      <div className="mt-3 flex flex-col gap-3">
         {problem.examples.map((ex, i) => (
           <div
             key={i}
-            className="rounded-[16px] border border-zinc-800/80 bg-[#1A1615] p-4 font-mono text-[13.5px] shadow-sm flex flex-col gap-1.5"
+            className="rounded-xl border border-border bg-card p-4 font-mono text-[13px] leading-relaxed text-secondary-foreground shadow-card"
           >
-            <div className="flex items-baseline gap-2">
-              <span className="text-zinc-500 font-sans text-xs font-semibold uppercase tracking-wider">Input:</span>
-              <span className="text-zinc-100 font-mono">nums = {py(ex.input)}</span>
+            <div>
+              <span className="text-muted-foreground">Input: </span>
+              {/* The example names its own parameters, so the panel adds none. */}
+              <span className="text-foreground">{py(ex.input)}</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-zinc-500 font-sans text-xs font-semibold uppercase tracking-wider">Output:</span>
-              <span className="text-emerald-400 font-mono">{py(ex.output)}</span>
+            <div>
+              <span className="text-muted-foreground">Output: </span>
+              <span className="font-semibold text-emerald-600">{py(ex.output)}</span>
             </div>
             {ex.explanation && (
-              <div className="mt-1 font-sans text-xs text-zinc-400 leading-relaxed border-t border-zinc-800/60 pt-1.5">
-                <span className="font-semibold text-zinc-300">Explanation: </span>
+              <div className="mt-1.5 font-sans text-xs text-muted-foreground border-t border-border/60 pt-1.5">
                 {ex.explanation}
               </div>
             )}
@@ -61,19 +58,17 @@ export function ProblemPanel({ problem }: { problem: Problem }) {
       </div>
 
       {/* Constraints */}
-      <div className="flex flex-col gap-2.5">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-[#A89C94]">
-          Constraints
-        </h2>
-        <ul className="flex flex-col gap-1.5 pl-1 text-[13.5px] text-zinc-300 font-mono">
-          {problem.constraints.map((c) => (
-            <li key={c} className="flex items-baseline gap-2">
-              <span className="text-maroon-soft" aria-hidden="true">•</span>
-              <span>{c}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
+      <h2 className="mt-7 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Constraints
+      </h2>
+      <ul className="mt-3 flex flex-col gap-1.5 text-sm text-secondary-foreground/80 font-mono">
+        {problem.constraints.map((c) => (
+          <li key={c} className="flex gap-2">
+            <span className="text-muted-foreground" aria-hidden="true">•</span>
+            <span>{c}</span>
+          </li>
+        ))}
+      </ul>
+    </article>
   );
 }

@@ -107,11 +107,19 @@ let c = await fresh();
 c.syncCode(snap(1));
 check("1 initial sync: syncCode(v1) -> one silent CODE v1", drain(), JSON.stringify([{ m: ["CODE v1"], tc: false }]));
 
-// 2) Repeated pauses while idle -> one silent send per version (no question).
+// 2) Repeated pauses while idle -> one silent send per version. Since the
+// interviewer now offers at most one remark per edited version, v2's silent
+// write is followed by that remark; v3's write lands at the next boundary.
 c.syncCode(snap(2));
+check("2a idle pause v2 -> silent send, then one remark", drain(),
+  JSON.stringify([{ m: ["CODE v2"], tc: false }, { m: ["CODE v2"], tc: true }]));
+globalThis.__CB__.onmessage({ serverContent: { turnComplete: true } }); // remark ends
+drain();
 c.syncCode(snap(3));
-check("2 repeated idle pauses v2,v3 -> two silent sends", drain(),
-  JSON.stringify([{ m: ["CODE v2"], tc: false }, { m: ["CODE v3"], tc: false }]));
+check("2b next edit v3 -> silent send, then one remark", drain(),
+  JSON.stringify([{ m: ["CODE v3"], tc: false }, { m: ["CODE v3"], tc: true }]));
+globalThis.__CB__.onmessage({ serverContent: { turnComplete: true } });
+drain();
 
 // 3) Edits while the interviewer speaks -> queued, coalesced, flushed at boundary.
 speak();

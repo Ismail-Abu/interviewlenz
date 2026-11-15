@@ -9,6 +9,8 @@ import { VoicePanel } from "./VoicePanel";
 import { BehavioralRoom } from "./BehavioralRoom";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { FullMockSummary } from "./FullMockSummary";
+import { recordAttempt } from "./historyStore";
+import { BEHAVIORAL_LIMIT_MS, describeClock, formatClock, useRoundClock, type RoundTiming } from "./roundClock";
 import { StartScreen, type MicStatus, type PracticeMode } from "./StartScreen";
 import { EMPTY_JOB, hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
 import { ApplicationSetup } from "./flow/ApplicationSetup";
@@ -20,11 +22,11 @@ import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
-import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
+import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { getProblem, randomProblem } from "@/lib/problems";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
-import { btn, coverBtnSm } from "./ui/buttons";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -43,7 +45,31 @@ const EMPTY_ATTEMPT: AttemptData = { turns: [], snapshots: [], runs: [] };
 // keystroke.
 const SYNC_INTERVAL_MS = DEFAULT_SYNC_INTERVAL_MS;
 
-export function ProblemRoom({ problem }: { problem: Problem }) {
+// Newlines only; cheap enough to run on every keystroke.
+function lineCount(source: string): number {
+  let n = 1;
+  for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
+  // Which problem this attempt is on. The prop is only the starting value:
+  // selection happens per attempt on the client, because picking in the server
+  // component would choose once per build and hand everyone the same problem.
+  const [problem, setProblem] = useState<Problem>(initialProblem);
+
+  // Reset the editor for a coding attempt on `next`, which may differ from the
+  // problem just attempted.
+  function loadProblem(next: Problem) {
+    setProblem(next);
+    lastSyncedVersion.current = null;
+    sync().reset();
+    latest.current = { codeVersion: 1, source: next.starterCode };
+    setSource(next.starterCode);
+    setCodeVersion(1);
+    setResult(null);
+    setFromFixture(false);
+  }
   // One Session per attempt, kept in browser memory (CONTRACT.md). IDs are
   // minted on first use in an event handler: Cache Components forbids random
   // values during prerender, and the room never renders them.
@@ -57,7 +83,14 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [codingRecords, setCodingRecords] = useState<AttemptRecord[]>([]);
   const [behavioralRecords, setBehavioralRecords] = useState<AttemptRecord[]>([]);
 
-  const activeRecords = round === "behavioral" ? behavioralRecords : codingRecords;
+  // Round timing (components/roundClock.ts). attemptSeq changes whenever a new
+  // attempt begins, so each attempt gets its own clock.
+  const [attemptSeq, setAttemptSeq] = useState(0);
+  const [timings, setTimings] = useState<Record<string, RoundTiming>>({});
+  const withTiming = (r: AttemptRecord | undefined): AttemptRecord | undefined =>
+    r && timings[r.session.attemptId] ? { ...r, timing: timings[r.session.attemptId] } : r;
+
+  const activeRecords = (round === "behavioral" ? behavioralRecords : codingRecords).map((r) => withTiming(r)!);
 
   const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
@@ -167,6 +200,17 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   // attempt so transcript IDs keep increasing. Retry resets it to 0.
   const turnCount = useRef(0);
 
+  // The technical round is timed from when the room opens, with no limit. The
+  // behavioral round's countdown starts with the interview (first connect or
+  // turn) and finishes the round when it reaches zero.
+  const behavioralStarted = connected || attempt.turns.length > 0;
+  const clockKey =
+    view !== "room" ? null : round === "coding" ? `coding-${attemptSeq}` : behavioralStarted ? `behavioral-${attemptSeq}` : null;
+  const clock = useRoundClock(clockKey, {
+    limitMs: round === "behavioral" ? BEHAVIORAL_LIMIT_MS : undefined,
+    onExpire: () => finishRound(true),
+  });
+
   // Code-context sync (B5): the real client gets the editor buffer silently via
   // syncCode, once on connect and after a typing pause. Refs, not state, so a
   // timer or a just-resolved connect always sees the latest buffer.
@@ -227,6 +271,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             if (!current()) return;
             turnCount.current += 1;
             setAttempt((s) => ({ ...s, turns: [...s.turns, t] }));
+            setTimeout(() => schedulePreload(), 100);
           },
           onError: (e: ApiError) => current() && setLiveError(e),
         },
@@ -332,15 +377,25 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   function handleEdit(next: string) {
+    const prev = latest.current.source;
     const v = latest.current.codeVersion + 1;
     latest.current = { codeVersion: v, source: next };
     setSource(next);
     setCodeVersion(v);
-    scheduleSync();
+
+    // A finished line is the natural unit of "I wrote something": send it at
+    // once rather than waiting out the throttle window, so a question asked
+    // immediately after pressing Enter is answered against the new line.
+    // Mid-line typing still coalesces, so this cannot become one provider
+    // message per keystroke.
+    if (lineCount(next) !== lineCount(prev)) sync().flushNow();
+    else scheduleSync();
   }
 
   async function handleRun() {
-    const snapshot: CodeSnapshot = { codeVersion, source, at: new Date().toISOString() };
+    const curSource = latest.current.source;
+    const curVersion = latest.current.codeVersion;
+    const snapshot: CodeSnapshot = { codeVersion: curVersion, source: curSource, at: new Date().toISOString() };
     setAttempt((s) => ({ ...s, snapshots: [...s.snapshots, snapshot] }));
     setRunning(true);
     try {
@@ -348,9 +403,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         {
           sessionId: ids().sessionId,
           problemId: problem.id,
-          codeVersion,
+          codeVersion: curVersion,
           language: "python",
-          source,
+          source: curSource,
         },
         mode,
       );
@@ -361,8 +416,53 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       if (live.current) {
         lastSyncedVersion.current = Math.max(lastSyncedVersion.current ?? 0, snapshot.codeVersion);
       }
+      setTimeout(() => schedulePreload(), 100);
     } finally {
       setRunning(false);
+    }
+  }
+
+  // Speculative report preloader: evaluates in the background while candidate speaks/codes
+  const preloadedReportRef = useRef<{
+    attemptId: string;
+    key: string;
+    promise: Promise<ReportOutcome>;
+    outcome: ReportOutcome | null;
+  } | null>(null);
+
+  function schedulePreload() {
+    try {
+      const s = fullSession();
+      const isBeh = isBehavioralSession(s);
+      // Need minimum context to evaluate:
+      // For coding: at least 1 test run or 2 spoken turns
+      // For behavioral: at least 2 spoken turns
+      if (!isBeh && s.runs.length === 0 && s.turns.length < 2) return;
+      if (isBeh && s.turns.length < 2) return;
+
+      const lastSnap = !isBeh && s.snapshots.length > 0 ? s.snapshots[s.snapshots.length - 1].codeVersion : 0;
+      const lastRun = !isBeh && s.runs.length > 0 ? s.runs[s.runs.length - 1].codeVersion : 0;
+      const key = `${s.attemptId}:snap${lastSnap}:run${lastRun}:turns${s.turns.length}`;
+
+      if (preloadedReportRef.current?.key === key) return;
+
+      const promise = requestReport(s, reportMode)
+        .then((res) => {
+          if (preloadedReportRef.current?.key === key) {
+            preloadedReportRef.current.outcome = res;
+          }
+          return res;
+        })
+        .catch(() => null as unknown as ReportOutcome);
+
+      preloadedReportRef.current = {
+        attemptId: s.attemptId,
+        key,
+        promise,
+        outcome: null,
+      };
+    } catch {
+      // Preload is non-blocking
     }
   }
 
@@ -373,10 +473,30 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       else setCodingRecords(fn);
     };
 
-    updateRecords((rs) =>
-      rs.map((r) => (r.session.attemptId === target.attemptId ? { session: target, status: "loading" } : r)),
-    );
-    const outcome = await requestReport(target, reportMode);
+    const cached = preloadedReportRef.current;
+    let outcome: ReportOutcome | null = null;
+
+    // Check if a preloaded report is ready or in-flight for this attempt
+    if (cached && cached.attemptId === target.attemptId) {
+      if (cached.outcome && cached.outcome.ok) {
+        outcome = cached.outcome;
+      } else if (cached.promise) {
+        outcome = await cached.promise;
+      }
+    }
+
+    if (!outcome || !outcome.ok) {
+      updateRecords((rs) =>
+        rs.map((r) => (r.session.attemptId === target.attemptId ? { session: target, status: "loading" } : r)),
+      );
+      outcome = await requestReport(target, reportMode);
+    }
+
+    if (outcome.ok) {
+      const job = profile?.job;
+      const role = job && hasJob(job) ? [job.role.trim(), job.company.trim()].filter(Boolean).join(" at ") : undefined;
+      recordAttempt(target, outcome.report, outcome.fromFixture, role);
+    }
     updateRecords((rs) =>
       rs.map((r) =>
         r.session.attemptId !== target.attemptId
@@ -395,8 +515,21 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   function handleFinish() {
+    finishRound(false);
+  }
+
+  function finishRound(timedOut: boolean) {
+    if (view !== "room") return;
+    const measured = clockKey ? clock.read(clockKey) : null;
     endLive();
     const finished = fullSession();
+    if (measured !== null) {
+      const timing: RoundTiming =
+        round === "behavioral"
+          ? { durationMs: timedOut ? BEHAVIORAL_LIMIT_MS : Math.min(measured, BEHAVIORAL_LIMIT_MS), limitMs: BEHAVIORAL_LIMIT_MS, timedOut }
+          : { durationMs: measured };
+      setTimings((t) => ({ ...t, [finished.attemptId]: timing }));
+    }
     if (practiceMode === "full-mock") {
       if (round === "coding") {
         setCodingRecords((rs) => [...rs, { session: finished, status: "loading" }]);
@@ -425,6 +558,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
     turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
     setRound("behavioral");
     setView("room");
   }
@@ -440,36 +574,28 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     endLive();
     turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
     setLiveError(null);
 
     if (round === "coding") {
-      lastSyncedVersion.current = null;
-      sync().reset();
-      latest.current = { codeVersion: 1, source: problem.starterCode };
-      setSource(problem.starterCode);
-      setCodeVersion(1);
-      setResult(null);
-      setFromFixture(false);
+      loadProblem(problem); // retry is another attempt at the same problem
     }
     setView("room");
   }
 
-  function handlePracticeAgain(targetRound: RoundType) {
+  function handlePracticeAgain(targetRound: RoundType, nextProblem?: Problem) {
     endLive();
     const prior = ids();
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
     turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
     setLiveError(null);
 
     if (targetRound === "coding") {
-      lastSyncedVersion.current = null;
-      sync().reset();
-      latest.current = { codeVersion: 1, source: problem.starterCode };
-      setSource(problem.starterCode);
-      setCodeVersion(1);
-      setResult(null);
-      setFromFixture(false);
+      // A fresh practice run gets a different problem; excluding the current one
+      // means "practice again" never hands back the problem just attempted.
+      loadProblem(nextProblem ?? randomProblem(problem.id));
       setRound("coding");
     } else {
       setRound("behavioral");
@@ -483,10 +609,13 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setProfile(p);
     setPracticeMode(m);
     setBehavioralContext(ctx);
+    setAttemptSeq((n) => n + 1);
     if (m === "behavioral") {
       setRound("behavioral");
     } else {
-      // "coding" or "full-mock" starts with coding
+      // "coding" or "full-mock" starts with coding. No plan named a problem, so
+      // skipping straight in gets a random one from the bank.
+      loadProblem(randomProblem());
       setRound("coding");
     }
     setView("room");
@@ -512,10 +641,12 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setProfile({ resume: draft.resume, job: draft.job });
     setBehavioralContext(plan.behavioral.focus);
     setPracticeMode("full-mock");
-    // The room renders one problem today; a plan always names it (lib/plan.ts).
-    if (plan.technical.problemId !== problem.id) console.warn("plan problem differs from the loaded problem");
-    if (idsRef.current) handlePracticeAgain("coding"); // fresh attempt, editor reset
+    // The plan names its problem (lib/plan.ts); load that one, not a random one.
+    const planned = getProblem(plan.technical.problemId) ?? problem;
+    if (idsRef.current) handlePracticeAgain("coding", planned); // fresh attempt, editor reset
     else {
+      loadProblem(planned);
+      setAttemptSeq((n) => n + 1);
       setRound("coding");
       setView("room");
     }
@@ -573,41 +704,49 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     const codingReportStatus = lastCodingRecord?.status;
 
     return (
-      <div data-surface="cream" className="flex min-h-screen flex-col bg-cream text-ink [color-scheme:light]" data-testid="full-mock-transition" {...planMarker}>
-        <header className="flex items-center gap-4 border-b border-cream-line bg-cream-2/95 px-6 py-4 shadow-sm">
-          <Wordmark size={26} tone="light" />
-          <span className="text-sm font-semibold text-ink-muted">Technical Coding Complete · Transition</span>
+      <div className="flex min-h-screen flex-col bg-background text-foreground [color-scheme:light]" data-testid="full-mock-transition" {...planMarker}>
+        <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur px-6 py-4 flex items-center justify-between">
+          <Wordmark size={24} tone="light" />
+          <span className="text-xs font-semibold text-muted-foreground">Technical Coding Complete · Transition</span>
         </header>
 
         <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-12">
-          <div className="rounded-[28px] border border-cream-line/60 bg-cream-2 p-8 shadow-warm">
+          <div className="rounded-2xl border border-border bg-card p-8 shadow-lift">
             <div className="mb-2 flex items-center justify-between">
-              <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-xs font-bold text-emerald-800 uppercase tracking-wider">
+              <span className="rounded-full bg-success-soft border border-emerald-500/20 px-3 py-1 text-xs font-bold text-success uppercase tracking-wider">
                 ✓ Technical Coding Complete
               </span>
-              <span className="text-xs font-semibold text-ink-muted">Next: Behavioral Deep-Dive</span>
+              <span className="text-xs font-medium text-muted-foreground">Next: Behavioral Deep-Dive</span>
             </div>
 
-            <h1 className="mt-4 font-brand text-3xl font-bold tracking-tight text-ink">Technical coding interview complete</h1>
-            <p className="mt-2 text-sm text-ink-muted leading-relaxed">
+            <h1 className="mt-4 font-brand text-3xl font-bold tracking-tight text-foreground">
+              Technical coding interview complete
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
               {lastCodingRun?.status === "completed"
                 ? `Your Python solution passed ${lastCodingRun.passed} of ${lastCodingRun.total} test cases.`
                 : "Your coding draft and interview responses have been saved."}
+              {lastCodingRecord && timings[lastCodingRecord.session.attemptId] && (
+                <span data-testid="transition-coding-time">
+                  {" "}
+                  It took you {describeClock(timings[lastCodingRecord.session.attemptId].durationMs)}.
+                </span>
+              )}
             </p>
 
-            <div className="mt-6 rounded-[20px] border border-cream-line/60 bg-white/80 p-5 shadow-sm">
-              <div className="text-xs font-bold uppercase tracking-wider text-maroon mb-1">
+            <div className="mt-6 rounded-xl border border-border bg-background p-5 shadow-card">
+              <div className="text-xs font-bold uppercase tracking-wider text-primary mb-1">
                 Next Up: Behavioral Deep-Dive Interview
               </div>
-              <p className="text-sm text-ink-muted leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 The interviewer will transition to questions about your engineering experiences, technical trade-offs, and personal contributions.
               </p>
               {focusLabel && (
-                <p className="mt-2 text-xs text-maroon-deep font-semibold">Tailored focus: {focusLabel}</p>
+                <p className="mt-2 text-xs text-primary font-semibold">Tailored focus: {focusLabel}</p>
               )}
               {codingReportStatus === "loading" && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-ink-muted" data-testid="bg-report-loading">
-                  <span className="h-3 w-3 animate-spin rounded-full border border-maroon border-t-transparent" />
+                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" data-testid="bg-report-loading">
+                  <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
                   Generating coding feedback in background…
                 </div>
               )}
@@ -617,7 +756,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               <button
                 type="button"
                 onClick={handleContinueToBehavioral}
-                className={`${btn.primary} flex-1 justify-center py-3 text-base font-semibold shadow-sm`}
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px py-3 px-6 flex-1"
                 data-testid="continue-behavioral"
               >
                 Continue to Behavioral Round →
@@ -625,7 +764,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               <button
                 type="button"
                 onClick={() => setView("report")}
-                className={`${btn.secondary} justify-center py-3 text-sm font-medium`}
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background border border-border bg-background text-foreground shadow-card hover:bg-muted py-3 px-5"
                 data-testid="view-coding-feedback"
               >
                 View coding feedback
@@ -636,10 +775,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               <button
                 type="button"
                 onClick={() => setView("summary")}
-                className="text-xs text-ink-muted hover:text-ink underline-offset-4 hover:underline"
+                className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline cursor-pointer"
                 data-testid="end-early"
               >
-                End interview early & view summary
+                End interview early &amp; view summary
               </button>
             </div>
           </div>
@@ -651,8 +790,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   if (view === "summary") {
     return (
       <FullMockSummary
-        codingRecord={codingRecords.at(-1)}
-        behavioralRecord={behavioralRecords.at(-1)}
+        codingRecord={withTiming(codingRecords.at(-1))}
+        behavioralRecord={withTiming(behavioralRecords.at(-1))}
         onRetryReport={handleRetryReport}
         onPracticeAgain={handlePracticeAgain}
         onReturnHome={() => setView("start")}
@@ -667,15 +806,15 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
   if (view === "report") {
     return (
-      <div data-surface="cream" className="min-h-screen bg-cream text-ink flex flex-col [color-scheme:light]">
+      <div className="min-h-screen bg-background text-foreground flex flex-col [color-scheme:light]">
         {practiceMode === "full-mock" && round === "coding" && (
-          <div className="bg-cream-2 border-b border-cream-line px-6 py-3 flex items-center justify-between text-sm shadow-sm">
-            <span className="text-ink-muted text-xs sm:text-sm font-medium">
+          <div className="bg-card border-b border-border px-6 py-3 flex items-center justify-between text-sm shadow-card">
+            <span className="text-muted-foreground text-xs sm:text-sm font-medium">
               Technical Coding feedback. Ready for Behavioral Deep-Dive?
             </span>
             <button
               onClick={handleContinueToBehavioral}
-              className={`${coverBtnSm.primary} px-4 py-1.5 text-xs font-semibold`}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs font-semibold cursor-pointer transition-all bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px px-4 py-1.5"
               data-testid="report-continue-behavioral"
             >
               Continue to Behavioral Round →
@@ -714,94 +853,129 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   if (round === "behavioral") {
     return (
       <div className="contents" {...planMarker}>
-        <BehavioralRoom voice={voiceProps} attemptNumber={attemptNumber} focusLabel={focusLabel} onFinish={handleFinish} />
+        <BehavioralRoom
+          voice={voiceProps}
+          attemptNumber={attemptNumber}
+          focusLabel={focusLabel}
+          onFinish={handleFinish}
+          clock={{ started: behavioralStarted, elapsedMs: clock.elapsedMs, limitMs: BEHAVIORAL_LIMIT_MS }}
+        />
       </div>
     );
   }
 
   return (
-    <div data-surface="cream" className="flex min-h-dvh flex-col bg-cream text-ink lg:h-screen [color-scheme:light]" {...planMarker}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-cream-line bg-cream-2/90 px-4 py-3 sm:gap-4 sm:px-6 shadow-sm">
-        <Wordmark size={26} tone="light" />
-        <div className="hidden items-center gap-2 md:flex">
-          <span className="font-semibold text-ink">
-            Python · {problem.title}
-          </span>
-          {attemptNumber > 1 && (
-            <span className="rounded-full bg-cream-3 px-2 py-0.5 text-xs font-medium text-ink-muted">
-              Attempt {attemptNumber}
-            </span>
-          )}
-          {practiceMode === "full-mock" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-maroon/10 border border-maroon/20 px-3 py-1 text-xs font-bold text-maroon">
-              <span className="h-1.5 w-1.5 rounded-full bg-maroon" />
-              Technical Coding Interview
-            </span>
-          )}
-        </div>
-        {profile && hasJob(profile.job) && (
-          <span
-            className="hidden max-w-xs truncate rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-maroon-deep lg:inline"
-            data-testid="target-role"
-            title="Role details used for interview framing and feedback."
-          >
-            Practicing for {profile.job.role.trim() || "your role"}
-            {profile.job.company.trim() && ` at ${profile.job.company.trim()}`}
-          </span>
-        )}
-        <span className="ml-auto text-sm text-ink-muted max-sm:sr-only" data-testid="session-stats">
-          {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
-        </span>
-        {DEV && (
-          <details className="relative max-sm:ml-auto">
-            <summary className="cursor-pointer select-none rounded-[12px] border border-cream-line bg-cream-3 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#EFE0CA]">
-              Dev
-            </summary>
-            <div className="absolute right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-[18px] border border-cream-line bg-cream-2 p-4 shadow-xl">
-              <label className="flex flex-col gap-1 text-xs font-bold text-ink">
-                Run with
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as RunMode)}
-                  className="rounded-lg border border-cream-line bg-white px-2 py-1.5 text-ink text-sm"
-                >
-                  <option value="real">Python runner</option>
-                  <option value="cycle">Fixtures: cycle all four</option>
-                  <option value="pass">Fixture: pass (4/4)</option>
-                  <option value="fail">Fixture: fail (3/4)</option>
-                  <option value="syntax">Fixture: syntax error</option>
-                  <option value="unavailable">Fixture: runner unavailable</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-bold text-ink">
-                Report
-                <select
-                  value={reportMode}
-                  onChange={(e) => setReportMode(e.target.value as ReportMode)}
-                  className="rounded-lg border border-cream-line bg-white px-2 py-1.5 text-ink text-sm"
-                >
-                  <option value="auto">Auto: /api/report, else fixture</option>
-                  <option value="fixture">Fixture only</option>
-                  <option value="fixture-error">Fixture: 503 once, then OK</option>
-                  <option value="api">/api/report only</option>
-                </select>
-              </label>
+    <div className="flex min-h-dvh flex-col bg-background text-foreground lg:h-screen [color-scheme:light]" {...planMarker}>
+      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:px-6 lg:grid-cols-[1fr_auto_1fr]">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              aria-label="Back to Interviewlenz home"
+              onClick={() => setView("start")}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="lucide lucide-arrow-left h-4 w-4 text-muted-foreground"
+                aria-hidden="true"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" />
+              </svg>
+            </button>
+            <Wordmark size={22} tone="light" />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-medium text-foreground" data-testid="target-role">
+                <span className="text-muted-foreground">Practicing for: </span>
+                {profile?.job?.role
+                  ? `${profile.job.company ? `${profile.job.company} · ` : ""}${profile.job.role}`
+                  : "Stripe · Backend Engineer"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                Problem: {problem.title} (Python 3)
+              </p>
             </div>
-          </details>
-        )}
-        <button
-          onClick={handleFinish}
-          disabled={running}
-          className={`${coverBtnSm.secondary} px-5 py-2 text-sm`}
-          data-testid="finish-btn"
-        >
-          Finish
-        </button>
+          </div>
+
+          <div className="order-last col-span-2 flex items-center justify-center lg:order-none lg:col-span-1">
+            <span
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-sm tabular-nums text-foreground"
+              data-testid="round-clock"
+              role="timer"
+              aria-label={`Time on this problem: ${describeClock(clock.elapsedMs)}`}
+            >
+              <span className="live-dot h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+              <span aria-hidden="true">{formatClock(clock.elapsedMs)} elapsed</span>
+            </span>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <span className="text-xs text-muted-foreground max-sm:sr-only" data-testid="session-stats">
+              {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
+            </span>
+            {DEV && (
+              <details className="relative">
+                <summary className="cursor-pointer select-none rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted">
+                  Dev
+                </summary>
+                <div className="absolute right-0 z-20 mt-2 flex w-64 flex-col gap-2.5 rounded-xl border border-border bg-card p-3 shadow-xl">
+                  <label className="flex flex-col gap-1 text-xs font-semibold text-foreground">
+                    Run with
+                    <select
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value as RunMode)}
+                      className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      <option value="real">Python runner</option>
+                      <option value="cycle">Fixtures: cycle all four</option>
+                      <option value="pass">Fixture: pass (4/4)</option>
+                      <option value="fail">Fixture: fail (3/4)</option>
+                      <option value="syntax">Fixture: syntax error</option>
+                      <option value="unavailable">Fixture: runner unavailable</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold text-foreground">
+                    Report
+                    <select
+                      value={reportMode}
+                      onChange={(e) => setReportMode(e.target.value as ReportMode)}
+                      className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    >
+                      <option value="auto">Auto: /api/report, else fixture</option>
+                      <option value="fixture">Fixture only</option>
+                      <option value="fixture-error">Fixture: 503 once, then OK</option>
+                      <option value="api">/api/report only</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+            )}
+            <button
+              onClick={handleFinish}
+              disabled={running}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground shadow-cta hover:bg-primary-hover active:translate-y-px py-2 h-9 px-3 sm:px-4"
+              data-testid="finish-btn"
+            >
+              <span className="sm:hidden">End &amp; Score</span>
+              <span className="hidden sm:inline">End Interview &amp; Generate Scorecard</span>
+            </button>
+          </div>
+        </div>
       </header>
 
-      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] p-3 sm:p-5 gap-4 bg-cream">
-        <div className="flex shrink-0 flex-col overflow-hidden rounded-[24px] bg-[#161312] text-zinc-100 shadow-warm border border-[#2D2623] lg:min-h-0 lg:shrink">
-          <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0}>
+      <main className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] bg-background">
+        {/* Left Column: Problem description & Live voice console */}
+        <section className="flex flex-col border-border lg:min-h-0 lg:border-r bg-background">
+          <div className="flex-1 px-5 py-6 sm:px-7 lg:overflow-y-auto">
             <ProblemPanel problem={problem} />
           </div>
           <VoicePanel
@@ -821,51 +995,72 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             onToggleMic={handleToggleMic}
             onEnd={endLive}
           />
-        </div>
+        </section>
 
-        <div className="flex flex-col overflow-hidden rounded-[24px] bg-[#161312] text-zinc-100 shadow-warm border border-[#2D2623] lg:min-h-0">
-          <div className="flex flex-wrap items-center justify-between border-b border-[#2D2623] bg-[#201B19] px-5 py-3 gap-2">
-            <div>
-              <div className="flex flex-wrap items-center gap-2 font-mono text-xs sm:text-sm text-[#9A8C84]">
-                <span className="font-semibold text-zinc-200">solution.py · v{codeVersion}</span>
-                {result?.status === "completed" && (
-                  <>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3A28] border border-[#2E6B40] px-2.5 py-0.5 text-xs font-semibold text-[#6EE7A0]">
-                      <span>{result.passed} / {result.total} passed</span>
-                      <span>·</span>
-                      <span>{result.durationMs} ms</span>
-                    </span>
-                  </>
-                )}
-              </div>
-              <p className="mt-0.5 text-[11px] text-zinc-400">Leave editor: Ctrl+M (Mac: Ctrl+Shift+M), then Shift+Tab.</p>
-            </div>
-            <button
-              onClick={handleRun}
-              disabled={running}
-              className={`${btn.primary} min-w-[7rem] px-5 py-2 text-sm font-semibold shadow-sm`}
-              data-testid="run-btn"
-            >
-              {running ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
-                  Running
-                </>
-              ) : (
-                <>
-                  <span aria-hidden>▶</span> Run
-                </>
+        {/* Right Column: Code editor, test results, and GREEN Run Code button */}
+        <section className="flex flex-col border-t border-border lg:min-h-0 lg:border-t-0 bg-background">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 bg-background">
+            <div className="flex items-center gap-2 font-mono text-xs text-foreground">
+              <span className="font-semibold text-foreground">solution.py · v{codeVersion}</span>
+              <span className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-muted-foreground">Python 3</span>
+              {result?.status === "completed" && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft border border-emerald-500/20 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-success">
+                  ✓ {result.passed} / {result.total} passed in {result.durationMs}ms
+                </span>
               )}
-            </button>
+            </div>
+            <span className="text-xs text-muted-foreground font-mono">4 tests</span>
           </div>
-          <div className="mobile-editor-pane bg-[#1e1e1e] lg:h-auto lg:min-h-0 lg:flex-[3]">
+
+          {/* Monaco Editor Pane */}
+          <div className="mobile-editor-pane min-h-[300px] flex-1 overflow-hidden bg-card border-b border-border lg:h-auto lg:min-h-0">
             <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
-          <div className="min-h-[260px] shrink-0 border-t border-[#2D2623] lg:h-[38%] lg:shrink">
+
+          {/* Results Panel */}
+          <div className="min-h-[200px] shrink-0 border-b border-border lg:h-[35%] lg:shrink overflow-hidden">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
-        </div>
+
+          {/* Bottom Bar: Tip + GREEN RUN BUTTON */}
+          <div className="border-t border-border bg-background">
+            <div className="flex items-center justify-between gap-3 px-5 py-3">
+              <span className="text-xs text-muted-foreground">Tip: explain your idea out loud before you run.</span>
+              <button
+                onClick={handleRun}
+                disabled={running}
+                data-testid="run-btn"
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 text-white shadow-sm hover:bg-emerald-500 active:translate-y-px h-9 px-4 py-2 min-w-[6.5rem]"
+              >
+                {running ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+                    <span>Running…</span>
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="lucide lucide-play fill-current"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+                    </svg>
+                    <span>Run Code</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );

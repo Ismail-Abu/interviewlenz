@@ -2,41 +2,81 @@
 @source "../components";
 @source "../app";
 
-/* One dark theme everywhere: the app is presented on projectors and the
-   editor is dark, so the page does not follow the OS light/dark setting. */
 :root {
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  color-scheme: dark;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #f8f9fa;
+  --card-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e293b;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --primary: #c8102e;
+  --primary-hover: #b00e28;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fff1f2;
+  --success: #10b981;
+  --success-soft: #ecfdf5;
+  --syntax-keyword: #8b5cf6;
+  --syntax-function: #2563eb;
+  --syntax-builtin: #0891b2;
+  --syntax-constant: #ea580c;
+  --syntax-plain: #334155;
+  --syntax-gutter: #94a3b8;
+  color-scheme: light;
+
+  /* Legacy cream palette tokens retained for full test & component compatibility */
+  --color-cream: #ffffff;
+  --color-cream-2: #f8f9fa;
+  --color-cream-3: #f1f5f9;
+  --color-cream-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-maroon: #c8102e;
+  --color-maroon-hover: #b00e28;
+  --color-maroon-deep: #9b0b23;
+  --color-maroon-soft: #fed7aa;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-brand: var(--font-space-grotesk), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --color-brand: #c8102e;
-  --color-brand-hover: #dc1f3d;
-  --color-brand-coral: #fe6b73; /* dark surfaces only: ~2.1:1 on cream */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
 
-  /* Cream surface, used by the landing page, the behavioral round (the one
-     in-app page with no Monaco editor) and the report. The coding room stays
-     dark. */
-  --color-cream: #fbf6ec; /* page */
-  --color-cream-2: #f6eee0; /* cards */
-  --color-cream-3: #f3e8d6; /* chips, secondary buttons */
-  --color-cream-line: #ede2d0; /* hairlines */
-  --color-ink: #3a302c; /* headings + body, 11.4:1 on cream */
-  --color-ink-muted: #75665c; /* secondary copy, 4.8:1 on cream */
-  --color-maroon: #9b3b50; /* buttons, accents */
-  --color-maroon-hover: #b04a60;
-  --color-maroon-deep: #8c2f43; /* link text on cream, 7.0:1 */
-  --color-maroon-soft: #c77d8c; /* underlines; decorative only (2.9:1 on cream) */
-  --color-panel: #1c1817; /* demo panel: warm dark */
-  --color-panel-2: #2a2422;
-  --shadow-warm: 0 10px 18px -6px rgb(90 68 50 / 0.13); /* cards, buttons */
-  --shadow-warm-panel: 0 12px 22px -6px rgb(90 68 50 / 0.14); /* dark demo panel */
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-function: var(--syntax-function);
+  --color-syntax-builtin: var(--syntax-builtin);
+  --color-syntax-constant: var(--syntax-constant);
+  --color-syntax-plain: var(--syntax-plain);
+  --color-syntax-gutter: var(--syntax-gutter);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+  --font-brand: var(--font-space-grotesk), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), Instrument Serif, ui-serif, Georgia, serif;
+
+  --color-brand: #c8102e;
+  --color-brand-hover: #b00e28;
+  --color-brand-coral: #fe6b73;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-lift: 0 1px 2px rgba(15, 23, 42, 0.04), 0 24px 48px -24px rgba(15, 23, 42, 0.18);
+  --shadow-cta: 0 1px 0 rgba(255, 255, 255, 0.2) inset, 0 8px 20px -8px rgba(200, 16, 46, 0.45);
 }
 
 html {
@@ -49,17 +89,55 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Coral on the dark coding room (unchanged). maroon-soft would be only ~2.9:1
-   on cream, under the 3:1 focus-indicator minimum, so cream surfaces use
-   maroon-deep below. */
 :focus-visible {
-  outline: 2px solid #fe6b73;
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-/* Coral is nearly invisible on cream, so cream surfaces get a maroon ring. */
-[data-surface="cream"] :focus-visible {
-  outline-color: #8c2f43;
+@keyframes eq {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes live-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes turn-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.eq-bar {
+  transform-origin: 50% 50%;
+  animation: 1s ease-in-out infinite eq;
+}
+
+.live-dot {
+  animation: 2s ease-in-out infinite live-glow;
+}
+
+.turn-in {
+  animation: 0.35s ease-out both turn-in;
+}
+
+.font-display {
+  font-family: var(--font-instrument-serif), Instrument Serif, ui-serif, Georgia, serif;
 }
 
 @media (max-width: 1023px) {
@@ -82,4 +160,16 @@ body {
 }
 .studio-surface :focus-visible {
   outline-color: #fb7185;
+}
+
+/* Landing demo editor caret (components/landing/TypingEditor.tsx) */
+@keyframes demo-caret-blink {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
+.demo-caret {
+  animation: demo-caret-blink 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-caret { animation: none; }
 }

@@ -10,9 +10,11 @@ import { EvidenceReceipt } from "./report/EvidenceReceipt";
 import { TranscriptSection } from "./report/TranscriptSection";
 import { UnrunDraftDisclosure } from "./report/UnrunDraftDisclosure";
 import { BandBadge, DimensionMeters } from "./report/Scorecard";
+import { ReportExtras } from "./report/ReportExtras";
 import { DownloadDebrief } from "./report/DownloadDebrief";
 import { buildDebrief, TRACK_LABEL } from "./report/debrief";
-import { scoreOverall, scoreRound } from "@/lib/score";
+import { BAND_LABEL, scoreOverall, scoreRound } from "@/lib/score";
+import { timingLabel, type RoundTiming } from "./roundClock";
 
 export interface AttemptRecord {
   session: Session;
@@ -21,6 +23,8 @@ export interface AttemptRecord {
   fromFixture?: boolean;
   fallbackReason?: string;
   error?: ApiError;
+  // How long the round took (components/roundClock.ts). Absent if never started.
+  timing?: RoundTiming;
 }
 
 interface Props {
@@ -43,24 +47,24 @@ export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0C0E] text-zinc-100 antialiased selection:bg-rose-500/30 selection:text-white">
-      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/[0.08] bg-[#0B0C0E]/90 px-4 py-3 backdrop-blur-xl shadow-lg sm:px-6">
-        <Wordmark size={26} tone="dark" />
-        <span className="hidden text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 sm:inline">
+    <div className="min-h-screen bg-background text-foreground antialiased selection:bg-rose-500/20 selection:text-foreground">
+      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-xl shadow-sm sm:px-6">
+        <Wordmark size={26} tone="light" />
+        <span className="hidden text-xs font-mono font-bold uppercase tracking-wider text-muted-foreground sm:inline">
           Telemetry Evaluation Report
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-2">
           {records.some((r) => r.report) && (
             <DownloadDebrief
               build={debrief}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-800/80 border border-white/10 px-4 py-2 font-mono text-xs font-semibold text-zinc-200 hover:bg-zinc-700/80 hover:border-white/20 transition-all"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-card border border-border px-4 py-2 font-mono text-xs font-semibold text-foreground hover:bg-muted transition-all shadow-sm"
             />
           )}
           <button
             type="button"
             onClick={onRetryAttempt}
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#C8102E] to-[#E11D48] px-5 py-2 font-mono text-xs sm:text-sm font-semibold text-white shadow-[0_0_20px_rgba(200,16,46,0.35)] hover:shadow-[0_0_28px_rgba(200,16,46,0.5)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary hover:bg-primary-hover px-5 py-2 font-mono text-xs sm:text-sm font-semibold text-white shadow-cta transition-all disabled:cursor-not-allowed disabled:opacity-50"
           >
             {latestIsBehavioral ? "Practice again" : "Retry problem"}
           </button>
@@ -104,7 +108,7 @@ function ReportCard({
   return (
     <article
       data-attempt={session.attemptId}
-      className="flex min-w-0 flex-col gap-6 rounded-[28px] bg-[#121318]/90 border border-white/[0.08] p-5 sm:p-8 shadow-2xl backdrop-blur-xl"
+      className="flex min-w-0 flex-col gap-6 rounded-2xl bg-card border border-border p-5 sm:p-8 shadow-card"
     >
       {/* Top Header & Context Badges */}
       <header className="flex flex-col gap-3">
@@ -112,37 +116,48 @@ function ReportCard({
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider ${
               isBehavioral
-                ? "bg-rose-950/80 text-rose-300 border border-rose-500/40 shadow-[0_0_10px_rgba(225,29,72,0.2)]"
-                : "bg-zinc-800 text-zinc-300 border border-white/10"
+                ? "bg-rose-50 text-rose-700 border border-rose-200"
+                : "bg-muted text-foreground border border-border"
             }`}
           >
             {TRACK_LABEL[isBehavioral ? "behavioral" : "coding"]}
           </span>
 
-          <h2 className="text-2xl font-bold font-brand tracking-tight text-white">
+          <h2 className="text-2xl font-bold font-brand tracking-tight text-foreground">
             Attempt {index + 1}
           </h2>
 
-          <span className="font-mono text-xs text-zinc-400">
+          <span className="font-mono text-xs text-muted-foreground">
             {session.attemptId.slice(0, 8)}
           </span>
 
           {session.priorAttemptId && (
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-muted-foreground">
               retry of {session.priorAttemptId.slice(0, 8)}
             </span>
           )}
 
           {record.fromFixture && (
             <span
-              className="rounded-full bg-amber-950/80 text-amber-300 border border-amber-500/40 px-3 py-0.5 text-xs font-mono font-bold tracking-wider"
+              className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-0.5 text-xs font-mono font-bold tracking-wider"
               data-testid="report-fixture-badge"
             >
               FIXTURE DATA{record.fallbackReason ? ` (${record.fallbackReason})` : ""}
             </span>
           )}
 
-          <span className="font-mono text-xs text-zinc-400 sm:ml-auto" data-testid="attempt-stats">
+          {record.timing && (
+            <span
+              className={`rounded-full border px-3 py-0.5 font-mono text-xs font-semibold ${
+                record.timing.timedOut ? "border-amber-200 bg-amber-50 text-amber-800" : "border-border bg-background text-foreground"
+              }`}
+              data-testid="attempt-time"
+            >
+              {timingLabel(record.timing)}
+            </span>
+          )}
+
+          <span className="font-mono text-xs text-muted-foreground sm:ml-auto" data-testid="attempt-stats">
             {isBehavioral
               ? `Behavioral · ${session.turns.length} turns · ${
                   session.turns.filter((t) => t.speaker === "student").length
@@ -161,29 +176,29 @@ function ReportCard({
       {/* Error State */}
       {record.status === "error" && record.error && (
         <div
-          className="rounded-[22px] border border-rose-800/60 bg-rose-950/40 p-5 sm:p-6 text-sm text-rose-200 shadow-xl"
+          className="rounded-xl border border-rose-200 bg-rose-50 p-5 sm:p-6 text-sm text-rose-800 shadow-sm"
           role="alert"
           data-testid="report-error"
         >
-          <div className="font-bold text-rose-100 text-base">
+          <div className="font-bold text-rose-900 text-base">
             {record.error.code === "timeout" ? "Report timed out" : "Report unavailable"}
           </div>
-          <div className="mt-1 text-rose-300">{record.error.message}</div>
+          <div className="mt-1 text-rose-700">{record.error.message}</div>
           {record.error.retryable ? (
             <>
-              <div className="mt-2 text-zinc-400">
+              <div className="mt-2 text-muted-foreground">
                 Your session is saved. Retry uses this same attempt.
               </div>
               <button
                 type="button"
                 onClick={() => onRetryReport(session.attemptId)}
-                className="mt-4 inline-flex items-center justify-center rounded-[14px] bg-zinc-800 border border-white/10 px-5 py-2 font-mono text-xs font-semibold text-rose-300 hover:bg-zinc-700 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                className="mt-4 inline-flex items-center justify-center rounded-lg bg-card border border-border px-5 py-2 font-mono text-xs font-semibold text-rose-700 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
               >
                 Retry report
               </button>
             </>
           ) : (
-            <div className="mt-2 text-zinc-400">
+            <div className="mt-2 text-muted-foreground">
               This attempt couldn&apos;t be evaluated, and retrying won&apos;t change that. You can still start a new attempt.
             </div>
           )}
@@ -194,19 +209,20 @@ function ReportCard({
       {report && (
         <>
           {score && score.dimensions.length > 0 && (
-            <section className="flex flex-col gap-4 rounded-[22px] bg-[#161720]/80 border border-white/[0.06] p-5 shadow-xl" data-testid="attempt-scorecard">
+            <section className="flex flex-col gap-4 rounded-xl bg-background border border-border p-5 shadow-sm" data-testid="attempt-scorecard">
               <div className="flex flex-wrap items-center gap-3">
                 <BandBadge band={score.band} />
-                <span className="text-xs font-mono text-zinc-400">
+                <span className="text-xs font-mono text-muted-foreground">
                   {score.ratedCount} of {score.totalCount} dimensions assessed
                 </span>
               </div>
-              {score.caveat && <p className="text-sm text-zinc-300">{score.caveat}</p>}
+              {score.caveat && <p className="text-sm text-muted-foreground">{score.caveat}</p>}
               <DimensionMeters score={score} />
             </section>
           )}
 
           <VerdictBanner nextStep={report.nextStep} />
+          {score && <ReportExtras key={report.reportId} report={report} band={BAND_LABEL[score.band]} />}
 
           <ul className="flex flex-col gap-4">
             {report.findings.map((f) => (
@@ -237,12 +253,12 @@ function ReportCard({
 }
 
 function SoftReportSkeleton() {
-  const bar = "animate-pulse rounded bg-zinc-800";
+  const bar = "animate-pulse rounded bg-muted";
   return (
     <div className="flex flex-col gap-4" aria-label="Writing your report" role="status">
-      <div className="h-24 animate-pulse rounded-[22px] bg-zinc-800/60" />
+      <div className="h-24 animate-pulse rounded-xl bg-muted/60" />
       {[0, 1, 2].map((i) => (
-        <div key={i} className="rounded-[26px] bg-zinc-900/60 border border-white/[0.04] p-6">
+        <div key={i} className="rounded-xl bg-card border border-border p-6">
           <div className="mb-3 flex gap-2">
             <div className={`h-5 w-32 ${bar}`} />
             <div className={`h-5 w-20 ${bar}`} />
