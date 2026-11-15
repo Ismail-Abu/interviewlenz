@@ -32,6 +32,40 @@ npm run dev
 
 Open http://localhost:3000. No API keys or `.env.local` are needed. Without keys, the interviewer uses a scripted voice labeled **MOCK VOICE (no API key)**, and the report uses sample data labeled **FIXTURE DATA (no API key)**. Python runs for real in the browser.
 
+## Checks
+
+Node 22 or newer. From a clean checkout:
+
+```sh
+npm ci
+npm run lint
+npm run test:ci
+npm run build
+```
+
+`npm run test:ci` runs the deterministic checks in `dev/` through
+`scripts/ci-checks.mjs`. They stub `@google/genai`, so they need no API key, no
+network, no microphone, and no dev server. Every check runs even if an earlier
+one fails; the summary lists `PASS`/`FAIL` per check and the command exits
+non-zero naming each failure.
+
+The same four commands run on every pull request via
+[`.github/workflows/pr.yml`](.github/workflows/pr.yml).
+
+`scripts/ci-checks.mjs` holds an explicit allowlist rather than a glob over
+`dev/*.mjs`, so a new check joins CI only when it is added there on purpose.
+
+### Still needs a human
+
+These are not in CI and must be run by hand on a configured machine:
+
+| Check | Why it cannot run unattended |
+|---|---|
+| `node dev/live-check.mjs` | Reads `GEMINI_API_KEY` and `LIVE_MODEL` from `.env.local` and opens a real Gemini Live socket. |
+| In-browser spoken walkthrough | Needs a real key, HTTPS or localhost, and a person speaking into a microphone. |
+| Real end-of-session report | Needs `REPORT_MODEL` and a real Gemini call. |
+| Deployed-site mic check over HTTPS | Needs the Vercel deployment and a browser. |
+
 ## Deploy to Vercel
 
 1. Push the branch to GitHub, then go to [vercel.com/new](https://vercel.com/new) and import the repository. Vercel detects Next.js, so keep the default build command (`npm run build`) and output settings.
