@@ -144,9 +144,9 @@ function RoundSummaryCard({
   const codingSession = !isBehavioral ? (session as CodingSession) : null;
   const lastRun = codingSession?.runs.at(-1);
 
-  // Derive top takeaway from nextSteps or first actionable finding
+  // Derive top takeaway from nextStep or first actionable finding
   const takeaway =
-    report?.nextSteps?.[0] ||
+    report?.nextStep ||
     report?.findings.find((f) => f.rating === "needs_work" || f.rating === "ok")?.summary ||
     (report?.findings[0]?.summary ?? null);
 
@@ -202,7 +202,10 @@ function RoundSummaryCard({
 
         {status === "done" && report && (
           <div className="mt-4 flex flex-col gap-4">
-            <p className="text-sm leading-relaxed text-zinc-300">{report.summary}</p>
+            {/* Overall nextStep */}
+            {report.nextStep && (
+              <p className="text-sm leading-relaxed text-zinc-300">{report.nextStep}</p>
+            )}
 
             {/* Evidence-backed practice takeaway */}
             {takeaway && (

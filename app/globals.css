@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "../components";
+@source "../app";
 
 /* One dark theme everywhere: the app is presented on projectors and the
    editor is dark, so the page does not follow the OS light/dark setting. */
@@ -32,4 +34,12 @@ body {
 :focus-visible {
   outline: 2px solid #fe6b73;
   outline-offset: 2px;
+}
+
+@media (max-width: 1023px) {
+  .mobile-editor-pane {
+    min-height: 360px !important;
+    height: 360px !important;
+    flex-shrink: 0 !important;
+  }
 }

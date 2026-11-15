@@ -38,6 +38,44 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const idsRef = useRef<AttemptIds | null>(null);
   const ids = () => (idsRef.current ??= { sessionId: crypto.randomUUID(), attemptId: crypto.randomUUID() });
   const [attempt, setAttempt] = useState<AttemptData>(EMPTY_ATTEMPT);
+
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>("coding");
+  const [round, setRound] = useState<RoundType>("coding");
+  const [view, setView] = useState<"start" | "room" | "report" | "transition" | "summary">("start");
+  const [codingRecords, setCodingRecords] = useState<AttemptRecord[]>([]);
+  const [behavioralRecords, setBehavioralRecords] = useState<AttemptRecord[]>([]);
+
+  const activeRecords = round === "behavioral" ? behavioralRecords : codingRecords;
+
+  const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
+
+  // Text fields only, sent to the token route (every connect, incl. Reconnect)
+  // and in the Session for the report. Resume screenshots stay local.
+  const roleContext = profile ? toRoleContext(profile.job) : undefined;
+
+  // Behavioral rounds never send the raw job listing: title, company, level only.
+  const behavioralRole = (() => {
+    if (!roleContext) return undefined;
+    const { jobDescription, ...rest } = roleContext;
+    void jobDescription;
+    return Object.keys(rest).length ? rest : undefined;
+  })();
+
+  // Personalization confirmed on the landing page (no files, listing, or
+  // excerpts). Kept for Reconnect and Practice again; never re-analyzed.
+  const [behavioralContext, setBehavioralContext] = useState<BehavioralContext | undefined>(undefined);
+  const behavioralRound: BehavioralRound | undefined =
+    round === "behavioral"
+      ? {
+          type: "behavioral",
+          ...(behavioralContext ? { context: behavioralContext, openingExtra: behavioralOpeningExtra(behavioralContext) } : {}),
+        }
+      : undefined;
+  const focusLabel = behavioralContext
+    ? [behavioralContext.project?.name, behavioralContext.focus?.skill].filter(Boolean).join(" · ")
+    : undefined;
+
   const fullSession = (): Session =>
     round === "behavioral"
       ? {
@@ -48,6 +86,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           ...(behavioralContext ? { behavioralContext } : {}),
         }
       : codingSession();
+
   function codingSession(): CodingSession {
     const draft = latest.current;
     const lastSnapshot = attempt.snapshots.at(-1);
@@ -62,41 +101,6 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       ...(roleContext ? { roleContext } : {}),
     };
   }
-
-  const [practiceMode, setPracticeMode] = useState<PracticeMode>("coding");
-  const [view, setView] = useState<"start" | "room" | "report" | "transition" | "summary">("start");
-  const [codingRecords, setCodingRecords] = useState<AttemptRecord[]>([]);
-  const [behavioralRecords, setBehavioralRecords] = useState<AttemptRecord[]>([]);
-
-  const activeRecords = round === "behavioral" ? behavioralRecords : codingRecords;
-
-  const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
-  const [profile, setProfile] = useState<CandidateProfile | null>(null);
-  // Text fields only, sent to the token route (every connect, incl. Reconnect)
-  // and in the Session for the report. Resume screenshots stay local.
-  const roleContext = profile ? toRoleContext(profile.job) : undefined;
-  // Interview round chosen on the landing page. Behavioral uses no code at all.
-  const [round, setRound] = useState<RoundType>("coding");
-  // Behavioral rounds never send the raw job listing: title, company, level only.
-  const behavioralRole = (() => {
-    if (!roleContext) return undefined;
-    const { jobDescription, ...rest } = roleContext;
-    void jobDescription;
-    return Object.keys(rest).length ? rest : undefined;
-  })();
-  // Personalization confirmed on the landing page (no files, listing, or
-  // excerpts). Kept for Reconnect and Practice again; never re-analyzed.
-  const [behavioralContext, setBehavioralContext] = useState<BehavioralContext | undefined>(undefined);
-  const behavioralRound: BehavioralRound | undefined =
-    round === "behavioral"
-      ? {
-          type: "behavioral",
-          ...(behavioralContext ? { context: behavioralContext, openingExtra: behavioralOpeningExtra(behavioralContext) } : {}),
-        }
-      : undefined;
-  const focusLabel = behavioralContext
-    ? [behavioralContext.project?.name, behavioralContext.focus?.skill].filter(Boolean).join(" · ")
-    : undefined;
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -152,122 +156,121 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     if (!live.current || !syncEnabled.current) return;
     const cur = latest.current;
     if (lastSyncedVersion.current === cur.codeVersion) return;
-    live.current.syncCode({ codeVersion: cur.codeVersion, source: cur.source, at: new Date().toISOString() });
+    live.current.syncCode?.({ codeVersion: cur.codeVersion, source: cur.source, at: new Date().toISOString() });
     lastSyncedVersion.current = cur.codeVersion;
   }
 
   async function handleConnect() {
-    if (connected || connecting) return;
-    setConnecting(true);
     setLiveError(null);
-    setDisconnected(false);
-    const gen = (connGen.current += 1);
+    setConnecting(true);
+    const gen = ++connGen.current;
     const current = () => gen === connGen.current;
 
     try {
-      const outcome = await openVoice({
-        sessionId: ids().sessionId,
-        roleContext,
-        behavioral: behavioralRound,
-        problem: round === "coding" ? problem : undefined,
-        micStatus,
-        turnCount: turnCount.current,
-        onMicStatus: setMicStatus,
-        onStateChange: (s) => current() && setLiveState(s),
-        onTurn: (t) => {
-          if (!current()) return;
-          turnCount.current += 1;
-          setAttempt((prev) => ({ ...prev, turns: [...prev.turns, t] }));
+      const conn = await openVoice(
+        ids().sessionId,
+        problem,
+        {
+          onState: (s: LiveState) => {
+            if (!current()) return;
+            setLiveState(s);
+            if (s === "error" && voiceModeRef.current === "live" && live.current) setDisconnected(true);
+          },
+          onTurn: (t) => {
+            if (!current()) return;
+            turnCount.current += 1;
+            setAttempt((s) => ({ ...s, turns: [...s.turns, t] }));
+          },
+          onError: (e: ApiError) => current() && setLiveError(e),
         },
-        onError: (err) => {
-          if (!current()) return;
-          setLiveError(err);
-          // Non-retryable error -> tear down immediately so the room returns to idle.
-          if (!err.retryable) {
-            endLive();
-          }
-        },
-        onDisconnect: (err) => {
-          if (!current()) return;
-          // Retryable disconnect: keep the client instance alive, drop to
-          // disconnected state, and offer the student Reconnect.
-          setConnected(false);
-          setMicOn(false);
-          setLiveState(null);
-          setDisconnected(true);
-          setLiveError(err);
-          syncEnabled.current = false;
-        },
-      });
+        turnCount.current,
+        round === "behavioral" ? behavioralRole : roleContext,
+        behavioralRound,
+      );
 
       if (!current()) {
-        outcome.client.end();
+        conn.client.end();
         return;
       }
 
-      live.current = outcome.client;
-      setVoiceMode(outcome.mode);
-      voiceModeRef.current = outcome.mode;
-      setMockReason(outcome.mockReason);
-      setConnected(true);
-      setMicOn(outcome.mode === "real"); // mocks start unmuted, real starts live
-      syncEnabled.current = outcome.mode === "real";
-      // First sync right after connect, if code was edited before connecting.
+      live.current = conn.client;
+      voiceModeRef.current = conn.mode;
+      syncEnabled.current = conn.mode === "live";
+      lastSyncedVersion.current = null;
       if (round === "coding") syncLatest();
-    } catch (e) {
-      if (!current()) return;
-      setLiveError(isApiError(e) ? e : { code: "provider_unavailable", message: (e as Error).message, retryable: true });
+      setVoiceMode(conn.mode);
+      setMockReason(conn.mockReason);
+      setConnected(true);
+
+      try {
+        await conn.client.startMic();
+        setMicOn(true);
+      } catch {
+        setLiveError({ code: "provider_unavailable", message: "Microphone unavailable", retryable: true });
+      }
+    } catch {
+      setLiveError({ code: "provider_unavailable", message: "Could not start the voice session", retryable: true });
+      setLiveState("error");
     } finally {
-      if (current()) setConnecting(false);
+      setConnecting(false);
+    }
+  }
+
+  async function handleToggleMic() {
+    const client = live.current;
+    if (!client) return;
+    if (micOn) {
+      client.stopMic();
+      setMicOn(false);
+    } else {
+      try {
+        await client.startMic();
+        setMicOn(true);
+      } catch {
+        setLiveError({ code: "provider_unavailable", message: "Microphone unavailable", retryable: true });
+      }
     }
   }
 
   async function handleReconnect() {
-    if (!disconnected || reconnecting || reconnectInFlight.current) return;
     const client = live.current;
-    if (!client) {
-      // No client to reconnect -> fresh connect.
-      void handleConnect();
-      return;
-    }
-
-    setReconnecting(true);
+    if (!client || voiceModeRef.current !== "live" || reconnectInFlight.current) return;
     reconnectInFlight.current = true;
-    setLiveError(null);
-    const gen = (connGen.current += 1);
-    const current = () => gen === connGen.current;
+    setReconnecting(true);
+    const gen = connGen.current;
+    const current = () => gen === connGen.current && live.current === client;
 
     try {
-      const token = await fetchLiveToken(ids().sessionId, roleContext, behavioralRound?.type);
+      const token = await fetchLiveToken(
+        ids().sessionId,
+        round === "behavioral" ? behavioralRole : roleContext,
+        behavioralRound?.type,
+        behavioralRound?.context,
+      );
       if (!current()) return;
-
-      await client.reconnect(token);
+      if (isApiError(token)) {
+        setLiveError(token);
+        return;
+      }
+      await client.connect(token, problem);
       if (!current()) return;
-
-      setConnected(true);
+      setLiveError(null);
       setDisconnected(false);
-      setMicOn(voiceModeRef.current === "real");
-      syncEnabled.current = voiceModeRef.current === "real";
-      if (round === "coding") syncLatest();
-    } catch (e) {
-      if (!current()) return;
-      setLiveError(isApiError(e) ? e : { code: "provider_unavailable", message: (e as Error).message, retryable: true });
+    } catch {
+      if (current()) setLiveError((e) => e ?? { code: "provider_unavailable", message: "Could not reconnect", retryable: true });
     } finally {
-      reconnectInFlight.current = false;
-      if (current()) setReconnecting(false);
+      if (gen === connGen.current) {
+        reconnectInFlight.current = false;
+        setReconnecting(false);
+      }
     }
-  }
-
-  function handleToggleMic() {
-    const next = !micOn;
-    setMicOn(next);
-    live.current?.setMuted(!next);
   }
 
   function endLive() {
-    connGen.current += 1; // invalidate any in-flight connect or callbacks
+    connGen.current++;
     cancelPendingSync();
     syncEnabled.current = false;
+    reconnectInFlight.current = false;
     voiceModeRef.current = null;
     live.current?.end();
     live.current = null;
@@ -285,8 +288,6 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     latest.current = { codeVersion: v, source: next };
     setSource(next);
     setCodeVersion(v);
-    // Debounce: each edit restarts the 2 s timer, so a burst of edits syncs
-    // once, with the latest version.
     if (syncEnabled.current) {
       cancelPendingSync();
       syncTimer.current = setTimeout(syncLatest, 2000);
@@ -311,9 +312,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       setAttempt((s) => ({ ...s, runs: [...s.runs, res.result] }));
       setResult(res.result);
       setFromFixture(res.fromFixture);
-      live.current?.sendRunContext(snapshot, res.result);
-      // The Run carried this exact source, so a pending sync of the same
-      // version is redundant. A newer edit still syncs after its pause.
+      live.current?.sendRunContext?.(snapshot, res.result);
       if (live.current) {
         lastSyncedVersion.current = Math.max(lastSyncedVersion.current ?? 0, snapshot.codeVersion);
       }
@@ -394,7 +393,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     const prior = ids();
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
     endLive();
-    turnCount.current = 0; // new attempt: transcript IDs may restart at t1
+    turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
     setLiveError(null);
 
@@ -672,8 +671,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         </button>
       </header>
 
-      <main className="grid grid-cols-1 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="flex min-h-0 flex-col border-zinc-800 lg:border-r">
+      <main className="flex flex-col lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="flex shrink-0 flex-col border-zinc-800 lg:min-h-0 lg:shrink lg:border-r">
           <div className="min-h-0 flex-1 overflow-y-auto" tabIndex={0}>
             <ProblemPanel problem={problem} />
           </div>
@@ -696,7 +695,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           />
         </div>
 
-        <div className="flex min-h-0 flex-col">
+        <div className="flex flex-col lg:min-h-0">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
             <div>
               <span className="font-mono text-sm text-zinc-500">solution.py · v{codeVersion}</span>
@@ -720,10 +719,10 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               )}
             </button>
           </div>
-          <div className="h-[45dvh] min-h-80 bg-[#1e1e1e] lg:h-auto lg:min-h-0 lg:flex-[3]">
+          <div className="mobile-editor-pane bg-[#1e1e1e] lg:h-auto lg:min-h-0 lg:flex-[3]">
             <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
           </div>
-          <div className="h-80 min-h-[220px] lg:h-[38%] border-t border-zinc-800">
+          <div className="min-h-[260px] shrink-0 border-t border-zinc-800 lg:h-[38%] lg:shrink">
             <ResultsPanel result={result} running={running} usingFixtures={fromFixture} />
           </div>
         </div>
