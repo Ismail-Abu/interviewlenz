@@ -803,3 +803,7 @@ Ismail requested on-demand ElevenLabs audio for behavioral questions and scoreca
 Files: sponsor API routes, lib/solana.ts, optional Report fields, ReadAloud, ReportExtras, the behavioral room, both report views, RolePresets, environment examples, dependency lock and offline sponsor checks. The Run button and existing test IDs are preserved.
 
 Validation: lint and production build passed, all 18 CI checks passed. Chrome at 390×844 selected the Solana preset, replayed the current question, and read the debrief with browser speech stubbed. No horizontal overflow appeared in that report. Local transaction signing was exercised with an ephemeral test issuer and stubbed Devnet RPC. Live ElevenLabs audio and a confirmed Devnet transaction require deployment credentials and a funded Devnet fee payer.
+
+## Remember me • November 15
+
+Production lacks the public SSOJet issuer and client ID. Ismail requested a working Remember me fallback. NavAuth now saves a display name in this browser, supports editing or forgetting it, and shows Sign in when SSOJet is configured. This local preference does not authenticate a user. Mobile Chrome verified save, reload, cancel, removal and cross-tab updates. Lint, production build and all 19 CI suites passed.
