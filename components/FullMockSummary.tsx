@@ -6,6 +6,7 @@ import type { CodingSession, EvidenceRef, Finding, RoundType } from "@/lib/contr
 import { Wordmark } from "./Logo";
 import { btn } from "./ui/buttons";
 import { isBehavioralSession } from "@/lib/behavioral";
+import { Scorecard } from "./report/Scorecard";
 
 interface Props {
   codingRecord?: AttemptRecord;
@@ -13,6 +14,22 @@ interface Props {
   onRetryReport: (attemptId: string) => void;
   onPracticeAgain: (round: RoundType) => void;
   onReturnHome: () => void;
+  // "Practicing for X at Y", when the student gave job details.
+  roleLabel?: string;
+}
+
+// The tested version and the final unrun draft, read off the coding session.
+// They are deliberately separate: the last snapshot can be newer than anything
+// that was ever run.
+function codingFacts(record?: AttemptRecord) {
+  const s = record?.session;
+  if (!s || isBehavioralSession(s)) return { lastRun: null, draftVersion: null };
+  const coding = s as CodingSession;
+  const lastRun = coding.runs.at(-1) ?? null;
+  const lastSnapshot = coding.snapshots.at(-1);
+  const draftVersion =
+    lastSnapshot && lastSnapshot.codeVersion !== lastRun?.codeVersion ? lastSnapshot.codeVersion : null;
+  return { lastRun, draftVersion };
 }
 
 const RATING_STYLE: Record<Finding["rating"], string> = {
@@ -41,17 +58,22 @@ export function FullMockSummary({
   onRetryReport,
   onPracticeAgain,
   onReturnHome,
+  roleLabel,
 }: Props) {
   const [expandedRound, setExpandedRound] = useState<RoundType | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<{ round: RoundType; ref: EvidenceRef } | null>(null);
+  const { lastRun, draftVersion } = codingFacts(codingRecord);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" data-testid="full-mock-summary">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
-        <div className="flex items-center gap-4">
+      {/* Wraps and shrinks: at 390px the one-line version overflowed the page. */}
+      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur sm:px-6">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <Wordmark size={26} />
-          <span className="text-base font-semibold text-zinc-200">Full Mock Interview Summary</span>
-          <span className="rounded bg-brand-coral/15 px-2 py-0.5 text-xs font-bold text-brand-coral uppercase tracking-wider">
+          <span className="hidden truncate text-base font-semibold text-zinc-200 sm:inline">
+            Full Mock Interview Summary
+          </span>
+          <span className="shrink-0 rounded bg-brand-coral/15 px-2 py-0.5 text-xs font-bold text-brand-coral uppercase tracking-wider">
             2 Rounds Complete
           </span>
         </div>
@@ -70,6 +92,17 @@ export function FullMockSummary({
           <p className="mt-1 text-sm text-zinc-400">
             Review your findings and evidence-backed practice takeaways from both rounds below.
           </p>
+        </div>
+
+        {/* How did it go, what supports it, what to practise next. Scores are
+            derived deterministically from the rubric ratings; see lib/score.ts. */}
+        <div className="mb-10">
+          <Scorecard
+            roleLabel={roleLabel}
+            coding={codingRecord ? { report: codingRecord.report ?? null, lastRun, draftVersion } : undefined}
+            behavioral={behavioralRecord ? { report: behavioralRecord.report ?? null } : undefined}
+            onPractice={onPracticeAgain}
+          />
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">

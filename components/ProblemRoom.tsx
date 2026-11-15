@@ -656,6 +656,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         onRetryReport={handleRetryReport}
         onPracticeAgain={handlePracticeAgain}
         onReturnHome={() => setView("start")}
+        roleLabel={
+          profile && hasJob(profile.job)
+            ? `Practicing for ${profile.job.role.trim() || "your role"}${profile.job.company.trim() ? ` at ${profile.job.company.trim()}` : ""}`
+            : undefined
+        }
       />
     );
   }
