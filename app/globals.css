@@ -20,11 +20,13 @@
   --color-brand-hover: #dc1f3d;
   --color-brand-coral: #fe6b73; /* dark surfaces only: ~2.1:1 on cream */
 
-  /* Cover page ("beige marketing, dark app"): used only inside the landing
-     page's own wrapper. The interview room keeps the dark theme above. */
+  /* Cream surface, used by the landing page, the behavioral round (the one
+     in-app page with no Monaco editor) and the report. The coding room stays
+     dark. */
   --color-cream: #fbf6ec; /* page */
   --color-cream-2: #f6eee0; /* cards */
   --color-cream-3: #f3e8d6; /* chips, secondary buttons */
+  --color-cream-line: #ede2d0; /* hairlines */
   --color-ink: #3a302c; /* headings + body, 11.4:1 on cream */
   --color-ink-muted: #75665c; /* secondary copy, 4.8:1 on cream */
   --color-maroon: #9b3b50; /* buttons, accents */
@@ -50,6 +52,12 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-maroon-soft);
   outline-offset: 2px;
+}
+
+/* Coral is nearly invisible on cream, so cream surfaces get a maroon ring.
+   Scoped, so the dark rooms keep the coral outline unchanged. */
+[data-surface="cream"] :focus-visible {
+  outline-color: #8c2f43;
 }
 
 @media (max-width: 1023px) {
