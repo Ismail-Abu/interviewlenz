@@ -317,6 +317,8 @@ class BrowserLiveClient implements LiveClient {
   syncCode(snapshot: CodeSnapshot): void {
     if (this.round === "behavioral") return; // no code in a behavioral round
     this.observeVersion(snapshot.codeVersion, snapshot.source);
+    // Version only — never the source. The sink is dev-only (see trace()).
+    trace({ conn: this.connectionSeq, stage: "buffer-queued", v: snapshot.codeVersion });
     this.pump();
   }
 
@@ -434,7 +436,10 @@ class BrowserLiveClient implements LiveClient {
         const r = this.latestRun.result;
         trace({ conn: this.connectionSeq, stage: "written", runId: this.latestRun.epoch, v: r.codeVersion, score: scoreOf(r) });
       }
-      if (bufferEligible) this.lastSentBufferVersion = this.currentBufferVersion;
+      if (bufferEligible) {
+        this.lastSentBufferVersion = this.currentBufferVersion;
+        trace({ conn: this.connectionSeq, stage: "buffer-written", v: this.currentBufferVersion });
+      }
     } catch {
       this.markDisconnected();
     }

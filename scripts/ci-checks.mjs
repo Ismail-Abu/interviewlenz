@@ -30,6 +30,7 @@ const CHECKS = [
   "behavioral-check.mjs",
   "tailoring-check.mjs",
   "role-context-check.mjs",
+  "live-freshness-check.mjs",
   "live-grounding-check.mjs",
   "live-queue-check.mjs",
   "live-stages-check.mjs",

@@ -17,6 +17,7 @@ import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
 import { btn } from "./ui/buttons";
 
@@ -30,6 +31,12 @@ const DEV = process.env.NODE_ENV !== "production";
 type AttemptIds = Pick<Session, "sessionId" | "attemptId" | "priorAttemptId">;
 type AttemptData = Pick<CodingSession, "turns" | "snapshots" | "runs">;
 const EMPTY_ATTEMPT: AttemptData = { turns: [], snapshots: [], runs: [] };
+
+// Upper bound on how long the newest editor version can wait before it is
+// written to the active Live session. Also the floor on the gap between two
+// code-context messages, so continuous typing cannot produce one message per
+// keystroke.
+const SYNC_INTERVAL_MS = DEFAULT_SYNC_INTERVAL_MS;
 
 export function ProblemRoom({ problem }: { problem: Problem }) {
   // One Session per attempt, kept in browser memory (CONTRACT.md). IDs are
@@ -140,17 +147,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   // timer or a just-resolved connect always sees the latest buffer.
   const latest = useRef({ codeVersion: 1, source: problem.starterCode });
   const lastSyncedVersion = useRef<number | null>(null);
-  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncEnabled = useRef(false); // true only while a real (non-mock) client is connected
   // Bumped whenever a voice connection ends. Callbacks and a connect that
   // resolves late check it, so nothing from an ended connection reaches the
   // current attempt.
   const connGen = useRef(0);
-
-  function cancelPendingSync() {
-    if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = null;
-  }
 
   function syncLatest() {
     if (!live.current || !syncEnabled.current) return;
@@ -158,6 +159,27 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     if (lastSyncedVersion.current === cur.codeVersion) return;
     live.current.syncCode?.({ codeVersion: cur.codeVersion, source: cur.source, at: new Date().toISOString() });
     lastSyncedVersion.current = cur.codeVersion;
+  }
+
+  // Leading send + bounded trailing flush; see lib/codeSync.ts for why.
+  // Built on first use from an event handler or the connect path, never during
+  // render. syncLatest reads only refs, so the captured closure always sees the
+  // current buffer.
+  const syncer = useRef<CodeSyncScheduler | null>(null);
+  function sync(): CodeSyncScheduler {
+    if (syncer.current == null) {
+      syncer.current = new CodeSyncScheduler(syncLatest, SYNC_INTERVAL_MS);
+    }
+    return syncer.current;
+  }
+
+  function cancelPendingSync() {
+    sync().cancel();
+  }
+
+  function scheduleSync() {
+    if (!syncEnabled.current) return;
+    sync().schedule();
   }
 
   async function handleConnect() {
@@ -197,6 +219,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
       voiceModeRef.current = conn.mode;
       syncEnabled.current = conn.mode === "live";
       lastSyncedVersion.current = null;
+      sync().reset();
       if (round === "coding") syncLatest();
       setVoiceMode(conn.mode);
       setMockReason(conn.mockReason);
@@ -288,10 +311,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     latest.current = { codeVersion: v, source: next };
     setSource(next);
     setCodeVersion(v);
-    if (syncEnabled.current) {
-      cancelPendingSync();
-      syncTimer.current = setTimeout(syncLatest, 2000);
-    }
+    scheduleSync();
   }
 
   async function handleRun() {
@@ -399,6 +419,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
     if (round === "coding") {
       lastSyncedVersion.current = null;
+      sync().reset();
       latest.current = { codeVersion: 1, source: problem.starterCode };
       setSource(problem.starterCode);
       setCodeVersion(1);
@@ -418,6 +439,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
 
     if (targetRound === "coding") {
       lastSyncedVersion.current = null;
+      sync().reset();
       latest.current = { codeVersion: 1, source: problem.starterCode };
       setSource(problem.starterCode);
       setCodeVersion(1);
