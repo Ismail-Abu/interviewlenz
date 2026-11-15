@@ -747,3 +747,34 @@ Branched from behavioral handoff 20bc1a3, which includes PR #16. Coordinated the
 Changed ProblemRoom, CodeEditor, StartScreen, ReportView and the coding report prompt. Loaded Monaco at 390×844 measured 5 px before and 379 px after. At 1366×768 it measured 377 px both times. Verified in Chrome with the real browser Python worker: typed set solution → 4/4, results visible, Finish reachable. Keyboard exit on macOS: Ctrl+Shift+M, Shift+Tab to Run; keyboard activation and subsequent navigation to Finish passed on both viewport sizes.
 
 Both viewport sizes: a v3 Run scored 2/4; after editing and finishing, the report request included v3 and v4 ISO-dated snapshots and exactly one Run, v3. The report displayed v4 as an unrun draft. An edit followed by Finish with no Runs saved the draft and showed no runs. The report prompt marks snapshots with no matching Run as unrun. Browser checks used the no-key report fallback. Lint, production build, report/token and behavioral regression checks passed.
+
+### Integration release • Full Mock, streamlined homepage, and verified release candidate
+**Branch:** `integration/release-full-mock`  
+**Base ancestry:** Unified `origin/b10-behavioral` (`b2ef7f5`) + `origin/fix/coding-room-bash` (`ebade66`).
+
+**Delivered Student Capabilities:**
+1. **Streamlined Homepage:**
+   - Single hero action: "Start practice" with clear framing for both coding and behavioral practice.
+   - Three actionable practice modes directly selectable on 1366×768 without scrolling: **Coding**, **Behavioral**, and **Full mock** (2-round).
+   - Collapsed optional personalization with mode-specific disclosures (job details sent to Gemini; resume screenshots stay local unless "Prepare my interview" is chosen for behavioral tailoring).
+   - Stale copy removed ("nothing is uploaded", "tailoring isn't live", unavailable round cards).
+2. **Full Mock Practice (Coding + Behavioral in one continuous loop):**
+   - Starts with Python Coding round (starter code, Pyodide runner, live voice).
+   - Finishing coding round presents an intentional transition screen ("Continue to Behavioral Round →" or "View Coding Feedback First").
+   - Voice session, audio listeners, and WebSocket teardown cleanly before Round 2 starts.
+   - Fresh behavioral session mints carrying confirmed personalization.
+   - Finishing behavioral round opens the **Full Mock Summary** featuring both Round 1 and Round 2 score cards, evidence-backed practice takeaways, transcript/code quotes, inline "Retry report", and per-round "Practice this round again" preserving the other round's results.
+3. **Coding-Room & Mobile Fixes:**
+   - Mobile editor height (`390×844`) verified at 360px (no squishing/collapsing) via `@source` directives and `.mobile-editor-pane`.
+   - Monaco keyboard navigation: `Ctrl+M` (Mac: `Ctrl+Shift+M`), then `Shift+Tab` to leave editor.
+   - Unrun draft preservation: editing after a test run preserves the unrun draft with an ISO timestamp without falsely attributing prior test scores to it.
+4. **Automated Verification:**
+   - `dev/integration-browser-check.mjs`: 4/4 suites passed (Homepage, Coding, Full Mock 2-Round, Mobile Viewport).
+   - Regression suites: `dev/tailoring-check.mjs` (44/44), `dev/behavioral-check.mjs` (28/28), `dev/live-reconnect-check.mjs` (14/14), `dev/live-disconnect-check.mjs` (8/8), `dev/runner-check.mjs` (all passed), `dev/report-check.mjs` (all passed).
+   - `npm run lint`: clean (0 errors, 0 warnings).
+   - Production Turbopack build (`next build`): 100% clean in 5.2s.
+
+**Real-Mic Walkthrough for Ismail:**
+1. **Coding Practice:** Start Coding round with mic enabled → Speak initial approach ("I plan to use a hash set") → Interviewer speaks prompt → Run set solution (4/4) → Interviewer asks about space-time complexity.
+2. **Behavioral Practice:** Start Behavioral round → Interviewer asks opening question → Speak engineering project story → Interviewer asks specific follow-up probing a detail from your answer.
+3. **Full Mock:** Complete both rounds back-to-back, verify dual summary cards and quote evidence.
