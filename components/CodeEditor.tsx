@@ -51,14 +51,14 @@ export default function CodeEditor({ value, onChange, errorLine, errorMessage }:
     <Editor
       height="100%"
       language="python"
-      theme="vs-dark"
+      theme="vs"
       value={value}
       onChange={(v) => onChange(v ?? "")}
       onMount={handleMount}
       options={{
         ariaLabel: "Python editor. To leave, press Control+M (Mac: Control+Shift+M), then Shift+Tab.",
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 14,
+        lineHeight: 22,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         tabSize: 4,

@@ -12,12 +12,12 @@ interface Props {
   session?: Session;
 }
 
-// High-tech ratings: rose / amber / slate / muted.
+// High-tech ratings: emerald / amber / rose / muted.
 const RATING_STYLE: Record<Finding["rating"], string> = {
-  strong: "bg-rose-950/80 text-rose-300 border border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.25)]",
-  ok: "bg-amber-950/80 text-amber-300 border border-amber-500/40",
-  needs_work: "bg-zinc-800 text-zinc-300 border border-zinc-700",
-  insufficient_evidence: "bg-zinc-900 text-zinc-400 border border-zinc-800",
+  strong: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  ok: "bg-amber-50 text-amber-700 border border-amber-200",
+  needs_work: "bg-rose-50 text-rose-700 border border-rose-200",
+  insufficient_evidence: "bg-muted text-muted-foreground border border-border",
 };
 
 const KIND_ICON: Record<EvidenceRef["kind"], string> = { turn: "❝", code: "</>", run: "▶" };
@@ -44,9 +44,9 @@ export function FindingCard({ finding, selected, onSelectRef, session }: Props) 
   // The first quoted turn is shown inline so the claim and the words sit together.
   const quoted = views.find((x) => x.v.quote)?.v.quote;
   return (
-    <li className="rounded-[22px] bg-[#161720]/80 border border-white/[0.06] p-5 sm:p-6 shadow-lg transition-colors hover:border-white/10">
+    <li className="rounded-xl bg-card border border-border p-5 sm:p-6 shadow-sm transition-colors hover:border-border/80">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs font-mono font-bold uppercase tracking-wider text-rose-400">
+        <span className="text-xs font-mono font-bold uppercase tracking-wider text-primary">
           {categoryLabel(finding.category)}
         </span>
         <span className={`inline-flex items-center rounded-full px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider ${RATING_STYLE[finding.rating]}`}>
@@ -54,15 +54,15 @@ export function FindingCard({ finding, selected, onSelectRef, session }: Props) 
         </span>
       </div>
 
-      <p className="mt-3 text-[15px] sm:text-[16px] leading-relaxed text-zinc-200">{finding.summary}</p>
+      <p className="mt-3 text-[15px] sm:text-[16px] leading-relaxed text-foreground">{finding.summary}</p>
 
       {quoted && (
-        <figure className="mt-3.5 rounded-r-[14px] border-l-[3px] border-rose-500/80 bg-[#0E0F14]/90 px-4 py-3">
-          <blockquote className="text-[14px] sm:text-[15px] italic leading-relaxed text-zinc-300">
+        <figure className="mt-3.5 rounded-r-lg border-l-2 border-primary bg-muted/50 px-4 py-3">
+          <blockquote className="text-[14px] sm:text-[15px] italic leading-relaxed text-foreground">
             &ldquo;{quoted.text.length > 220 ? `${quoted.text.slice(0, 220).trimEnd()}…` : quoted.text}&rdquo;
           </blockquote>
-          <figcaption className="mt-1.5 font-mono text-xs text-zinc-400">
-            <span className={quoted.who === "You" ? "text-cyan-400 font-semibold" : "text-rose-400 font-semibold"}>
+          <figcaption className="mt-1.5 font-mono text-xs text-muted-foreground">
+            <span className={quoted.who === "You" ? "text-primary font-semibold" : "text-foreground font-semibold"}>
               {quoted.who}
             </span>
             {" · "}
@@ -86,8 +86,8 @@ export function FindingCard({ finding, selected, onSelectRef, session }: Props) 
                 title={v.missing ? "Not found in this attempt" : "Open this evidence"}
                 className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3.5 py-1.5 font-mono text-xs font-medium transition-all ${
                   isSelected
-                    ? "bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.4)]"
-                    : "bg-zinc-800/90 text-zinc-300 border border-white/10 hover:border-white/20 hover:bg-zinc-700 hover:text-white"
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-background text-foreground border border-border hover:bg-muted"
                 } ${v.missing ? "line-through opacity-50" : ""}`}
               >
                 <span aria-hidden className="shrink-0 opacity-70">
