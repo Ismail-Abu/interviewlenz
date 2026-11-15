@@ -24,6 +24,7 @@ import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { getProblem, randomProblem } from "@/lib/problems";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
 
@@ -44,7 +45,24 @@ const EMPTY_ATTEMPT: AttemptData = { turns: [], snapshots: [], runs: [] };
 // keystroke.
 const SYNC_INTERVAL_MS = DEFAULT_SYNC_INTERVAL_MS;
 
-export function ProblemRoom({ problem }: { problem: Problem }) {
+export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
+  // Which problem this attempt is on. The prop is only the starting value:
+  // selection happens per attempt on the client, because picking in the server
+  // component would choose once per build and hand everyone the same problem.
+  const [problem, setProblem] = useState<Problem>(initialProblem);
+
+  // Reset the editor for a coding attempt on `next`, which may differ from the
+  // problem just attempted.
+  function loadProblem(next: Problem) {
+    setProblem(next);
+    lastSyncedVersion.current = null;
+    sync().reset();
+    latest.current = { codeVersion: 1, source: next.starterCode };
+    setSource(next.starterCode);
+    setCodeVersion(1);
+    setResult(null);
+    setFromFixture(false);
+  }
   // One Session per attempt, kept in browser memory (CONTRACT.md). IDs are
   // minted on first use in an event handler: Cache Components forbids random
   // values during prerender, and the room never renders them.
@@ -545,18 +563,12 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setLiveError(null);
 
     if (round === "coding") {
-      lastSyncedVersion.current = null;
-      sync().reset();
-      latest.current = { codeVersion: 1, source: problem.starterCode };
-      setSource(problem.starterCode);
-      setCodeVersion(1);
-      setResult(null);
-      setFromFixture(false);
+      loadProblem(problem); // retry is another attempt at the same problem
     }
     setView("room");
   }
 
-  function handlePracticeAgain(targetRound: RoundType) {
+  function handlePracticeAgain(targetRound: RoundType, nextProblem?: Problem) {
     endLive();
     const prior = ids();
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
@@ -566,13 +578,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setLiveError(null);
 
     if (targetRound === "coding") {
-      lastSyncedVersion.current = null;
-      sync().reset();
-      latest.current = { codeVersion: 1, source: problem.starterCode };
-      setSource(problem.starterCode);
-      setCodeVersion(1);
-      setResult(null);
-      setFromFixture(false);
+      // A fresh practice run gets a different problem; excluding the current one
+      // means "practice again" never hands back the problem just attempted.
+      loadProblem(nextProblem ?? randomProblem(problem.id));
       setRound("coding");
     } else {
       setRound("behavioral");
@@ -590,7 +598,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     if (m === "behavioral") {
       setRound("behavioral");
     } else {
-      // "coding" or "full-mock" starts with coding
+      // "coding" or "full-mock" starts with coding. No plan named a problem, so
+      // skipping straight in gets a random one from the bank.
+      loadProblem(randomProblem());
       setRound("coding");
     }
     setView("room");
@@ -616,10 +626,11 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setProfile({ resume: draft.resume, job: draft.job });
     setBehavioralContext(plan.behavioral.focus);
     setPracticeMode("full-mock");
-    // The room renders one problem today; a plan always names it (lib/plan.ts).
-    if (plan.technical.problemId !== problem.id) console.warn("plan problem differs from the loaded problem");
-    if (idsRef.current) handlePracticeAgain("coding"); // fresh attempt, editor reset
+    // The plan names its problem (lib/plan.ts); load that one, not a random one.
+    const planned = getProblem(plan.technical.problemId) ?? problem;
+    if (idsRef.current) handlePracticeAgain("coding", planned); // fresh attempt, editor reset
     else {
+      loadProblem(planned);
       setAttemptSeq((n) => n + 1);
       setRound("coding");
       setView("room");
