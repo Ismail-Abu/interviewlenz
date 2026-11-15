@@ -8,6 +8,7 @@ import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { StartScreen, type MicStatus } from "./StartScreen";
+import { hasJob, type CandidateProfile } from "./landing/profile";
 import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
@@ -37,6 +38,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [view, setView] = useState<"start" | "room" | "report">("start");
   const [records, setRecords] = useState<AttemptRecord[]>([]);
   const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
+  // From the landing page. Browser-only and display-only: never added to the
+  // Session, the token request, or the Live session (no backend fields for it).
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -195,7 +199,16 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   if (view === "start") {
-    return <StartScreen micStatus={micStatus} onMicStatus={setMicStatus} onStart={() => setView("room")} />;
+    return (
+      <StartScreen
+        micStatus={micStatus}
+        onMicStatus={setMicStatus}
+        onStart={(p) => {
+          setProfile(p);
+          setView("room");
+        }}
+      />
+    );
   }
 
   if (view === "report") {
@@ -213,6 +226,16 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           Python · {problem.title}
           {attemptNumber > 1 && ` · Attempt ${attemptNumber}`}
         </span>
+        {profile && hasJob(profile.job) && (
+          <span
+            className="hidden max-w-xs truncate rounded-full border border-brand-coral/40 bg-brand-coral/10 px-3 py-1 text-sm text-brand-coral lg:inline"
+            data-testid="target-role"
+            title="From your setup. Tailored rounds are a preview."
+          >
+            Practicing for {profile.job.role.trim() || "your role"}
+            {profile.job.company.trim() && ` at ${profile.job.company.trim()}`}
+          </span>
+        )}
         <span className="ml-auto text-sm text-zinc-500" data-testid="session-stats">
           {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
         </span>
