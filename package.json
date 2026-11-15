@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:ci": "node scripts/ci-checks.mjs"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
     "@google/genai": "^3.3.0",
