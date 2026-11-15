@@ -13,25 +13,29 @@ export const btn = {
 } as const;
 
 // Cover page buttons (cream surface, design/COVER-PAGE-BRIEF.md). Separate from
-// `btn` on purpose: `btn` is used by the dark interview room, which must not
-// change. Sizing lives in the base here; call sites add layout only.
+// `btn` on purpose: `btn` is used by the dark interview room.
+// Sizing lives in the base here; call sites add layout only.
 const coverBase =
   "inline-flex items-center justify-center gap-2 rounded-[18px] font-semibold " +
-  "text-[15px] px-6 py-4 transition-colors disabled:cursor-not-allowed disabled:opacity-60";
+  "text-[15px] px-6 py-3.5 transition-all duration-150 select-none " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-soft " +
+  "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none";
 
 export const coverBtn = {
-  primary: `${coverBase} bg-maroon text-white shadow-[0_10px_18px_-6px_rgb(90_68_50/0.25)] hover:bg-maroon-hover`,
-  secondary: `${coverBase} bg-cream-3 text-maroon-deep hover:bg-[#EFE0CA]`,
-  neutral: `${coverBase} text-ink-muted hover:text-ink hover:bg-cream-2`,
+  primary: `${coverBase} bg-maroon text-white shadow-[0_10px_18px_-6px_rgb(90_68_50/0.25)] hover:bg-maroon-hover active:bg-maroon-deep hover:shadow-[0_12px_22px_-6px_rgb(90_68_50/0.32)]`,
+  secondary: `${coverBase} bg-cream-3 text-maroon-deep border border-cream-line hover:bg-[#EFE0CA] hover:border-maroon-soft/40 active:bg-cream-2`,
+  neutral: `${coverBase} text-ink-muted hover:text-ink hover:bg-cream-2 border border-transparent`,
 } as const;
 
 // Compact cover buttons (inline actions inside setup cards). Same colours.
 const coverSmBase =
   "inline-flex items-center justify-center gap-2 rounded-[14px] font-semibold " +
-  "text-sm px-3.5 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60";
+  "text-sm px-4 py-2 transition-all duration-150 select-none " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-soft " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
 
 export const coverBtnSm = {
-  primary: `${coverSmBase} bg-maroon text-white hover:bg-maroon-hover`,
-  secondary: `${coverSmBase} bg-cream-3 text-maroon-deep hover:bg-[#EFE0CA]`,
-  neutral: `${coverSmBase} text-ink-muted hover:text-ink hover:bg-cream-3`,
+  primary: `${coverSmBase} bg-maroon text-white shadow-sm hover:bg-maroon-hover active:bg-maroon-deep`,
+  secondary: `${coverSmBase} bg-cream-3 text-maroon-deep border border-cream-line hover:bg-[#EFE0CA] hover:border-maroon-soft/40 active:bg-cream-2`,
+  neutral: `${coverSmBase} text-ink-muted hover:text-ink hover:bg-cream-3 border border-transparent`,
 } as const;

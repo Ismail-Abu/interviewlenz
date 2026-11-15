@@ -1,8 +1,7 @@
 "use client";
 
-// "Review your interview plan". Functional version so the flow runs end to end.
-// PRESENTATION OWNER: Gemini #2. Replace the markup freely; keep the props
-// (components/flow/types.ts) and the data-testids.
+// "Review your interview plan".
+// PRESENTATION OWNER: Gemini #2. Controlled component: renders props and calls callbacks.
 import { useState } from "react";
 import type { PlanTheme } from "@/lib/contract";
 import { getProblem } from "@/lib/problems";
@@ -11,7 +10,8 @@ import { fallbackNotice } from "../planAdapter";
 import { coverBtn, coverBtnSm } from "../ui/buttons";
 import type { PlanReviewProps } from "./types";
 
-const field = "w-full rounded-[14px] bg-white px-3 py-2 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] focus:ring-2 focus:ring-maroon-soft";
+const inputField =
+  "w-full rounded-[14px] bg-white px-3.5 py-2.5 text-sm text-ink ring-1 ring-inset ring-[#D9C8B0] transition-colors focus:outline-none focus:ring-2 focus:ring-maroon-soft";
 
 export function PlanReview({ plan, application, onEdit, onStart, onBack, starting }: PlanReviewProps) {
   const problem = getProblem(plan.technical.problemId);
@@ -22,16 +22,24 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
   const [project, setProject] = useState(plan.behavioral.focus?.project?.name ?? "");
   const [skill, setSkill] = useState(plan.behavioral.focus?.focus?.skill ?? "");
 
-  const provenance = (th: PlanTheme) => {
+  const provenanceBadge = (th: PlanTheme) => {
     const p = th.provenance;
-    if (p.kind === "public-research")
+    if (p.kind === "public-research") {
       return (
-        <span>
-          Public source{p.citationIds.length > 1 ? "s" : ""}:{" "}
+        <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+          <span className="rounded-full bg-[#E8F0FE] px-2 py-0.5 text-[11px] font-semibold text-[#1967D2]">
+            Public source
+          </span>
           {p.citationIds.map((id, i) => {
             const c = cite(id);
             return c ? (
-              <a key={id} href={c.url} target="_blank" rel="noopener noreferrer" className="text-maroon-deep underline underline-offset-2">
+              <a
+                key={id}
+                href={c.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-maroon-deep underline underline-offset-2 hover:text-maroon"
+              >
                 {c.publisher ?? c.title}
                 {i < p.citationIds.length - 1 ? ", " : ""}
               </a>
@@ -39,27 +47,63 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
           })}
         </span>
       );
-    return p.kind === "job-listing" ? "From your listing" : p.kind === "candidate-resume" ? "From your resume" : "Typical for this role";
+    }
+    if (p.kind === "job-listing") {
+      return (
+        <span className="inline-flex items-center rounded-full bg-[#E6F4EA] px-2 py-0.5 text-[11px] font-semibold text-[#137333]">
+          From your listing
+        </span>
+      );
+    }
+    if (p.kind === "candidate-resume") {
+      return (
+        <span className="inline-flex items-center rounded-full bg-[#FEF7E0] px-2 py-0.5 text-[11px] font-semibold text-[#B06000]">
+          From your resume
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center rounded-full bg-cream-3 px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
+        Inferred for role
+      </span>
+    );
   };
 
-  const round = (r: PlanTheme["round"]) => (
-    <ul className="flex flex-col gap-2">
-      {plan.themes
-        .filter((th) => th.round === r)
-        .map((th) => (
-          <li key={th.id} className="flex items-start justify-between gap-3 rounded-[18px] bg-white/80 p-3" data-testid={`theme-${th.id}`}>
-            <div>
-              <div className="font-semibold">{th.label}</div>
-              {th.detail && <div className="text-sm text-ink-muted">{th.detail}</div>}
-              <div className="mt-1 text-xs text-ink-muted">{provenance(th)}</div>
+  const renderRoundThemes = (r: PlanTheme["round"]) => {
+    const themes = plan.themes.filter((th) => th.round === r);
+    if (themes.length === 0) {
+      return (
+        <p className="rounded-[18px] bg-white/60 p-4 text-sm text-ink-muted italic">
+          No specific themes configured for this round.
+        </p>
+      );
+    }
+    return (
+      <ul className="flex flex-col gap-2.5">
+        {themes.map((th) => (
+          <li
+            key={th.id}
+            className="flex items-start justify-between gap-4 rounded-[20px] bg-white/90 p-4 shadow-sm border border-cream-line/50 transition-colors"
+            data-testid={`theme-${th.id}`}
+          >
+            <div className="flex-1">
+              <div className="text-[15px] font-bold text-ink">{th.label}</div>
+              {th.detail && <div className="mt-1 text-sm leading-relaxed text-ink-muted">{th.detail}</div>}
+              <div className="mt-2.5">{provenanceBadge(th)}</div>
             </div>
-            <button type="button" onClick={() => onEdit({ removeThemeIds: [th.id] })} className={coverBtnSm.neutral} aria-label={`Remove ${th.label}`}>
+            <button
+              type="button"
+              onClick={() => onEdit({ removeThemeIds: [th.id] })}
+              className={coverBtnSm.neutral}
+              aria-label={`Remove ${th.label}`}
+            >
               Remove
             </button>
           </li>
         ))}
-    </ul>
-  );
+      </ul>
+    );
+  };
 
   // Only a real change creates a new revision (blur alone does not).
   const saveFocus = () => {
@@ -68,80 +112,172 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
     onEdit({
       behavioralFocus:
         project.trim() || skill.trim()
-          ? { ...(project.trim() ? { project: { name: project.trim() } } : {}), ...(skill.trim() ? { focus: { skill: skill.trim() } } : {}) }
+          ? {
+              ...(project.trim() ? { project: { name: project.trim() } } : {}),
+              ...(skill.trim() ? { focus: { skill: skill.trim() } } : {}),
+            }
           : null,
     });
   };
 
   return (
-    <div data-surface="cream" className="min-h-screen bg-cream text-ink [color-scheme:light]" data-testid="plan-review" data-plan-id={plan.planId} data-plan-revision={plan.revision}>
-      <main className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-8 sm:px-8">
+    <div
+      data-surface="cream"
+      className="min-h-screen bg-cream text-ink [color-scheme:light]"
+      data-testid="plan-review"
+      data-plan-id={plan.planId}
+      data-plan-revision={plan.revision}
+    >
+      <main className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
+        {/* Navigation Bar */}
         <div className="flex items-center justify-between gap-3">
           <Wordmark size={26} tone="light" />
-          <button type="button" onClick={onBack} className={coverBtnSm.neutral} data-testid="plan-back">
+          <button
+            type="button"
+            onClick={onBack}
+            className={coverBtnSm.neutral}
+            data-testid="plan-back"
+          >
             ← Edit details
           </button>
         </div>
+
+        {/* Plan Header */}
         <div>
-          <h1 className="font-brand text-3xl font-bold tracking-tight">Review your interview plan</h1>
-          <p className="mt-1 text-[15px] text-ink-muted">
+          <span className="inline-flex items-center gap-2 rounded-full bg-cream-3 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-maroon-deep">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-maroon" />
+            Interview Plan Preview
+          </span>
+          <h1 className="mt-3 font-brand text-3xl font-bold tracking-tight sm:text-4xl text-ink">
+            Review your interview plan
+          </h1>
+          <p className="mt-2 text-lg font-semibold text-ink">
             {title}
-            {t.level ? ` · ${t.level}` : ""}
+            {t.level ? <span className="ml-2 font-normal text-ink-muted">· {t.level}</span> : null}
           </p>
-          <p className="mt-1 text-xs text-ink-muted" data-testid="plan-source">
-            {plan.source === "researched" ? "Based on public sources and what you entered" : "Based on the role and what you entered"} · revision {plan.revision}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-muted" data-testid="plan-source">
+            <span className="rounded-full bg-cream-2 px-2.5 py-0.5 font-medium border border-cream-line">
+              {plan.source === "researched"
+                ? "Sourced from public research & your inputs"
+                : "Inferred from role title & your inputs"}
+            </span>
+            <span>·</span>
+            <span>Revision {plan.revision}</span>
+          </div>
         </div>
+
+        {/* Fallback Notice */}
         {notice && (
-          <p role="status" className="rounded-[18px] bg-[#fbe9c8] p-3 text-sm text-[#7a4600]" data-testid="plan-fallback-notice">
-            {notice}
-          </p>
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-[20px] bg-[#FDF6E2] border border-[#E8D196] p-4 text-sm text-[#7A4600]"
+            data-testid="plan-fallback-notice"
+          >
+            <span aria-hidden className="text-base font-bold">⚠️</span>
+            <div className="flex-1 font-medium">{notice}</div>
+          </div>
         )}
 
-        <section className="rounded-[26px] bg-cream-2 p-5 shadow-warm">
-          <h2 className="font-brand text-xl font-bold">Round 1 · Technical</h2>
-          <p className="mb-3 mt-1 text-sm text-ink-muted" data-testid="plan-problem">
-            Problem: <span className="font-semibold text-ink">{problem?.title ?? plan.technical.problemId}</span>, in Python, while the interviewer asks about your reasoning.
+        {/* Round 1: Technical Coding Card */}
+        <section className="rounded-[26px] bg-cream-2 p-6 shadow-warm border border-cream-line/50">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-maroon">Round 1</span>
+              <h2 className="font-brand text-2xl font-bold text-ink">Technical Coding</h2>
+            </div>
+            <span className="rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-ink-muted">
+              ~20 mins
+            </span>
+          </div>
+          <p className="mb-4 text-sm text-ink-muted" data-testid="plan-problem">
+            Problem:{" "}
+            <span className="font-bold text-ink">{problem?.title ?? plan.technical.problemId}</span> (Python), with live interviewer follow-ups on your approach, edge cases, and runtime.
           </p>
-          {round("technical")}
+          {renderRoundThemes("technical")}
         </section>
 
-        <section className="rounded-[26px] bg-cream-2 p-5 shadow-warm">
-          <h2 className="font-brand text-xl font-bold">Round 2 · Behavioral</h2>
-          <div className="mb-3 mt-2 grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              Project to ask about (optional)
-              <input className={field} value={project} onChange={(e) => setProject(e.target.value)} onBlur={saveFocus} name="plan-project" />
+        {/* Round 2: Behavioral Deep-Dive Card */}
+        <section className="rounded-[26px] bg-cream-2 p-6 shadow-warm border border-cream-line/50">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-maroon">Round 2</span>
+              <h2 className="font-brand text-2xl font-bold text-ink">Behavioral Deep-Dive</h2>
+            </div>
+            <span className="rounded-full bg-cream-3 px-3 py-1 text-xs font-semibold text-ink-muted">
+              ~15 mins
+            </span>
+          </div>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-wider text-ink-muted">
+              Project to ask about
+              <input
+                className={inputField}
+                placeholder="e.g. Campus Orders Service"
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                onBlur={saveFocus}
+                name="plan-project"
+              />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium">
-              Skill to focus on (optional)
-              <input className={field} value={skill} onChange={(e) => setSkill(e.target.value)} onBlur={saveFocus} name="plan-skill" />
+            <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-wider text-ink-muted">
+              Skill to focus on
+              <input
+                className={inputField}
+                placeholder="e.g. Debugging production incidents"
+                value={skill}
+                onChange={(e) => setSkill(e.target.value)}
+                onBlur={saveFocus}
+                name="plan-skill"
+              />
             </label>
           </div>
-          {round("behavioral")}
+          {renderRoundThemes("behavioral")}
         </section>
 
+        {/* Public Citations */}
         {plan.source === "researched" && plan.citations.length > 0 && (
-          <section className="text-sm text-ink-muted" data-testid="plan-citations">
-            <h2 className="mb-1 font-semibold text-ink">Public sources</h2>
-            <ul className="list-disc pl-5">
+          <section className="rounded-[22px] bg-white/70 p-5 text-sm text-ink-muted border border-cream-line/50" data-testid="plan-citations">
+            <h2 className="mb-2 font-bold text-ink">Public Sources & Research References</h2>
+            <ul className="flex flex-col gap-1.5 pl-1">
               {plan.citations.map((c) => (
-                <li key={c.id}>
-                  <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-maroon-deep underline underline-offset-2">
+                <li key={c.id} className="flex items-baseline gap-2">
+                  <span className="text-maroon">•</span>
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-maroon-deep underline underline-offset-2 hover:text-maroon"
+                  >
                     {c.title}
                   </a>
-                  {c.publisher ? ` · ${c.publisher}` : ""}
+                  {c.publisher && <span className="text-xs text-ink-muted">({c.publisher})</span>}
                 </li>
               ))}
             </ul>
           </section>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={onStart} disabled={starting} className={coverBtn.primary} data-testid="start-plan">
-            {starting ? "Starting…" : "Start technical round"}
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-4 pt-2">
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={starting}
+            className={`${coverBtn.primary} min-w-56`}
+            data-testid="start-plan"
+          >
+            {starting ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+                <span>Starting…</span>
+              </>
+            ) : (
+              "Start technical round"
+            )}
           </button>
-          <span className="text-sm text-ink-muted">Technical, then behavioral, then your score with evidence.</span>
+          <span className="text-sm text-ink-muted">
+            Round 1 (Technical) followed immediately by Round 2 (Behavioral).
+          </span>
         </div>
       </main>
     </div>

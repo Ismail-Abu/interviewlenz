@@ -82,8 +82,8 @@ export function ResumeDrop({ images, onChange }: Props) {
           add(Array.from(e.dataTransfer.files));
         }}
         data-testid="resume-drop"
-        className={`flex min-h-36 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-6 text-center transition-colors ${
-          dragging ? "border-maroon bg-cream-3" : "border-[#d9c8b0] bg-white/70 hover:border-maroon-soft"
+        className={`flex min-h-36 flex-col items-center justify-center gap-2 rounded-[20px] border-2 border-dashed px-6 py-6 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-soft ${
+          dragging ? "border-maroon bg-cream-3" : "border-[#D9C8B0] bg-cream-2/80 hover:bg-cream-2 hover:border-maroon"
         }`}
       >
         <svg viewBox="0 0 24 24" className="h-8 w-8 text-maroon" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>

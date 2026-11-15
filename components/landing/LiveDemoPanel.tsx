@@ -10,9 +10,14 @@ export function LiveDemoPanel() {
         <div className="overflow-hidden rounded-[22px] sm:rounded-[24px] bg-[#141211]">
           {/* Title bar */}
           <div className="flex items-center justify-between bg-panel-2 px-4 py-3 sm:px-5 sm:py-3.5">
-            <span className="font-mono text-xs sm:text-[13px] text-[#9A8C84]">
-              solution.py · v4
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs sm:text-[13px] text-[#9A8C84]">
+                solution.py · v4
+              </span>
+              <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] font-medium text-[#C7BDB7]">
+                example
+              </span>
+            </div>
             <span className="inline-flex items-center rounded-full bg-maroon px-3 py-1 text-[11px] font-semibold text-white select-none">
               ▶ Run
             </span>
@@ -55,10 +60,13 @@ export function LiveDemoPanel() {
               </pre>
             </div>
 
-            {/* Bottom-right pass pill */}
-            <div className="mt-3 flex justify-end">
-              <span className="inline-flex items-center rounded-full bg-[#1B3A28] px-3.5 py-1 text-xs font-bold text-[#6EE7A0] select-none">
-                v4 — 4 / 4 passed
+            {/* Bottom-right pass pill & runtime */}
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[11px] text-[#8A7C74]">runtime · 14 ms (example)</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1B3A28] px-3.5 py-1 text-xs font-bold text-[#6EE7A0] select-none">
+                <span>v4</span>
+                <span>·</span>
+                <span>4 / 4 passed</span>
               </span>
             </div>
           </div>
@@ -66,7 +74,12 @@ export function LiveDemoPanel() {
 
         {/* Transcript header */}
         <div className="flex items-center justify-between text-[11px] font-bold tracking-[0.16em] text-[#8A7C74]">
-          <span>TRANSCRIPT</span>
+          <span className="flex items-center gap-1.5">
+            <span>TRANSCRIPT</span>
+            <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] font-semibold tracking-normal text-[#A89C94]">
+              example
+            </span>
+          </span>
           <div className="flex items-center gap-2 text-xs font-normal tracking-normal text-[#8A7C74]">
             <span>listening</span>
             <span className="inline-block h-2 w-2 rounded-full bg-[#6EE7A0]" />
@@ -81,7 +94,7 @@ export function LiveDemoPanel() {
               INTERVIEWER
             </p>
             <p className="text-sm leading-snug sm:text-[14px]">
-              You called this linear. How many comparisons happen if every number is unique?
+              You used a hash set here to pass all test cases. What&apos;s the space cost of this approach?
             </p>
           </div>
 
@@ -91,7 +104,7 @@ export function LiveDemoPanel() {
               YOU
             </p>
             <p className="text-sm leading-snug sm:text-[14px]">
-              Oh — that&apos;s n squared. The set makes it O(n).
+              It&apos;s O(n) space in the worst case because we store each distinct number in the set.
             </p>
           </div>
 
@@ -101,7 +114,7 @@ export function LiveDemoPanel() {
               INTERVIEWER
             </p>
             <p className="text-sm leading-snug sm:text-[14px]">
-              Right. What about the space cost?
+              Right. Could we achieve O(1) auxiliary space if the input array can be sorted in place?
             </p>
           </div>
         </div>

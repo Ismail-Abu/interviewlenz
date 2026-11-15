@@ -113,12 +113,12 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               {onApply ? (
-                <button type="button" onClick={onApply} data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-44`}>
-                  Start practice
+                <button type="button" onClick={onApply} data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-48`}>
+                  Build my interview
                 </button>
               ) : (
-                <a href="#practice-modes" data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-44`}>
-                  Start practice
+                <a href="#practice-modes" data-testid="hero-start-practice" className={`${coverBtn.primary} min-w-48`}>
+                  Build my interview
                 </a>
               )}
               <button
@@ -284,9 +284,10 @@ export function StartScreen({ micStatus, onMicStatus, onStart, onApply }: Props)
               <button
                 type="button"
                 onClick={testMic}
-                className="text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+                className="inline-flex items-center gap-2 rounded-full border border-[#D9C8B0] bg-cream-2 px-4 py-2 text-xs font-semibold text-ink-muted transition-colors hover:border-maroon-soft hover:bg-cream-3 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon-soft"
               >
-                Test my microphone
+                <span aria-hidden>🎙️</span>
+                <span>Test my microphone</span>
               </button>
             )}
           </div>
