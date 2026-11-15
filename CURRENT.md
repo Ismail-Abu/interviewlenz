@@ -653,3 +653,27 @@ Also on `5419848`:
   - Browser 27/27: Skip → Behavioral → answer → follow-up → mute → Finish → exact quote → Practice again; **two attempts with different `t1`/`t2` each open their own quote**; phone layout; zero-key mock and real deterministic report with no code evidence.
   - Coding regression: landing, sync, reconnect, role, F9 report-retry, and all 12 dev checks; lint clean.
 - **Needs a human (real key + mic):** the real interviewer's follow-up adapting to two different answers.
+
+
+#### Step 2 — Tailor this interview: **tested commit `0093b75`**
+- **Contract (PROPOSED, same review):** `BehavioralContext { project?: {name, summary?}; focus?: {skill, detail?} }` on `BehavioralSession` and `LiveTokenRequest` (behavioral only; 400 on a coding token). `TailoringRequest` / `TailoringSuggestion` for the new route. Limits in `lib/behavioral.ts`: 3,500,000 request bytes, 4 pages, 8000 listing chars, 80/240-char context fields.
+- **`POST /api/analyze-tailoring` (new):**
+  - Rejects before any model call: `content-length` or body bytes over 3,500,000 (UTF-8 bytes, not characters), more than 4 images, types other than PNG/JPEG/WebP, non-base64 data, bytes that don't match the declared type, listings over 8000 chars, and requests with neither resume nor listing.
+  - Uploaded and pasted content goes to the model as data; 25 s timeout → 503 `timeout`; missing key → 503 not configured (`retryable:false`).
+  - Returns at most one project (only if pages were sent; needs an excerpt) and one focus (only if a listing was sent; its excerpt must actually be in the listing). Emails, links, and phone numbers are removed. Nothing is logged.
+- **Landing (`TailorPanel`):**
+  - **Tailor this interview** is collapsed by default. The disclosure says what goes to Gemini before **Prepare my interview**. Selecting files, typing, or opening the form sends nothing.
+  - Pages are re-encoded in the browser (JPEG, long side 1600 → 1100 px floor). The exact serialized body is checked against 3,500,000 bytes before sending. If it can't fit: remove pages, enter details manually, or start a generic round. Five or six pages → "at most 4".
+  - Duplicate clicks send one request. Editing inputs or Skip mid-flight drops the late response.
+  - The editable preview shows verbatim excerpts separately ("not sent to the interviewer"), with Remove buttons. **Enter details manually** works without any upload.
+  - Landing copy corrected: screenshots stay in the tab *unless* the student selects Prepare.
+- **Round:**
+  - The confirmed context (never excerpts, files, or the listing) goes into the token instruction (project → ask about it; focus → student picks a story; both → connect without assuming an incident; "not evidence") and the `[START]` opening.
+  - It's resent on every Reconnect and reused by Practice again with no new analysis. It shows as "Tailored: …" in the room, and the report prompt labels it NOT evidence.
+  - No context → byte-identical Step 1 instruction and opening.
+- **Checks:**
+  - `dev/tailoring-check.mjs` 44/44: the bounds above, all four input combinations, excerpt enforcement, contact removal, timeout, not configured, injection delimiters, report labeling, no console output.
+  - Browser `drive-tailor` 34/34. **Completion check:** correct "CampusEats Delivery API" → "CampusEats Orders Service", remove the focus, start → the token, `[START]` extra, and room use the corrected name; Reconnect and Practice again resend it with **one** analysis request total. Also covered: stale/Skip mid-flight, timeout → manual focus-only, listing-only, remove-all → generic, 5 pages, ladder fits 3 large pages at 3.30 MB, 4 can't fit, unreadable file → generic, phone width.
+  - Regression: the Step 1 behavioral, landing, sync, reconnect, role, and report-retry drivers, plus all stubbed dev checks; lint; `next build`. Zero-key: the real route answers "not configured", and the panel offers manual or generic.
+  - The too-large browser case stubs the canvas encoder: real synthetic noise pages still compress under the cap at 1100 px.
+- **Needs a human (real key):** extraction quality on a real resume screenshot and listing, and hearing an opening about the corrected project.
