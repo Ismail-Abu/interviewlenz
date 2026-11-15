@@ -626,3 +626,30 @@ Also on `5419848`:
 **Correction to earlier live-check steps (#12, #14):** the adjacent-only solution scores **3/4** on the canonical cases, not 2/4. For a 2/4 Run use `def contains_duplicate(nums):\n    return nums[0] == nums[-1]` (c3 raises on `[]`, c4 fails).
 
 **Not run (needs key + mic):** that two attempts with different roles get audibly different framing, while both name the same latest version and score. Steps are in the B9 PR.
+
+### B10 • Behavioral interview practice — branch `b10-behavioral` from #16 `8fc4464` (contains B9 + F9)
+
+**Shared contract: PROPOSED, needs Hamza's approval before merge** (same agreement as B9). Started with no newer work, no other worktrees, and no in-progress UI from Hamza. There was no existing mode picker; the only "Behavioral" was a landing preview label.
+
+#### Step 1 — generic behavioral round: **tested commit `f55f835`**
+- **Contract:**
+  - `RoundType = "coding" | "behavioral"`
+  - `Session = CodingSession | BehavioralSession`; an omitted `roundType` means coding, so older payloads and fixtures are unchanged
+  - a `BehavioralSession` has **no** `problemId`, snapshots, or runs
+  - four behavioral `Finding` categories: specificity, personal_contribution, reasoning, outcome
+  - `LiveTokenRequest.roundType?`; `LiveClient.connect(token, problem?)`
+- **Server:**
+  - The token route locks `behavioralInstructions()` for `roundType: "behavioral"`: one engineering-story question, then one follow-up probing a missing detail in the student's own words; never coding. An unknown round returns 400. Role framing uses title, company, and level only, never the raw listing.
+  - Report route: behavioral validation. An **empty transcript** gets a 200 insufficient-evidence report; a **sparse one** (under 40 student words) gets a 200 report saying what's missing; neither calls the model. Otherwise the behavioral rubric runs, and **only this attempt's student turns** are evidence (interviewer turns, invented IDs, code refs, and coding categories are dropped or downgraded). The coding path is unchanged.
+- **Client (`lib/live.ts` `round`):** behavioral `[START]` opening; Run and code calls are inert; reconnect sends one `[RECONNECTED]` recap with the current question and recent turns verbatim (asking for the follow-up if the student had answered); IDs stay continuous.
+- **UI:**
+  - Landing has **Skip to a behavioral round** and **Start behavioral round**.
+  - `BehavioralRoom`: current question, a whose-turn line, mute/end/reconnect, transcript, and Finish; works at phone width.
+  - Report: an **exact-quote** evidence panel per attempt, and **Practice again** for behavioral (Retry report still reuses the attempt).
+  - Zero-key demo: a scripted behavioral mock ("We fixed the database" → "what did you personally investigate or change?"), and a labeled behavioral fixture.
+  - Corrected stale landing copy: B9 sends role details, so "nothing is uploaded" was no longer true.
+- **Checks:**
+  - `dev/behavioral-check.mjs` 28/28: instruction selection (an omitted round is still the exact coding instruction), no coding text in any behavioral message, inert Run/code, recap verbatim, IDs continuous, report empty/sparse/rubric/student-only evidence/400s, an old coding payload with no `roundType`, zero-key behavior.
+  - Browser 27/27: Skip → Behavioral → answer → follow-up → mute → Finish → exact quote → Practice again; **two attempts with different `t1`/`t2` each open their own quote**; phone layout; zero-key mock and real deterministic report with no code evidence.
+  - Coding regression: landing, sync, reconnect, role, F9 report-retry, and all 12 dev checks; lint clean.
+- **Needs a human (real key + mic):** the real interviewer's follow-up adapting to two different answers.
