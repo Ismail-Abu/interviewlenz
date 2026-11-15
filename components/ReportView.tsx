@@ -118,16 +118,26 @@ function ReportCard({
       )}
 
       {record.status === "error" && record.error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
-          <div className="font-semibold text-red-300">Report unavailable</div>
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm" role="alert" data-testid="report-error">
+          <div className="font-semibold text-red-300">
+            {record.error.code === "timeout" ? "Report timed out" : "Report unavailable"}
+          </div>
           <div className="mt-1 text-red-200">{record.error.message}</div>
-          <div className="mt-1 text-zinc-400">Your session is saved.</div>
-          <button
-            onClick={() => onRetryReport(session.attemptId)}
-            className={`${btn.secondary} mt-3 px-3 py-1.5 text-sm`}
-          >
-            Retry report
-          </button>
+          {record.error.retryable ? (
+            <>
+              <div className="mt-1 text-zinc-400">Your session is saved. Retry uses this same attempt.</div>
+              <button
+                onClick={() => onRetryReport(session.attemptId)}
+                className={`${btn.secondary} mt-3 px-3 py-1.5 text-sm`}
+              >
+                Retry report
+              </button>
+            </>
+          ) : (
+            <div className="mt-1 text-zinc-400">
+              This attempt couldn&apos;t be evaluated, and retrying won&apos;t change that. You can still start a new attempt.
+            </div>
+          )}
         </div>
       )}
 

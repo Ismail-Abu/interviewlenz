@@ -4,9 +4,13 @@ import { detectApproach } from "./liveAdapter";
 
 // The only place the UI requests a report. Never throws.
 //
-// "auto" (default) POSTs {session} to /api/report. If the route is missing or
-// fails (503 when GEMINI_API_KEY is not set), it falls back to
-// fixtures/report.json, labeled FIXTURE DATA, so the demo runs with zero keys.
+// "auto" (default) POSTs {session} to /api/report and only falls back to
+// fixtures/report.json (labeled FIXTURE DATA) when there is no real report
+// service: the route says it is not configured (503, retryable:false) or the
+// route is missing (404 / not an API response). That keeps the zero-key demo.
+// A real failure (provider error or timeout, retryable:true; network error)
+// is returned as an error so the UI shows Retry report for the same attempt,
+// and an invalid request (400) is an error too: never fixture feedback.
 // Dev-only modes: "fixture" skips the route; "fixture-error" simulates a 503
 // on the first request for each attempt so Retry report can be exercised;
 // "api" calls the route and surfaces its error without falling back.
@@ -26,12 +30,19 @@ const UNAVAILABLE: ApiError = {
 };
 
 export async function requestReport(session: Session, mode: ReportMode = DEFAULT_REPORT_MODE): Promise<ReportOutcome> {
-  if (mode === "api") return postReport(session);
+  if (mode === "api") return toOutcome(await postReport(session));
   if (mode === "auto") {
     const real = await postReport(session);
-    if (real.ok) return real;
-    await delay(400);
-    return { ok: true, report: fixtureFor(session), fromFixture: true, fallbackReason: "no API key" };
+    if (real.kind === "not-configured" || real.kind === "route-missing") {
+      await delay(400);
+      return {
+        ok: true,
+        report: fixtureFor(session),
+        fromFixture: true,
+        fallbackReason: real.kind === "not-configured" ? "no API key" : "report service unavailable",
+      };
+    }
+    return toOutcome(real);
   }
   await delay(900);
   if (mode === "fixture-error" && !failedOnce.has(session.attemptId)) {
@@ -45,20 +56,57 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function postReport(session: Session): Promise<ReportOutcome> {
+// What the report route said, classified for the fallback decision.
+type RouteResult =
+  | { kind: "report"; report: Report }
+  | { kind: "not-configured" } // 503, retryable:false: no real service here
+  | { kind: "route-missing" } // 404 or not an API response: no real service here
+  | { kind: "error"; error: ApiError }; // real failure or invalid request
+
+const NETWORK: ApiError = {
+  code: "provider_unavailable",
+  message: "Couldn't reach the report service. Check your connection and try again.",
+  retryable: true,
+};
+
+function isApiError(v: unknown): v is ApiError {
+  const e = v as ApiError | null;
+  return !!e && typeof e === "object" && typeof e.code === "string" && typeof e.message === "string" && typeof e.retryable === "boolean";
+}
+
+async function postReport(session: Session): Promise<RouteResult> {
+  let res: Response;
   try {
-    const res = await fetch("/api/report", {
+    res = await fetch("/api/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session }),
     });
-    const body = await res.json().catch(() => null);
-    if (res.ok && body && Array.isArray(body.findings)) return { ok: true, report: body as Report, fromFixture: false };
-    if (body && typeof body === "object" && "code" in body) return { ok: false, error: body as ApiError };
-    return { ok: false, error: UNAVAILABLE };
   } catch {
-    return { ok: false, error: UNAVAILABLE };
+    return { kind: "error", error: NETWORK }; // offline or dropped: retry the same attempt
   }
+  const body = await res.json().catch(() => null);
+  if (res.ok && body && Array.isArray(body.findings)) return { kind: "report", report: body as Report };
+  if (isApiError(body)) {
+    if (res.status === 503 && body.code === "provider_unavailable" && body.retryable === false) return { kind: "not-configured" };
+    return { kind: "error", error: body };
+  }
+  if (res.status === 404) return { kind: "route-missing" };
+  // Any other non-API response (e.g. a platform error page) is a transient failure.
+  return { kind: "error", error: UNAVAILABLE };
+}
+
+function toOutcome(r: RouteResult): ReportOutcome {
+  if (r.kind === "report") return { ok: true, report: r.report, fromFixture: false };
+  if (r.kind === "error") return { ok: false, error: r.error };
+  // Only reachable in "api" mode, which never falls back.
+  return {
+    ok: false,
+    error:
+      r.kind === "not-configured"
+        ? { code: "provider_unavailable", message: "Report provider not configured", retryable: false }
+        : { code: "provider_unavailable", message: "Report service not found", retryable: false },
+  };
 }
 
 // Build the fixture report for this attempt. The real sessionId and attemptId
