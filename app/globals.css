@@ -18,23 +18,25 @@
   --font-brand: var(--font-space-grotesk), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --color-brand: #c8102e;
   --color-brand-hover: #dc1f3d;
-  --color-brand-coral: #fe6b73;
+  --color-brand-coral: #fe6b73; /* dark surfaces only: ~2.1:1 on cream */
 
   /* Cream surface, used by the landing page, the behavioral round (the one
      in-app page with no Monaco editor) and the report. The coding room stays
      dark. */
-  --color-cream: #fbf6ec;
-  --color-cream-2: #f6eee0;
-  --color-cream-3: #f3e8d6;
-  --color-cream-line: #ede2d0;
-  --color-ink: #3a302c;
-  --color-ink-muted: #75665c;
-  --color-maroon: #9b3b50;
+  --color-cream: #fbf6ec; /* page */
+  --color-cream-2: #f6eee0; /* cards */
+  --color-cream-3: #f3e8d6; /* chips, secondary buttons */
+  --color-cream-line: #ede2d0; /* hairlines */
+  --color-ink: #3a302c; /* headings + body, 11.4:1 on cream */
+  --color-ink-muted: #75665c; /* secondary copy, 4.8:1 on cream */
+  --color-maroon: #9b3b50; /* buttons, accents */
   --color-maroon-hover: #b04a60;
-  --color-maroon-deep: #8c2f43;
-  --color-maroon-soft: #c77d8c;
-  --color-panel: #1c1817;
+  --color-maroon-deep: #8c2f43; /* link text on cream, 7.0:1 */
+  --color-maroon-soft: #c77d8c; /* underlines, focus ring; decorative only */
+  --color-panel: #1c1817; /* demo panel: warm dark */
   --color-panel-2: #2a2422;
+  --shadow-warm: 0 10px 18px -6px rgb(90 68 50 / 0.13); /* cards, buttons */
+  --shadow-warm-panel: 0 12px 22px -6px rgb(90 68 50 / 0.14); /* dark demo panel */
 }
 
 html {
@@ -48,7 +50,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #fe6b73;
+  outline: 2px solid var(--color-maroon-soft);
   outline-offset: 2px;
 }
 
