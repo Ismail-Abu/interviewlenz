@@ -167,6 +167,27 @@ console.log(`== A. Scheduling (interval ${DEFAULT_SYNC_INTERVAL_MS} ms, virtual 
   assert("A7 first edit after reset is immediate", sends.length === 2 && sends[1] === 0);
 }
 
+// A8 flushNow: a completed line must go out at once, even mid-window, and the
+// throttle must still hold afterwards (one finished line != one message per key).
+{
+  const { clock, advance, time } = makeClock();
+  const sends = [];
+  const s = new CodeSyncScheduler(() => sends.push(time()), DEFAULT_SYNC_INTERVAL_MS, clock);
+  s.schedule();            // leading send at 0
+  advance(40);
+  s.schedule();            // inside the window: books a flush, does not send
+  assert("A8 mid-window typing does not send immediately", sends.length === 1);
+  advance(10);
+  s.flushNow();            // a line was completed
+  assert("A8 a completed line is sent at once, mid-window", sends.length === 2 && sends[1] === 50);
+  assert("A8 flushNow clears the pending flush", s.pending === false);
+  advance(5);
+  s.schedule();
+  assert("A8 the throttle still holds right after a flush", sends.length === 2);
+  advance(DEFAULT_SYNC_INTERVAL_MS);
+  assert("A8 the next window delivers it", sends.length === 3);
+}
+
 // ------------------------------------------------- Part B: the client contract
 console.log("\n== B. Editor buffer vs last run (real BrowserLiveClient, provider stubbed)");
 
