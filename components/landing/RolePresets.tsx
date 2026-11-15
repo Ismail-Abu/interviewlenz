@@ -42,7 +42,7 @@ export function RolePresets({ job, onPick, tone = "setup", className = "" }: Pro
 
   return (
     <div className={className} data-testid="role-presets">
-      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-ink-muted">
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-zinc-400">
         {tone === "hero" ? "Practising for" : "Quick-fill a target"}
       </p>
       <ul className="mt-2.5 flex flex-wrap gap-2">
@@ -55,14 +55,14 @@ export function RolePresets({ job, onPick, tone = "setup", className = "" }: Pro
                 onClick={() => onPick(applyPreset(job, p))}
                 aria-pressed={active}
                 data-testid={`role-preset-${p.id}`}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-left text-[13px] font-semibold transition-colors ${
                   active
-                    ? "bg-maroon text-white"
-                    : "bg-cream-3 text-ink hover:bg-[#EFE0CA] hover:text-maroon-deep"
+                    ? "bg-[#E11D48] text-white"
+                    : "bg-white/[0.06] text-zinc-100 hover:bg-white/[0.1] hover:text-rose-200"
                 }`}
               >
-                <span className={active ? "text-white/70" : "text-maroon"}>{p.company}</span>
-                <span aria-hidden className={active ? "text-white/40" : "text-ink-muted"}>·</span>
+                <span className={active ? "text-white/70" : "text-rose-400"}>{p.company}</span>
+                <span aria-hidden className={active ? "text-white/40" : "text-zinc-400"}>·</span>
                 <span>{p.role}</span>
               </button>
             </li>
@@ -74,7 +74,7 @@ export function RolePresets({ job, onPick, tone = "setup", className = "" }: Pro
               type="button"
               onClick={() => onPick({ ...job, ...EMPTY_JOB, listing: job.listing })}
               data-testid="role-preset-clear"
-              className="inline-flex items-center rounded-full px-3 py-2 text-[13px] font-semibold text-ink-muted transition-colors hover:text-ink hover:bg-cream-2"
+              className="inline-flex items-center rounded-full px-3 py-2 text-[13px] font-semibold text-zinc-400 transition-colors hover:text-white hover:bg-zinc-900/60"
             >
               Clear
             </button>

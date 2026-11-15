@@ -3,7 +3,7 @@ export function LiveDemoPanel() {
     <div
       role="img"
       aria-label="Example: the interviewer asks a follow-up about the code you just ran"
-      className="w-full rounded-[30px] bg-panel p-5 sm:p-7 md:p-8 shadow-warm-panel"
+      className="w-full rounded-[26px] border border-white/[0.08] bg-[#0C0D12]/90 p-5 sm:p-7 md:p-8 shadow-[0_0_60px_-20px_rgba(200,16,46,0.45)] backdrop-blur-xl"
     >
       <div aria-hidden="true" className="flex flex-col gap-5 sm:gap-6">
         {/* Mock editor card */}

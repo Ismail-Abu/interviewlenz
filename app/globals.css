@@ -69,3 +69,17 @@ body {
     flex-shrink: 0 !important;
   }
 }
+
+/* Obsidian developer studio: homepage, application setup, plan review only.
+   A precision dot grid and soft crimson ambient glows, scoped to .studio-surface. */
+.studio-surface {
+  background-image:
+    radial-gradient(60rem 30rem at 85% -10%, rgb(200 16 46 / 0.16), transparent 60%),
+    radial-gradient(40rem 24rem at -10% 30%, rgb(225 29 72 / 0.08), transparent 60%),
+    radial-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1px);
+  background-size: auto, auto, 22px 22px;
+  background-attachment: fixed, fixed, fixed;
+}
+.studio-surface :focus-visible {
+  outline-color: #fb7185;
+}
