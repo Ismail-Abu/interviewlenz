@@ -10,6 +10,7 @@ import { BehavioralRoom } from "./BehavioralRoom";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { FullMockSummary } from "./FullMockSummary";
 import { recordAttempt } from "./historyStore";
+import { BEHAVIORAL_LIMIT_MS, describeClock, formatClock, useRoundClock, type RoundTiming } from "./roundClock";
 import { StartScreen, type MicStatus, type PracticeMode } from "./StartScreen";
 import { EMPTY_JOB, hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
 import { ApplicationSetup } from "./flow/ApplicationSetup";
@@ -57,7 +58,14 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [codingRecords, setCodingRecords] = useState<AttemptRecord[]>([]);
   const [behavioralRecords, setBehavioralRecords] = useState<AttemptRecord[]>([]);
 
-  const activeRecords = round === "behavioral" ? behavioralRecords : codingRecords;
+  // Round timing (components/roundClock.ts). attemptSeq changes whenever a new
+  // attempt begins, so each attempt gets its own clock.
+  const [attemptSeq, setAttemptSeq] = useState(0);
+  const [timings, setTimings] = useState<Record<string, RoundTiming>>({});
+  const withTiming = (r: AttemptRecord | undefined): AttemptRecord | undefined =>
+    r && timings[r.session.attemptId] ? { ...r, timing: timings[r.session.attemptId] } : r;
+
+  const activeRecords = (round === "behavioral" ? behavioralRecords : codingRecords).map((r) => withTiming(r)!);
 
   const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
@@ -166,6 +174,17 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   // Turns accepted in the current attempt; seeds every client built within the
   // attempt so transcript IDs keep increasing. Retry resets it to 0.
   const turnCount = useRef(0);
+
+  // The technical round is timed from when the room opens, with no limit. The
+  // behavioral round's countdown starts with the interview (first connect or
+  // turn) and finishes the round when it reaches zero.
+  const behavioralStarted = connected || attempt.turns.length > 0;
+  const clockKey =
+    view !== "room" ? null : round === "coding" ? `coding-${attemptSeq}` : behavioralStarted ? `behavioral-${attemptSeq}` : null;
+  const clock = useRoundClock(clockKey, {
+    limitMs: round === "behavioral" ? BEHAVIORAL_LIMIT_MS : undefined,
+    onExpire: () => finishRound(true),
+  });
 
   // Code-context sync (B5): the real client gets the editor buffer silently via
   // syncCode, once on connect and after a typing pause. Refs, not state, so a
@@ -402,8 +421,21 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   function handleFinish() {
+    finishRound(false);
+  }
+
+  function finishRound(timedOut: boolean) {
+    if (view !== "room") return;
+    const measured = clockKey ? clock.read(clockKey) : null;
     endLive();
     const finished = fullSession();
+    if (measured !== null) {
+      const timing: RoundTiming =
+        round === "behavioral"
+          ? { durationMs: timedOut ? BEHAVIORAL_LIMIT_MS : Math.min(measured, BEHAVIORAL_LIMIT_MS), limitMs: BEHAVIORAL_LIMIT_MS, timedOut }
+          : { durationMs: measured };
+      setTimings((t) => ({ ...t, [finished.attemptId]: timing }));
+    }
     if (practiceMode === "full-mock") {
       if (round === "coding") {
         setCodingRecords((rs) => [...rs, { session: finished, status: "loading" }]);
@@ -432,6 +464,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
     turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
     setRound("behavioral");
     setView("room");
   }
@@ -447,6 +480,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     endLive();
     turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
     setLiveError(null);
 
     if (round === "coding") {
@@ -467,6 +501,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
     turnCount.current = 0;
     setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
     setLiveError(null);
 
     if (targetRound === "coding") {
@@ -490,6 +525,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     setProfile(p);
     setPracticeMode(m);
     setBehavioralContext(ctx);
+    setAttemptSeq((n) => n + 1);
     if (m === "behavioral") {
       setRound("behavioral");
     } else {
@@ -523,6 +559,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
     if (plan.technical.problemId !== problem.id) console.warn("plan problem differs from the loaded problem");
     if (idsRef.current) handlePracticeAgain("coding"); // fresh attempt, editor reset
     else {
+      setAttemptSeq((n) => n + 1);
       setRound("coding");
       setView("room");
     }
@@ -602,6 +639,12 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
               {lastCodingRun?.status === "completed"
                 ? `Your Python solution passed ${lastCodingRun.passed} of ${lastCodingRun.total} test cases.`
                 : "Your coding draft and interview responses have been saved."}
+              {lastCodingRecord && timings[lastCodingRecord.session.attemptId] && (
+                <span data-testid="transition-coding-time">
+                  {" "}
+                  It took you {describeClock(timings[lastCodingRecord.session.attemptId].durationMs)}.
+                </span>
+              )}
             </p>
 
             <div className="mt-6 rounded-xl border border-border bg-background p-5 shadow-card">
@@ -660,8 +703,8 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   if (view === "summary") {
     return (
       <FullMockSummary
-        codingRecord={codingRecords.at(-1)}
-        behavioralRecord={behavioralRecords.at(-1)}
+        codingRecord={withTiming(codingRecords.at(-1))}
+        behavioralRecord={withTiming(behavioralRecords.at(-1))}
         onRetryReport={handleRetryReport}
         onPracticeAgain={handlePracticeAgain}
         onReturnHome={() => setView("start")}
@@ -723,7 +766,13 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   if (round === "behavioral") {
     return (
       <div className="contents" {...planMarker}>
-        <BehavioralRoom voice={voiceProps} attemptNumber={attemptNumber} focusLabel={focusLabel} onFinish={handleFinish} />
+        <BehavioralRoom
+          voice={voiceProps}
+          attemptNumber={attemptNumber}
+          focusLabel={focusLabel}
+          onFinish={handleFinish}
+          clock={{ started: behavioralStarted, elapsedMs: clock.elapsedMs, limitMs: BEHAVIORAL_LIMIT_MS }}
+        />
       </div>
     );
   }
@@ -771,9 +820,14 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
           </div>
 
           <div className="order-last col-span-2 flex items-center justify-center lg:order-none lg:col-span-1">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-sm tabular-nums text-foreground">
+            <span
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-sm tabular-nums text-foreground"
+              data-testid="round-clock"
+              role="timer"
+              aria-label={`Time on this problem: ${describeClock(clock.elapsedMs)}`}
+            >
               <span className="live-dot h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-              19:59 remaining
+              <span aria-hidden="true">{formatClock(clock.elapsedMs)} elapsed</span>
             </span>
           </div>
 
