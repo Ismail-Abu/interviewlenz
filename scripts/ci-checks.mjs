@@ -25,6 +25,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // even where a stub value is assigned to process.env.
 const CHECKS = [
   "runner-check.mjs",
+  "problem-bank-check.mjs",
   "report-check.mjs",
   "unrun-draft-check.mjs",
   "score-check.mjs",

@@ -105,7 +105,7 @@ console.log("== A. Report request validation and size limits");
   assert("A1 non-JSON -> 400 invalid_request", r.status === 400 && r.json?.code === "invalid_request");
   r = await post(report, { session: { sessionId: "s1" } });
   assert("A2 missing fields -> 400", r.status === 400 && r.json?.code === "invalid_request");
-  r = await post(report, { session: { ...session(), problemId: "two-sum" } });
+  r = await post(report, { session: { ...session(), problemId: "no-such-problem" } });
   assert("A3 unknown problem -> 400 unknown_problem", r.status === 400 && r.json?.code === "unknown_problem", r.text.slice(0, 120));
   r = await post(report, { session: { ...session(), turns: [{ id: "t1", speaker: "student" }] } });
   assert("A4 malformed turn element -> 400 (not a 500)", r.status === 400, `${r.status}`);

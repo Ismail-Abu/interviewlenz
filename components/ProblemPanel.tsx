@@ -44,7 +44,8 @@ export function ProblemPanel({ problem }: { problem: Problem }) {
           >
             <div className="flex items-baseline gap-2">
               <span className="text-zinc-500 font-sans text-xs font-semibold uppercase tracking-wider">Input:</span>
-              <span className="text-zinc-100 font-mono">nums = {py(ex.input)}</span>
+              {/* The example names its own parameters, so the panel adds none. */}
+              <span className="text-zinc-100 font-mono">{py(ex.input)}</span>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-zinc-500 font-sans text-xs font-semibold uppercase tracking-wider">Output:</span>

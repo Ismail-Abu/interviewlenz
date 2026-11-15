@@ -64,7 +64,7 @@ console.log("== 2. Researched example + validation");
   const fb = structuredClone(ex);
   fb.source = "role-fallback";
   assert("2d a fallback plan never carries citations", normalizeInterviewPlan(fb).value.citations.length === 0);
-  assert("2e unknown problem rejected", !normalizeInterviewPlan({ ...ex, technical: { problemId: "two-sum", themeIds: [] } }).ok);
+  assert("2e unknown problem rejected", !normalizeInterviewPlan({ ...ex, technical: { problemId: "no-such-problem", themeIds: [] } }).ok);
   assert("2f bad planId rejected", !normalizeInterviewPlan({ ...ex, planId: "123" }).ok);
   const ctl = structuredClone(ex);
   ctl.themes[0].label = "x\u0000y" + "z".repeat(200);

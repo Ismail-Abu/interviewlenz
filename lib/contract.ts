@@ -17,13 +17,27 @@ export interface TestCase {
   expected: unknown;
 }
 
+// Problem ids and their Python entry points. Both are unions so the bank can
+// grow; every existing "contains-duplicate" usage still type-checks.
+export type ProblemId =
+  | "contains-duplicate"
+  | "two-sum"
+  | "valid-anagram"
+  | "max-profit";
+
+export type ProblemFunction =
+  | "contains_duplicate"
+  | "two_sum"
+  | "is_anagram"
+  | "max_profit";
+
 export interface Problem {
-  id: "contains-duplicate";
+  id: ProblemId;
   title: string;
   prompt: string;
   examples: { input: unknown; output: unknown; explanation?: string }[];
   constraints: string[];
-  functionName: "contains_duplicate";
+  functionName: ProblemFunction;
   starterCode: string;
   cases: TestCase[];
 }
