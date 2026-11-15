@@ -501,3 +501,53 @@ Traced one Run: `ProblemRoom.handleRun` captures `{codeVersion, source}` before 
 - **No rate limit or origin check exists.** Add a Vercel WAF rate-limit rule on `/api/*` (e.g. ~10/min per IP), a Google Cloud budget alert and quota cap on the key, and optionally an Origin check or a challenge (e.g. Turnstile). Consider shortening the 30-min token window for the demo.
 
 **Real-provider results: NOT RUN.** There's no key or mic on this machine. Steps for the real-key run are in the PR.
+
+## Release • interviewlenz.us — November 14 (prepared; NOT live)
+
+**Release candidate code: `9362d24`** (tree `8839aa14e7642f8c07dfcf5d02dab20cafc4c64c`) on branch `release-candidate`. The branch head adds only this CURRENT.md entry. It is one clean merge of the two lines from `f5f80a0`:
+- **Backend line:** #5 ⊂ #9 ⊂ #10 ⊂ #12 ⊂ **#13 `23b167d`**
+- **UI line:** #5 ⊂ #8 ⊂ **#11 `995e7a2`**
+- plus one planned UI follow-up: the Reconnect button uses `btn.primary`, the "one-line change after #10 and #11 merge" from #11
+
+`main` (`a18d179`) is an ancestor, so the release fast-forwards `main`. Excluded on purpose: `live-context-wip` (`a599be3`, superseded draft; branch left untouched).
+
+**Acceptance status:** no voice or report work has spoken or real-key acceptance. There are no comments from Ismail on #9, #10, #12, or #13.
+
+**Automated checks on a fresh GitHub clone at `9362d24` (`npm ci` from the lockfile, Node 22.18, npm 10.9, no `.env.local`):**
+- `npm run lint` clean; `npm run build` passes (`/`, `/api/live-token`, `/api/report`, icons).
+- All 10 dev checks pass: `live-{disconnect,grounding,queue,reconnect,run-evidence,stages,transcript,turnid}`, `report-check` (46), `runner-check`.
+- **Production server (`next start`):**
+  - landing 23/23, including **Skip → coding round**, and the role/resume data staying in the browser (no request carries it)
+  - regression A/B/C: the no-key routes return `503 not configured`, the UI shows labeled mock voice and fixture report; real `lib/live.ts` opens the `v1beta` socket and falls back cleanly; a stubbed report's evidence chips land and Retry works
+  - report UI: double-click Finish makes 1 request; real report has no badge; Attempt 1's report kept after Retry
+  - the dev test seam is absent from the production bundle
+- **Dev server:** voice sync 25/25, reconnect 30/30 (test LiveClient).
+
+**Known limitations at this commit:**
+- **Local-only preview:** landing-page resume screenshots, job fields, the "Your interview loop" preview, and the room's "Practicing for…" chip stay in the browser tab. Nothing tailors the interview yet. All of it is labeled PREVIEW.
+- **Report failure fallback:** a retryable report failure or timeout shows the fixture report labeled "(no API key)" instead of Retry report. Hamza's decision on `components/reportAdapter.ts`; see B8.
+- **DOMPurify in the runtime editor:** browsers run Monaco 0.55.1 from jsDelivr, which bundles DOMPurify 3.2.7 (affected by GHSA-6688-9rhm-gjv2 / -mrv2-3pqr-j5jr / -c6gr-qvv4-5v3f). Practical exposure is low: the only editor content is the student's own code, and there are no Python hover providers. The `npm audit` hit (`monaco-editor@0.57.0` / `dompurify@3.4.15`) is in an unused npm copy, absent from the client bundle. Not changed before the deadline.
+- **Public routes:** both API routes are unauthenticated, with request and size caps and timeouts but **no rate limit**. See "Remaining exposure" below.
+
+**Hosting and domain: NOT DONE (needs Vercel, Porkbun, Gemini, and a mic; none on Hamza's machine):**
+- **Vercel:** not linked (the repo has 0 GitHub deployments). To do: import `Ismail-Abu/interviewlenz`, Framework Next.js, defaults, production branch `main`.
+- **Server env (Production + Preview), names only:**
+  - `GEMINI_API_KEY`, `LIVE_MODEL`, `REPORT_MODEL` (required; match `.env.example`)
+  - leave unset: `LIVE_API_VERSION` (defaults to `v1beta`), `REPORT_TIMEOUT_MS`, `LIVE_TOKEN_TIMEOUT_MS`
+  - no `NEXT_PUBLIC_*` variables exist
+  - **Function duration:** check Settings → Functions allows ≥ 30 s; the report call can take up to 25 s.
+- **Models with the production key:** not verified here. B2 recorded `LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025` and `REPORT_MODEL=gemini-3.8-flash` working with Ismail's key on `v1beta`.
+- **DNS at Porkbun (public lookup, Nov 14):**
+  - NS: Porkbun (`fortaleza`, `maceio`, `curitiba`, `salvador`)
+  - apex A: `207.207.210.107` and `207.207.210.229` (Porkbun parking)
+  - `www`: CNAME `pixie.porkbun.com` (parking)
+  - apex MX, TXT, CAA: **none public**; confirm email forwarding in the dashboard before editing
+  - HTTPS on apex and `www`: no connection
+  - **Not live.** Add `interviewlenz.us` and `www` in Vercel → Domains, then copy the exact A / CNAME values Vercel shows for this project. Replace only the parking A records and the `www` CNAME; keep everything else.
+- **Remaining exposure for Ismail:** anyone can mint Live tokens or trigger Flash reports. Configure a Vercel WAF rate limit on `/api/*`, a Google Cloud budget alert, and an API quota cap on the key. Nothing here shows whether those exist.
+
+**Rollback:** no production deployment exists yet. After the first deploy, record its Vercel deployment URL here. Rollback is Vercel → Deployments → previous → "Promote to Production" (or "Instant Rollback").
+
+**Deadline:** still "Sunday, November 15, exact time awaiting organizer confirmation". Freeze code 2 hours before the confirmed time.
+
+**Live checks on https://interviewlenz.us: NONE RUN.** A token HTTP 200 alone is not voice acceptance.
