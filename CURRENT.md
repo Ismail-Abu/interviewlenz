@@ -684,6 +684,79 @@ Also on `5419848`:
 - PR #19 carries the contract proposal for Hamza, the screenshots (branch `pr-assets/b10`, images only, never merge), and a 5-step real-mic walkthrough for Ismail with two contrasting answers.
 - **Outstanding:** Hamza's contract approval, after which `docs/CONTRACT.md` gets B9 + B10; Ismail's real key + mic walkthrough; extraction quality on a real resume; the setup copy decision noted in `35ecda9`. Next task after merge: the combined multi-round interview.
 
+#### Step 3 — verification: **in progress** (on `b752373`, no app code changed)
+- Done: coding regression in the browser (`drive-b10-coding` 10/10). With a confirmed tailoring context on the landing page, Start practice still sends a coding token with no `roundType` or `behavioralContext`; set solution 4/4 (v2) and unconditional `return False` 2/4 (v3) both reach Live with the latest version and source; the report session is the old coding shape; the F9 zero-key fixture fallback and zero-key mock voice still work; no analysis request is made.
+- Already covered by Steps 1–2: four input combinations, oversized/unreadable/too many pages, timeout, edit/remove, duplicate clicks, stale responses, manual fallback, instruction selection, opening, reconnect, report for both rounds, two attempts with different t1 quotes, rejection of invented and interviewer turn IDs.
+- Left: move the scratchpad browser drivers into the repo (`dev/`), post the B9/B10 contract proposal for Hamza, write a real-mic walkthrough for Ismail with two contrasting answers, and open the focused PR with the tested SHA, screenshots, and remaining manual acceptance.
+
+## CI handoff • automated PR checks • November 15 • passed on GitHub Actions
+
+Branch `ci/pr-checks`. PR **#17** → **`main`**. Tested commit **`b6b3133`**.
+
+Originally based on `b10-behavioral` (`b2ef7f5`) and targeted there. Retargeted to `main` once `main` moved ahead: `main` (`984f26b`) now carries the unrun-draft fix (via its own merge `52a4f98`) plus PR #18's 2-round flow, streamlined homepage, and mobile editor, and is ahead of `b10-behavioral` in features. Merging `main` in conflicted on `components/StartScreen.tsx` — **took main's version**, since this branch adds CI only and must not change Hamza's components. Its diff against `main` is CI files alone (workflow, `scripts/ci-checks.mjs`, `dev/unrun-draft-check.mjs`, `package.json`, `README.md`, this entry).
+
+**No file in `dev/` is touched**, so the browser drivers moving into `dev/` (B10 Step 3) stay uncontested.
+
+### Files
+
+- `.github/workflows/pr.yml` (new) — `on: pull_request` + `workflow_dispatch`; `permissions: contents: read`; `concurrency: pr-checks-${{ github.event.pull_request.number || github.ref }}` with `cancel-in-progress: true`; Node 22 with npm cache; `npm ci` → `npm run lint` → `npm run test:ci` → `npm run build`; 20-minute timeout.
+- `scripts/ci-checks.mjs` (new) — runs the deterministic `dev/` checks as child processes with `--experimental-strip-types`. Explicit allowlist, not a glob. Every check runs even after a failure; exits 1 naming each failing check.
+- `package.json` — adds `"test:ci": "node scripts/ci-checks.mjs"` and `engines.node: ">=22"`.
+- `README.md` — new **Checks** section: the four commands and the "Still needs a human" table.
+
+### Local command
+
+```sh
+npm ci && npm run lint && npm run test:ci && npm run build
+```
+
+### In CI (13 deterministic checks)
+
+`runner-check` · `report-check` · `behavioral-check` · `tailoring-check` · `role-context-check` · `live-grounding-check` · `live-queue-check` · `live-stages-check` · `live-transcript-check` · `live-turnid-check` · `live-reconnect-check` · `live-disconnect-check` · `live-run-evidence-check`
+
+All stub `@google/genai` through the esbuild alias; `runner-check` drives the local `pyodide` package. None needs a key, network, port, dev server, or browser.
+
+**Excluded on purpose: `dev/live-check.mjs`.** It imports the real `GoogleGenAI`, reads `GEMINI_API_KEY`/`LIVE_MODEL` from `.env.local`, mints a real ephemeral token, and opens a real Live socket; on a clean runner its `readFileSync("../.env.local")` throws before the key check reports. The allowlist is explicit so it cannot be picked up by a `live-*.mjs` glob, and so new `dev/` browser drivers do not silently enlist.
+
+### Checks performed
+
+| Check | Result |
+|---|---|
+| Actions run [43676131163](https://github.com/Ismail-Abu/interviewlenz/actions/runs/43676131163) on `e7bfa86`, `pull_request` | **success**, 1m46s. Steps: checkout, setup-node, `npm ci`, Lint, Deterministic checks, Production build — all green |
+| `npm run test:ci` on the runner | `all 13 checks passed` on Node 22.23.4. Slowest: `live-grounding` 7863 ms, `runner-check` 6785 ms |
+| Red path (throwaway branch, since deleted) | A probe exiting 3 → step **failure**, `Production build` **skipped**, job failed with exit 1, summary `FAIL ../scripts/_fail-probe.mjs (21 ms, exit 3)` and `ci-checks: 1 of 14 FAILED: ../scripts/_fail-probe.mjs`. The other 13 still ran |
+| `cancel-in-progress` | Two rapid runs on one ref: the superseded run `43676438058` went to **cancelled** when `43676456466` started |
+| No credentials needed | The green run used no secrets; `GEMINI_API_KEY`/`LIVE_MODEL`/`REPORT_MODEL` are unset on the runner |
+
+**Not run locally:** this machine has no Node installed, so `npm run test:ci` was never executed here. Every result above comes from GitHub Actions.
+
+### Regression test added — dependency resolved
+
+`dev/unrun-draft-check.mjs` (new; no existing `dev/` file touched), in CI via the allowlist. 19 assertions, all passing.
+
+Scenario: a v3 Run scores 2/4, the student edits to v4 and presses Finish without running. It asserts `buildPrompt` labels v4 `(unrun draft; no test results for this version)`, leaves v3 unlabelled, retains the v4 source, states 2/4 on v3, attributes no run to v4, and emits exactly one run line; that `buildValidators` keeps v4 citable as `kind:code` while dropping an invented `kind:run` v4 citation; that a version which *was* run gets no false marker; and that an attempt with no Runs still sends the draft.
+
+This was originally blocked: the fix lived only on `fix/coding-room-bash` (`ebade66`) and was absent from the then-base. Resolved — the fix reached `main` via `52a4f98`, and `b10-behavioral` via the merge `35ecda9` recorded below.
+
+Covers the report half only. The `components/ProblemRoom.tsx` half (appending the unrun draft snapshot at Finish) is React and belongs with B10's browser drivers.
+
+**Proven as a regression guard** (run locally on Node 22.23.5, working tree restored clean afterwards):
+
+| State of `buildPrompt` | Result |
+|---|---|
+| With the fix (current `main`) | `unrun-draft-check: all checks passed`, exit 0 |
+| Marker lines reverted | `unrun-draft-check: 2 FAILED` — **A1** "v4 is labelled an unrun draft" and **D2** "it is labelled unrun" — check exit **1**, `test:ci` exit **1** |
+
+So a revert of the report-side fix turns CI red. Only 2 of the 19 assertions fail, which is correct: the reverted hunk is the snapshot label alone, and the section-B evidence-validation assertions do not depend on it (they guard `buildValidators`, a separate failure mode).
+
+### Still needs a human
+
+- `node dev/live-check.mjs` — real key, real Live socket.
+- The in-browser spoken walkthrough — real key, HTTPS/localhost, a person at a microphone.
+- The real end-of-session report — `REPORT_MODEL` and a real Gemini call.
+- The deployed-site mic check over HTTPS.
+
+Deployment, branch protection, and application features are left to their current owners.
 ### Coding-room bug bash • mobile editor, keyboard access, and final coding draft
 
 Branched from behavioral handoff 20bc1a3, which includes PR #16. Coordinated the coding setup disclosure and shared-component scope on that commit. Coding setup now names Gemini and both uses of job details; resume screenshots stay local in the coding path. Behavioral analysis opt-in wording belongs beside its own action.
@@ -691,3 +764,34 @@ Branched from behavioral handoff 20bc1a3, which includes PR #16. Coordinated the
 Changed ProblemRoom, CodeEditor, StartScreen, ReportView and the coding report prompt. Loaded Monaco at 390×844 measured 5 px before and 379 px after. At 1366×768 it measured 377 px both times. Verified in Chrome with the real browser Python worker: typed set solution → 4/4, results visible, Finish reachable. Keyboard exit on macOS: Ctrl+Shift+M, Shift+Tab to Run; keyboard activation and subsequent navigation to Finish passed on both viewport sizes.
 
 Both viewport sizes: a v3 Run scored 2/4; after editing and finishing, the report request included v3 and v4 ISO-dated snapshots and exactly one Run, v3. The report displayed v4 as an unrun draft. An edit followed by Finish with no Runs saved the draft and showed no runs. The report prompt marks snapshots with no matching Run as unrun. Browser checks used the no-key report fallback. Lint, production build, report/token and behavioral regression checks passed.
+
+### Integration release • Full Mock, streamlined homepage, and verified release candidate
+**Branch:** `integration/release-full-mock`  
+**Base ancestry:** Unified `origin/b10-behavioral` (`b2ef7f5`) + `origin/fix/coding-room-bash` (`ebade66`).
+
+**Delivered Student Capabilities:**
+1. **Streamlined Homepage:**
+   - Single hero action: "Start practice" with clear framing for both coding and behavioral practice.
+   - Three actionable practice modes directly selectable on 1366×768 without scrolling: **Coding**, **Behavioral**, and **Full mock** (2-round).
+   - Collapsed optional personalization with mode-specific disclosures (job details sent to Gemini; resume screenshots stay local unless "Prepare my interview" is chosen for behavioral tailoring).
+   - Stale copy removed ("nothing is uploaded", "tailoring isn't live", unavailable round cards).
+2. **Full Mock Practice (Coding + Behavioral in one continuous loop):**
+   - Starts with Python Coding round (starter code, Pyodide runner, live voice).
+   - Finishing coding round presents an intentional transition screen ("Continue to Behavioral Round →" or "View Coding Feedback First").
+   - Voice session, audio listeners, and WebSocket teardown cleanly before Round 2 starts.
+   - Fresh behavioral session mints carrying confirmed personalization.
+   - Finishing behavioral round opens the **Full Mock Summary** featuring both Round 1 and Round 2 score cards, evidence-backed practice takeaways, transcript/code quotes, inline "Retry report", and per-round "Practice this round again" preserving the other round's results.
+3. **Coding-Room & Mobile Fixes:**
+   - Mobile editor height (`390×844`) verified at 360px (no squishing/collapsing) via `@source` directives and `.mobile-editor-pane`.
+   - Monaco keyboard navigation: `Ctrl+M` (Mac: `Ctrl+Shift+M`), then `Shift+Tab` to leave editor.
+   - Unrun draft preservation: editing after a test run preserves the unrun draft with an ISO timestamp without falsely attributing prior test scores to it.
+4. **Automated Verification:**
+   - `dev/integration-browser-check.mjs`: 4/4 suites passed (Homepage, Coding, Full Mock 2-Round, Mobile Viewport).
+   - Regression suites: `dev/tailoring-check.mjs` (44/44), `dev/behavioral-check.mjs` (28/28), `dev/live-reconnect-check.mjs` (14/14), `dev/live-disconnect-check.mjs` (8/8), `dev/runner-check.mjs` (all passed), `dev/report-check.mjs` (all passed).
+   - `npm run lint`: clean (0 errors, 0 warnings).
+   - Production Turbopack build (`next build`): 100% clean in 5.2s.
+
+**Real-Mic Walkthrough for Ismail:**
+1. **Coding Practice:** Start Coding round with mic enabled → Speak initial approach ("I plan to use a hash set") → Interviewer speaks prompt → Run set solution (4/4) → Interviewer asks about space-time complexity.
+2. **Behavioral Practice:** Start Behavioral round → Interviewer asks opening question → Speak engineering project story → Interviewer asks specific follow-up probing a detail from your answer.
+3. **Full Mock:** Complete both rounds back-to-back, verify dual summary cards and quote evidence.

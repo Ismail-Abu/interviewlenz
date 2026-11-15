@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "../components";
+@source "../app";
 
 /* One dark theme everywhere: the app is presented on projectors and the
    editor is dark, so the page does not follow the OS light/dark setting. */
@@ -17,6 +19,22 @@
   --color-brand: #c8102e;
   --color-brand-hover: #dc1f3d;
   --color-brand-coral: #fe6b73;
+
+  /* Cream surface, used by the landing page, the behavioral round (the one
+     in-app page with no Monaco editor) and the report. The coding room stays
+     dark. */
+  --color-cream: #fbf6ec;
+  --color-cream-2: #f6eee0;
+  --color-cream-3: #f3e8d6;
+  --color-cream-line: #ede2d0;
+  --color-ink: #3a302c;
+  --color-ink-muted: #75665c;
+  --color-maroon: #9b3b50;
+  --color-maroon-hover: #b04a60;
+  --color-maroon-deep: #8c2f43;
+  --color-maroon-soft: #c77d8c;
+  --color-panel: #1c1817;
+  --color-panel-2: #2a2422;
 }
 
 html {
@@ -32,4 +50,18 @@ body {
 :focus-visible {
   outline: 2px solid #fe6b73;
   outline-offset: 2px;
+}
+
+/* Coral is nearly invisible on cream, so cream surfaces get a maroon ring.
+   Scoped, so the dark rooms keep the coral outline unchanged. */
+[data-surface="cream"] :focus-visible {
+  outline-color: #8c2f43;
+}
+
+@media (max-width: 1023px) {
+  .mobile-editor-pane {
+    min-height: 360px !important;
+    height: 360px !important;
+    flex-shrink: 0 !important;
+  }
 }

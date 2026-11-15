@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ApiError, EvidenceRef, Finding, Report, RunResult, Session } from "@/lib/contract";
-import { ReportSkeleton } from "./Skeletons";
+import type { ApiError, EvidenceRef, Report, Session } from "@/lib/contract";
 import { Wordmark } from "./Logo";
-import { btn } from "./ui/buttons";
 import { isBehavioralSession } from "@/lib/behavioral";
+import { VerdictBanner } from "./report/VerdictBanner";
+import { FindingCard } from "./report/FindingCard";
+import { EvidenceReceipt } from "./report/EvidenceReceipt";
+import { TranscriptSection } from "./report/TranscriptSection";
+import { UnrunDraftDisclosure } from "./report/UnrunDraftDisclosure";
 
 export interface AttemptRecord {
   session: Session;
@@ -22,47 +25,26 @@ interface Props {
   onRetryAttempt: () => void;
 }
 
-const RATING_STYLE: Record<Finding["rating"], string> = {
-  strong: "bg-emerald-500/15 text-emerald-400",
-  ok: "bg-zinc-200/10 text-zinc-100",
-  needs_work: "bg-red-500/15 text-red-400",
-  insufficient_evidence: "bg-zinc-700/50 text-zinc-300",
-};
-
-// Icon + word + color, so the rating never relies on color alone.
-const RATING_ICON: Record<Finding["rating"], string> = {
-  strong: "✓",
-  ok: "●",
-  needs_work: "!",
-  insufficient_evidence: "?",
-};
-
-const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
-
-function evidenceLabel(ref: EvidenceRef) {
-  if (ref.kind === "turn") return `Transcript ${ref.turnId}`;
-  if (ref.kind === "code") return `Code v${ref.codeVersion}${ref.lines ? ` · lines ${ref.lines[0]}–${ref.lines[1]}` : ""}`;
-  return `Run v${ref.codeVersion}${ref.caseId ? ` · ${ref.caseId}` : ""}`;
-}
-
-const sameRef = (a: EvidenceRef | null, b: EvidenceRef) => !!a && JSON.stringify(a) === JSON.stringify(b);
-
 export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
   const busy = records.some((r) => r.status === "loading");
+  const latestIsBehavioral = isBehavioralSession(records.at(-1)?.session);
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
+    <div className="min-h-screen bg-cream text-ink antialiased selection:bg-maroon-soft/30 selection:text-ink">
+      <header className="sticky top-0 z-20 flex items-center gap-4 border-b border-cream-line bg-cream/95 px-6 py-4 backdrop-blur shadow-[0_4px_12px_-4px_rgb(90_68_50/0.05)]">
         <Wordmark size={26} />
-        <span className="text-base text-zinc-400">Interview report</span>
+        <span className="text-base font-medium text-ink-muted">Interview report</span>
         <button
+          type="button"
           onClick={onRetryAttempt}
           disabled={busy}
-          className={`${btn.primary} ml-auto px-5 py-2 text-base`}
+          className="ml-auto inline-flex items-center justify-center gap-2 rounded-[18px] bg-maroon px-6 py-2.5 text-[15px] font-semibold text-white shadow-[0_10px_18px_-6px_rgb(90_68_50/0.25)] transition-colors hover:bg-maroon-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-soft disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isBehavioralSession(records.at(-1)?.session) ? "Practice again" : "Retry problem"}
+          {latestIsBehavioral ? "Practice again" : "Retry problem"}
         </button>
       </header>
-      <main className={`grid gap-6 p-6 ${records.length > 1 ? "xl:grid-cols-2" : "mx-auto max-w-4xl"}`}>
+
+      <main className={`grid gap-8 p-6 sm:p-8 ${records.length > 1 ? "xl:grid-cols-2" : "mx-auto max-w-4xl"}`}>
         {records.map((r, i) => (
           <ReportCard key={r.session.attemptId} record={r} index={i} onRetryReport={onRetryReport} />
         ))}
@@ -81,9 +63,11 @@ function ReportCard({
   onRetryReport: (attemptId: string) => void;
 }) {
   const { session, report } = record;
-  const lastSnapshot = isBehavioralSession(session) ? undefined : session.snapshots.at(-1);
-  const lastRun = isBehavioralSession(session) ? undefined : session.runs.at(-1);
+  const isBehavioral = isBehavioralSession(session);
+  const lastSnapshot = isBehavioral ? undefined : session.snapshots.at(-1);
+  const lastRun = isBehavioral ? undefined : session.runs.at(-1);
   const unrunDraft = lastSnapshot && lastSnapshot.codeVersion !== lastRun?.codeVersion ? lastSnapshot : undefined;
+
   const [selected, setSelected] = useState<EvidenceRef | null>(null);
   const turnRefs = useRef(new Map<string, HTMLLIElement>());
 
@@ -96,261 +80,140 @@ function ReportCard({
   return (
     <article
       data-attempt={session.attemptId}
-      className="flex flex-col gap-5 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5"
+      className="flex flex-col gap-6 rounded-[28px] bg-cream-2/80 p-6 sm:p-8 shadow-[0_10px_18px_-6px_rgb(90_68_50/0.13)] border border-cream-line/60"
     >
-      <header className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold">Attempt {index + 1}</h2>
-        <span className="font-mono text-xs text-zinc-500">{session.attemptId.slice(0, 8)}</span>
-        {session.priorAttemptId && (
-          <span className="text-xs text-zinc-500">retry of {session.priorAttemptId.slice(0, 8)}</span>
-        )}
-        {record.fromFixture && (
+      {/* Top Header & Context Badges */}
+      <header className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span
-            className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300"
-            data-testid="report-fixture-badge"
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
+              isBehavioral
+                ? "bg-maroon/10 text-maroon"
+                : "bg-cream-3 text-ink-muted border border-cream-line"
+            }`}
           >
-            FIXTURE DATA{record.fallbackReason ? ` (${record.fallbackReason})` : ""}
+            {isBehavioral ? "Behavioral round" : "Coding round"}
           </span>
-        )}
-        <span className="ml-auto text-xs text-zinc-500" data-testid="attempt-stats">
-          {isBehavioralSession(session)
-            ? `Behavioral · ${session.turns.length} turns · ${session.turns.filter((t) => t.speaker === "student").length} answers`
-            : `${session.snapshots.length} snapshots · ${session.runs.length} runs · ${session.turns.length} turns`}
-        </span>
+
+          <h2 className="text-2xl font-bold font-brand tracking-tight text-ink">
+            Attempt {index + 1}
+          </h2>
+
+          <span className="font-mono text-xs text-ink-muted">
+            {session.attemptId.slice(0, 8)}
+          </span>
+
+          {session.priorAttemptId && (
+            <span className="text-xs text-ink-muted">
+              retry of {session.priorAttemptId.slice(0, 8)}
+            </span>
+          )}
+
+          {record.fromFixture && (
+            <span
+              className="rounded-full bg-amber-100 text-amber-900 border border-amber-300 px-3 py-0.5 text-xs font-bold tracking-wider"
+              data-testid="report-fixture-badge"
+            >
+              FIXTURE DATA{record.fallbackReason ? ` (${record.fallbackReason})` : ""}
+            </span>
+          )}
+
+          <span className="ml-auto font-mono text-xs text-ink-muted" data-testid="attempt-stats">
+            {isBehavioral
+              ? `Behavioral · ${session.turns.length} turns · ${
+                  session.turns.filter((t) => t.speaker === "student").length
+                } answers`
+              : `${session.snapshots.length} snapshots · ${session.runs.length} runs · ${session.turns.length} turns`}
+          </span>
+        </div>
       </header>
 
-      {unrunDraft && (
-        <details className="rounded-md border border-zinc-700 p-3 text-sm">
-          <summary className="cursor-pointer">
-            Unrun draft · v{unrunDraft.codeVersion}
-            {lastRun ? ` · Last run: v${lastRun.codeVersion}` : " · No runs this attempt"}
-            {lastRun?.status === "completed" && ` (${lastRun.passed}/${lastRun.total} passed)`}
-          </summary>
-          <pre className="mt-2 overflow-x-auto">{unrunDraft.source}</pre>
-        </details>
-      )}
+      {/* Unrun Draft Disclosure for Coding Rounds */}
+      {unrunDraft && <UnrunDraftDisclosure unrunDraft={unrunDraft} lastRun={lastRun} />}
 
-      {record.status === "loading" && (
-        <ReportSkeleton />
-      )}
+      {/* Loading Skeleton */}
+      {record.status === "loading" && <SoftReportSkeleton />}
 
+      {/* Error State */}
       {record.status === "error" && record.error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm" role="alert" data-testid="report-error">
-          <div className="font-semibold text-red-300">
+        <div
+          className="rounded-[22px] border border-red-200 bg-[#FDF2F2] p-5 sm:p-6 text-sm text-red-900 shadow-[0_10px_18px_-6px_rgb(90_68_50/0.08)]"
+          role="alert"
+          data-testid="report-error"
+        >
+          <div className="font-bold text-red-950 text-base">
             {record.error.code === "timeout" ? "Report timed out" : "Report unavailable"}
           </div>
-          <div className="mt-1 text-red-200">{record.error.message}</div>
+          <div className="mt-1 text-red-800">{record.error.message}</div>
           {record.error.retryable ? (
             <>
-              <div className="mt-1 text-zinc-400">Your session is saved. Retry uses this same attempt.</div>
+              <div className="mt-2 text-ink-muted">
+                Your session is saved. Retry uses this same attempt.
+              </div>
               <button
+                type="button"
                 onClick={() => onRetryReport(session.attemptId)}
-                className={`${btn.secondary} mt-3 px-3 py-1.5 text-sm`}
+                className="mt-4 inline-flex items-center justify-center rounded-[16px] bg-cream-3 px-5 py-2.5 font-semibold text-sm text-maroon-deep shadow-sm hover:bg-[#EFE0CA] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-soft"
               >
                 Retry report
               </button>
             </>
           ) : (
-            <div className="mt-1 text-zinc-400">
+            <div className="mt-2 text-ink-muted">
               This attempt couldn&apos;t be evaluated, and retrying won&apos;t change that. You can still start a new attempt.
             </div>
           )}
         </div>
       )}
 
+      {/* Report Findings & Verdict */}
       {report && (
         <>
-          <section className="rounded-lg border border-brand-coral/40 bg-brand-coral/10 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-brand-coral">Next step</div>
-            <p className="mt-1 text-lg font-medium leading-snug text-zinc-50" data-testid="next-step">{report.nextStep}</p>
-          </section>
+          <VerdictBanner nextStep={report.nextStep} />
 
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-4">
             {report.findings.map((f) => (
-              <li key={f.id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-base font-semibold text-zinc-100">{label(f.category)}</span>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold ${RATING_STYLE[f.rating]}`}
-                  >
-                    <span aria-hidden>{RATING_ICON[f.rating]}</span>
-                    {label(f.rating)}
-                  </span>
-                </div>
-                <p className="mt-2 text-base leading-relaxed text-zinc-200">{f.summary}</p>
-                {f.evidence.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {f.evidence.map((ref, i) => (
-                      <button
-                        key={i}
-                        data-evidence-kind={ref.kind}
-                        onClick={() => setSelected(ref)}
-                        className={`rounded-md border px-3 py-1.5 font-mono text-sm transition-colors ${
-                          sameRef(selected, ref)
-                            ? "border-brand-coral bg-brand-coral/15 text-zinc-50"
-                            : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
-                        }`}
-                      >
-                        {evidenceLabel(ref)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </li>
+              <FindingCard
+                key={f.id}
+                finding={f}
+                selected={selected}
+                onSelectRef={setSelected}
+              />
             ))}
           </ul>
 
           {selected && (
-            <EvidencePanel refValue={selected} session={session} onClose={() => setSelected(null)} />
+            <EvidenceReceipt
+              refValue={selected}
+              session={session}
+              onClose={() => setSelected(null)}
+            />
           )}
         </>
       )}
 
-      <section>
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">Transcript</h3>
-        {session.turns.length === 0 ? (
-          <p className="text-sm text-zinc-500">No spoken turns in this attempt.</p>
-        ) : (
-          <ol className="flex max-h-80 flex-col gap-2 overflow-y-auto pr-1">
-            {session.turns.map((t) => {
-              const hit = selected?.kind === "turn" && selected.turnId === t.id;
-              return (
-                <li
-                  key={t.id}
-                  data-turn-id={t.id}
-                  data-highlighted={hit || undefined}
-                  ref={(el) => {
-                    if (el) turnRefs.current.set(t.id, el);
-                    else turnRefs.current.delete(t.id);
-                  }}
-                  className={`rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed transition-colors ${
-                    hit ? "bg-amber-400/20 ring-2 ring-amber-400" : t.speaker === "student" ? "bg-zinc-800" : "bg-brand-coral/10"
-                  }`}
-                >
-                  <div className="mb-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
-                    {t.speaker === "student" ? "You" : "Interviewer"} · {t.id}
-                  </div>
-                  {t.text}
-                </li>
-              );
-            })}
-          </ol>
-        )}
-        {selected?.kind === "turn" && !session.turns.some((t) => t.id === selected.turnId) && (
-          <p className="mt-2 text-sm text-amber-300">Turn {selected.turnId} is not in this attempt&apos;s transcript.</p>
-        )}
-      </section>
+      {/* Transcript Section */}
+      <TranscriptSection session={session} selected={selected} turnRefs={turnRefs} />
     </article>
   );
 }
 
-function EvidencePanel({
-  refValue,
-  session,
-  onClose,
-}: {
-  refValue: EvidenceRef;
-  session: Session;
-  onClose: () => void;
-}) {
-  const title = evidenceLabel(refValue);
-  let body: React.ReactNode;
-
-  if (refValue.kind === "turn") {
-    // The exact words from THIS attempt's transcript.
-    const turn = session.turns.find((t) => t.id === refValue.turnId);
-    body = turn ? (
-      <figure data-testid="evidence-quote">
-        <blockquote className="whitespace-pre-wrap rounded-md border-l-4 border-brand-coral bg-zinc-950 px-4 py-3 text-base leading-relaxed text-zinc-50">
-          “{turn.text}”
-        </blockquote>
-        <figcaption className="mt-2 text-xs text-zinc-500">
-          {turn.speaker === "student" ? "You" : "Interviewer"} · {turn.id}
-        </figcaption>
-      </figure>
-    ) : (
-      <NotFound what={`Turn ${refValue.turnId} is not in this attempt's transcript.`} />
-    );
-  } else if (isBehavioralSession(session)) {
-    body = <NotFound what="This behavioral attempt has no code or runs." />;
-  } else if (refValue.kind === "code") {
-    const snap = session.snapshots.findLast((s) => s.codeVersion === refValue.codeVersion);
-    body = snap ? (
-      <pre className="overflow-x-auto rounded-md bg-[#1e1e1e] py-2 font-mono text-sm" data-testid="evidence-code">
-        {snap.source.split("\n").map((line, i) => {
-          const n = i + 1;
-          const hit = refValue.lines && n >= refValue.lines[0] && n <= refValue.lines[1];
-          return (
-            <div key={n} data-highlighted={hit || undefined} className={`flex px-3 ${hit ? "bg-amber-400/20" : ""}`}>
-              <span className="w-8 shrink-0 select-none text-right text-zinc-600">{n}</span>
-              <span className="pl-4 whitespace-pre text-zinc-100">{line || " "}</span>
-            </div>
-          );
-        })}
-      </pre>
-    ) : (
-      <NotFound what={`No snapshot for version ${refValue.codeVersion} in this attempt.`} />
-    );
-  } else {
-    const run = session.runs.findLast((r) => r.codeVersion === refValue.codeVersion);
-    body = run ? <RunDetail run={run} caseId={refValue.caseId} /> : (
-      <NotFound what={`No run of version ${refValue.codeVersion} in this attempt.`} />
-    );
-  }
-
+function SoftReportSkeleton() {
+  const bar = "animate-pulse rounded bg-[#EADECE]";
   return (
-    <section className="rounded-lg border border-brand-coral/40 bg-zinc-900 p-4" data-testid="evidence-panel">
-      <div className="mb-3 flex items-center">
-        <h3 className="font-mono text-sm text-brand-coral">{title}</h3>
-        <button onClick={onClose} className="ml-auto text-xs text-zinc-400 hover:text-zinc-200">
-          Close
-        </button>
-      </div>
-      {body}
-    </section>
-  );
-}
-
-function RunDetail({ run, caseId }: { run: RunResult; caseId?: string }) {
-  if (run.status === "error") {
-    return (
-      <div className="text-sm text-red-300">
-        {run.error.message}
-        {run.error.line !== undefined && ` (line ${run.error.line})`}
-      </div>
-    );
-  }
-  return (
-    <div data-testid="evidence-run">
-      <div className={`mb-2 text-sm font-semibold ${run.passed === run.total ? "text-emerald-400" : "text-red-400"}`}>
-        {run.passed}/{run.total} passed
-      </div>
-      <ul className="flex flex-col gap-2">
-        {run.cases.map((c) => {
-          const hit = c.caseId === caseId;
-          return (
-            <li
-              key={c.caseId}
-              data-case-id={c.caseId}
-              data-highlighted={hit || undefined}
-              className={`grid grid-cols-[3.5rem_1fr] gap-x-3 rounded-md px-3 py-2 font-mono text-xs ${
-                hit ? "bg-amber-400/20 ring-2 ring-amber-400" : "bg-zinc-950"
-              }`}
-            >
-              <span className={c.pass ? "text-emerald-400" : "text-red-400"}>
-                {c.caseId} {c.pass ? "✓" : "✗"}
-              </span>
-              <span className="text-zinc-300">
-                {c.input} → expected {c.expected}, got {c.actual ?? c.error ?? "—"}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+    <div className="flex flex-col gap-4" aria-label="Writing your report" role="status">
+      <div className="h-24 animate-pulse rounded-[22px] bg-[#EADECE]/60" />
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="rounded-[26px] bg-[#F2E8DA]/60 p-6">
+          <div className="mb-3 flex gap-2">
+            <div className={`h-5 w-32 ${bar}`} />
+            <div className={`h-5 w-20 ${bar}`} />
+          </div>
+          <div className={`mb-2 h-4 w-full ${bar}`} />
+          <div className={`mb-4 h-4 w-3/4 ${bar}`} />
+          <div className={`h-7 w-36 ${bar}`} />
+        </div>
+      ))}
     </div>
   );
-}
-
-function NotFound({ what }: { what: string }) {
-  return <p className="text-sm text-amber-300">{what}</p>;
 }

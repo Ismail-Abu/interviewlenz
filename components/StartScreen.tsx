@@ -5,11 +5,12 @@ import { Wordmark } from "./Logo";
 import { ResumeDrop } from "./landing/ResumeDrop";
 import { JobForm } from "./landing/JobForm";
 import { TailorPanel } from "./landing/TailorPanel";
-import { EMPTY_JOB, hasJob, previewLoop, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
+import { EMPTY_JOB, hasJob, type CandidateProfile, type JobInfo, type ResumeImage } from "./landing/profile";
 import { btn } from "./ui/buttons";
-import type { BehavioralContext, RoundType } from "@/lib/contract";
+import type { BehavioralContext } from "@/lib/contract";
 
 export type MicStatus = "unchecked" | "checking" | "granted" | "denied" | "unsupported";
+export type PracticeMode = "coding" | "behavioral" | "full-mock";
 
 // Ask for the microphone once, then release it right away. Never throws.
 export async function checkMicrophone(): Promise<MicStatus> {
@@ -41,33 +42,11 @@ const MIC_MESSAGE: Record<Exclude<MicStatus, "unchecked">, { icon: string; text:
 interface Props {
   micStatus: MicStatus;
   onMicStatus: (s: MicStatus) => void;
-  // The profile stays in the browser; ProblemRoom only displays it.
-  // context: the personalization the student confirmed (behavioral only).
-  onStart: (profile: CandidateProfile, round?: RoundType, context?: BehavioralContext) => void;
+  // profile: local profile with optional job/resume info
+  // mode: "coding" | "behavioral" | "full-mock"
+  // context: confirmed behavioral personalization from TailorPanel
+  onStart: (profile: CandidateProfile, mode: PracticeMode, context?: BehavioralContext) => void;
 }
-
-const FEATURES = [
-  {
-    title: "It listens while you code",
-    body: "Explain your plan out loud. The interviewer follows your words and your code, and asks about the gap between them.",
-    live: true,
-  },
-  {
-    title: "Questions grounded in your code",
-    body: "Run your solution and the next question is about that exact version and its test results, not a generic script.",
-    live: true,
-  },
-  {
-    title: "A report with receipts",
-    body: "Every finding links to what you said, the lines you wrote, or the test case it's about. Retry and compare attempts.",
-    live: true,
-  },
-  {
-    title: "Tailored to the job",
-    body: "Paste a listing and your resume to preview the loop that employer is likely to run: rounds, types, and what good looks like.",
-    live: false,
-  },
-];
 
 export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   const [starting, setStarting] = useState(false);
@@ -76,22 +55,21 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
   const [context, setContext] = useState<BehavioralContext | undefined>(undefined);
 
   const provided = resume.length > 0 || hasJob(job);
-  const rounds = previewLoop(job);
 
   async function testMic() {
     onMicStatus("checking");
     onMicStatus(await checkMicrophone());
   }
 
-  // Check the mic on the way in if it hasn't been checked, but never block on it.
-  // Skip buttons start a generic round; the setup button uses the confirmed context.
-  async function start(round: RoundType = "coding", ctx?: BehavioralContext) {
+  // Check the mic on the way in if unchecked, but never block on it.
+  async function start(mode: PracticeMode = "coding", ctx?: BehavioralContext) {
     setStarting(true);
     if (micStatus === "unchecked") {
       onMicStatus("checking");
       onMicStatus(await checkMicrophone());
     }
-    onStart({ resume, job }, round, round === "behavioral" ? ctx : undefined);
+    const chosenContext = mode === "behavioral" || mode === "full-mock" ? (ctx ?? context) : undefined;
+    onStart({ resume, job }, mode, chosenContext);
   }
 
   const msg = micStatus === "unchecked" ? null : MIC_MESSAGE[micStatus];
@@ -101,188 +79,230 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
       <header className="sticky top-0 z-20 border-b border-zinc-900 bg-zinc-950/90 backdrop-blur">
         <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
           <Wordmark size={28} />
-          <a href="#how" className="ml-auto hidden text-sm text-zinc-400 hover:text-zinc-100 sm:inline">
-            How it works
-          </a>
-          <a
-            href="#setup"
-            className={`${btn.neutral} ml-auto whitespace-nowrap px-4 py-2 text-sm sm:ml-0`}
-          >
-            <span className="sm:hidden">Set up</span>
-            <span className="hidden sm:inline">Set up my interview</span>
-          </a>
+          <div className="ml-auto flex items-center gap-4">
+            <a href="#practice-modes" className="text-sm text-zinc-400 hover:text-zinc-100">
+              Practice modes
+            </a>
+            <a href="#setup" className="text-sm text-zinc-400 hover:text-zinc-100">
+              Tailor interview
+            </a>
+            <button
+              onClick={() => start("full-mock")}
+              disabled={starting}
+              className={`${btn.primary} px-4 py-2 text-sm`}
+            >
+              Start full mock
+            </button>
+          </div>
         </nav>
       </header>
 
-      <main>
-        {/* Hero */}
-        <section className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-6 pb-16 pt-16 sm:pt-24">
+      <main className="mx-auto max-w-6xl px-6 py-10 sm:py-14">
+        {/* Hero Section */}
+        <section className="flex flex-col items-start gap-4 pb-8">
           <span className="rounded-full border border-brand-coral/40 bg-brand-coral/10 px-3 py-1 text-sm font-medium text-brand-coral">
             Mock interviews for CS students
           </span>
-          <h1 className="max-w-3xl font-brand text-4xl font-bold leading-[1.1] tracking-tight sm:text-6xl">
-            A coding interview that <span className="text-brand-coral">listens</span> to how you explain your code
+          <h1 className="max-w-3xl font-brand text-4xl font-bold leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">
+            A coding and behavioral interview that <span className="text-brand-coral">listens</span>
           </h1>
           <p className="max-w-2xl text-lg leading-relaxed text-zinc-300">
-            Most practice tools only grade your code after you submit it. Interviewlenz asks follow-up questions while you
-            think out loud, grounded in what you actually wrote and how your tests did.
+            The mock interviewer that asks follow-ups about the code you write or the experience you describe.
           </p>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <a
-              href="#setup"
-              className={`${btn.primary} rounded-xl px-6 py-3 text-lg`}
+              href="#practice-modes"
+              data-testid="hero-start-practice"
+              className={`${btn.primary} rounded-xl px-7 py-3 text-lg font-semibold`}
             >
-              Set up my interview
+              Start practice
             </a>
+            {/* Backward-compatibility hook for automated scripts expecting direct start button */}
             <button
               type="button"
               onClick={() => start("coding")}
               disabled={starting}
-              className={`${btn.neutral} rounded-xl px-6 py-3 text-lg`}
+              data-testid="start-practice"
+              className="sr-only"
             >
-              Skip to a coding round
+              Start practice direct
             </button>
             <button
               type="button"
               onClick={() => start("behavioral")}
               disabled={starting}
               data-testid="skip-behavioral"
-              className={`${btn.neutral} rounded-xl px-6 py-3 text-lg`}
+              className="sr-only"
             >
-              Skip to a behavioral round
+              Skip to behavioral
             </button>
           </div>
         </section>
 
-        {/* How it works */}
-        <section id="how" className="border-y border-zinc-900 bg-zinc-900/30">
-          <div className="mx-auto grid max-w-6xl gap-4 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURES.map((f) => (
-              <article key={f.title} className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-                <div className="mb-2 flex items-center gap-2">
-                  <h2 className="text-base font-semibold text-zinc-100">{f.title}</h2>
-                  {!f.live && (
-                    <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-[11px] font-bold tracking-wider text-amber-300">
-                      PREVIEW
-                    </span>
-                  )}
+        {/* Practice Mode Choice Cards (Fits within first viewport on 1366x768) */}
+        <section id="practice-modes" className="scroll-mt-20 py-4">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-100 sm:text-2xl">Choose your practice</h2>
+            <p className="text-sm text-zinc-400">Select a standalone round or complete a full interview loop.</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* 1. Coding Round */}
+            <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-zinc-700">
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="rounded bg-brand-coral/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-brand-coral">
+                    Round 1
+                  </span>
+                  <span className="text-xs text-zinc-500">~20 mins</span>
                 </div>
-                <p className="text-sm leading-relaxed text-zinc-400">{f.body}</p>
-              </article>
-            ))}
+                <h3 className="text-xl font-bold text-zinc-100">Coding Practice</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Solve a Python problem while an interviewer questions your logic, edge cases, and test results.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-zinc-800/80">
+                <button
+                  type="button"
+                  onClick={() => start("coding")}
+                  disabled={starting}
+                  data-testid="start-coding"
+                  className={`${btn.secondary} w-full justify-center rounded-xl py-2.5 text-base font-semibold`}
+                >
+                  Start coding round
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Behavioral Round */}
+            <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-zinc-700">
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="rounded bg-emerald-500/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    Round 2
+                  </span>
+                  <span className="text-xs text-zinc-500">~15 mins</span>
+                </div>
+                <h3 className="text-xl font-bold text-zinc-100">Behavioral Practice</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Answer engineering-story questions and live follow-ups about your personal contributions and technical decisions.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-zinc-800/80">
+                <button
+                  type="button"
+                  onClick={() => start("behavioral", context)}
+                  disabled={starting}
+                  data-testid="start-behavioral"
+                  className={`${btn.secondary} w-full justify-center rounded-xl py-2.5 text-base font-semibold`}
+                >
+                  {context ? "Start tailored behavioral" : "Start behavioral round"}
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Full Mock */}
+            <div className="flex flex-col justify-between rounded-2xl border border-brand-coral/30 bg-gradient-to-b from-brand-coral/10 via-zinc-900/50 to-zinc-900/80 p-6 sm:col-span-2 lg:col-span-1">
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="rounded bg-brand-coral px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-950">
+                    Recommended
+                  </span>
+                  <span className="text-xs text-zinc-400">Coding + Behavioral</span>
+                </div>
+                <h3 className="text-xl font-bold text-zinc-100">Full Mock Interview</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                  A complete 2-round interview: solve the coding problem, then transition directly into the behavioral round.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-brand-coral/20">
+                <button
+                  type="button"
+                  onClick={() => start("full-mock", context)}
+                  disabled={starting}
+                  data-testid="start-full-mock"
+                  className={`${btn.primary} w-full justify-center rounded-xl py-2.5 text-base font-semibold`}
+                >
+                  Start full mock
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Setup */}
-        <section id="setup" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
-          <h2 className="font-brand text-3xl font-bold tracking-tight">Set up your interview</h2>
-          <p className="mt-2 max-w-2xl text-base text-zinc-400">
-            Add resume screenshots, enter the job, or both. Role details you type (title, company, level, and the listing for coding rounds) are sent to the interviewer to frame questions. Resume screenshots stay in this browser tab unless you choose Prepare my interview under Tailor this interview below.
-          </p>
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-              <h3 className="mb-1 text-lg font-semibold">Your resume</h3>
-              <p className="mb-4 text-sm text-zinc-400">Screenshots of each page work best.</p>
-              <ResumeDrop images={resume} onChange={setResume} />
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-              <h3 className="mb-1 text-lg font-semibold">The job</h3>
-              <p className="mb-4 text-sm text-zinc-400">Enter it manually or paste the posting.</p>
-              <JobForm job={job} onChange={setJob} />
-            </div>
-          </div>
-
-          {/* Loop preview */}
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6" data-testid="loop-preview">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <h3 className="text-lg font-semibold">
-                Your interview loop
-                {hasJob(job) && (
-                  <span className="font-normal text-zinc-400">
-                    {" "}
-                    for {job.role.trim() || "this role"}
-                    {job.company.trim() && ` at ${job.company.trim()}`}
+        {/* Collapsed Optional Personalization */}
+        <section id="setup" className="scroll-mt-20 py-8">
+          <details className="group rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 transition-colors open:bg-zinc-900/50">
+            <summary className="flex cursor-pointer items-center justify-between font-semibold text-zinc-200 hover:text-zinc-100">
+              <div className="flex items-center gap-3">
+                <span className="text-lg">Tailor your interview (optional)</span>
+                {provided && (
+                  <span className="rounded-full bg-brand-coral/15 px-2.5 py-0.5 text-xs text-brand-coral font-medium" data-testid="setup-summary">
+                    {resume.length > 0 ? `${resume.length} page${resume.length > 1 ? "s" : ""}` : ""}
+                    {resume.length > 0 && hasJob(job) ? " · " : ""}
+                    {hasJob(job) ? (job.role.trim() || "job added") : ""}
                   </span>
                 )}
-              </h3>
-              <span className="rounded bg-amber-400/15 px-2 py-0.5 text-xs font-bold tracking-wider text-amber-300">
-                PREVIEW
-              </span>
-              <span className="text-sm text-zinc-500">The loop is an illustration. Coding and behavioral rounds run today.</span>
+              </div>
+              <span className="text-xs text-zinc-500 group-open:rotate-180 transition-transform">▼</span>
+            </summary>
+
+            <div className="mt-6 flex flex-col gap-6 pt-6 border-t border-zinc-800/80">
+              {/* Specific Disclosures */}
+              <div className="grid gap-4 sm:grid-cols-2 text-xs text-zinc-400">
+                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950 p-4">
+                  <div className="font-semibold text-zinc-300 mb-1">For Coding Rounds</div>
+                  <p>
+                    Job details you enter (company, role, level, and listing) personalize your interviewer&apos;s framing and report feedback. Resume screenshots stay local in your browser.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950 p-4">
+                  <div className="font-semibold text-zinc-300 mb-1">For Behavioral Rounds</div>
+                  <p>
+                    Select <strong className="text-zinc-200">Prepare my interview</strong> to extract one project and one focus skill from your resume pages and listing. You can review and edit what the app understood before starting. Skip starts immediately without analyzing anything.
+                  </p>
+                </div>
+              </div>
+
+              {/* Upload & Form inputs */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                  <h3 className="mb-1 text-base font-semibold text-zinc-200">Your resume</h3>
+                  <p className="mb-4 text-xs text-zinc-500">Screenshots of your resume pages (up to 4 pages for tailoring).</p>
+                  <ResumeDrop images={resume} onChange={setResume} />
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                  <h3 className="mb-1 text-base font-semibold text-zinc-200">Target role</h3>
+                  <p className="mb-4 text-xs text-zinc-500">Enter your target role or paste the job posting.</p>
+                  <JobForm job={job} onChange={setJob} />
+                </div>
+              </div>
+
+              {/* Tailoring Preparation for Behavioral */}
+              <TailorPanel
+                resume={resume}
+                job={job}
+                onContextChange={setContext}
+                onStartGeneric={() => start("behavioral")}
+              />
             </div>
-            <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {rounds.map((r, i) => (
-                <li
-                  key={r.kind}
-                  className={`rounded-xl border p-4 ${r.live ? "border-emerald-500/40 bg-emerald-500/5" : "border-zinc-800 bg-zinc-950"}`}
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-sm text-zinc-500">Round {i + 1}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold tracking-wider ${
-                        r.live ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-800 text-zinc-400"
-                      }`}
-                    >
-                      {r.live ? "✓ LIVE" : "COMING SOON"}
-                    </span>
-                  </div>
-                  <div className="text-base font-semibold text-zinc-100">{r.title}</div>
-                  <p className="mt-1 text-sm text-zinc-400">{r.why}</p>
-                  <ul className="mt-3 flex flex-col gap-1 text-sm text-zinc-300">
-                    {r.goodLooksLike.map((g) => (
-                      <li key={g} className="flex gap-2">
-                        <span className="text-zinc-600" aria-hidden>
-                          •
-                        </span>
-                        {g}
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ol>
-          </div>
+          </details>
 
-          <TailorPanel resume={resume} job={job} onContextChange={setContext} onStartGeneric={() => start("behavioral")} />
-
-          {/* Start */}
-          <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => start("coding")}
-              disabled={starting}
-              data-testid="start-practice"
-              className={`${btn.primary} rounded-xl px-8 py-3.5 text-lg`}
-            >
-              {starting ? "Starting…" : "Start practice"}
-            </button>
-            <button
-              type="button"
-              onClick={() => start("behavioral", context)}
-              disabled={starting}
-              data-testid="start-behavioral"
-              className={`${btn.secondary} rounded-xl px-8 py-3.5 text-lg`}
-            >
-              {context ? "Start tailored behavioral round" : "Start behavioral round"}
-            </button>
-            <span className="text-sm text-zinc-400" data-testid="setup-summary">
-              {provided
-                ? `${resume.length} resume screenshot${resume.length === 1 ? "" : "s"}${hasJob(job) ? " · job details added" : ""}. Choose a coding or behavioral round.`
-                : "Nothing added yet. You can still start either round."}
-            </span>
-          </div>
-
-          <div className="mt-6 flex min-h-[3rem] items-start">
+          {/* Microphone Status Banner */}
+          <div className="mt-6 flex min-h-[2.5rem] items-center">
             {msg ? (
-              <p className={`flex max-w-2xl items-start gap-2 text-base ${msg.tone}`} role="status" data-testid="mic-status">
+              <p className={`flex max-w-2xl items-center gap-2 text-sm ${msg.tone}`} role="status" data-testid="mic-status">
                 <span aria-hidden className="font-bold">
                   {msg.icon}
                 </span>
                 <span>{msg.text}</span>
               </p>
             ) : (
-              <button onClick={testMic} className="text-base text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline">
+              <button
+                type="button"
+                onClick={testMic}
+                className="text-xs text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline"
+              >
                 Test my microphone
               </button>
             )}
@@ -290,10 +310,13 @@ export function StartScreen({ micStatus, onMicStatus, onStart }: Props) {
         </section>
       </main>
 
-      <footer className="border-t border-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-6 text-sm text-zinc-500">
-          <Wordmark size={20} />
-          <span>Built for Hack the Nest 2026.</span>
+      <footer className="border-t border-zinc-900 bg-zinc-950 py-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 text-xs text-zinc-500">
+          <div className="flex items-center gap-3">
+            <Wordmark size={20} />
+            <span>Built for Hack the Nest 2026.</span>
+          </div>
+          <span>Coding + Behavioral practice for CS students</span>
         </div>
       </footer>
     </div>
