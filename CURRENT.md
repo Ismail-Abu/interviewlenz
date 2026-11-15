@@ -525,7 +525,7 @@ Traced one Run: `ProblemRoom.handleRun` captures `{codeVersion, source}` before 
 
 **Known limitations at this commit:**
 - **Local-only preview:** landing-page resume screenshots, job fields, the "Your interview loop" preview, and the room's "Practicing for…" chip stay in the browser tab. Nothing tailors the interview yet. All of it is labeled PREVIEW.
-- **Report failure fallback:** a retryable report failure or timeout shows the fixture report labeled "(no API key)" instead of Retry report. Hamza's decision on `components/reportAdapter.ts`; see B8.
+- **Report failure fallback:** fixed by F9 (`5419848`, on top of this release candidate). Until it merges into the release, a retryable report failure or timeout at `9362d24` still shows the "(no API key)" fixture.
 - **DOMPurify in the runtime editor:** browsers run Monaco 0.55.1 from jsDelivr, which bundles DOMPurify 3.2.7 (affected by GHSA-6688-9rhm-gjv2 / -mrv2-3pqr-j5jr / -c6gr-qvv4-5v3f). Practical exposure is low: the only editor content is the student's own code, and there are no Python hover providers. The `npm audit` hit (`monaco-editor@0.57.0` / `dompurify@3.4.15`) is in an unused npm copy, absent from the client bundle. Not changed before the deadline.
 - **Public routes:** both API routes are unauthenticated, with request and size caps and timeouts but **no rate limit**. See "Remaining exposure" below.
 
@@ -551,3 +551,33 @@ Traced one Run: `ProblemRoom.handleRun` captures `{codeVersion, source}` before 
 **Deadline:** still "Sunday, November 15, exact time awaiting organizer confirmation". Freeze code 2 hours before the confirmed time.
 
 **Live checks on https://interviewlenz.us: NONE RUN.** A token HTTP 200 alone is not voice acceptance.
+
+### F9 • Report fallback: real failures retry, fixture only without a service — Hamza • November 14 • branch `f9-report-retry` from release candidate `fa84be6`
+
+**Tested code commit `5419848`** (tree `07dde279428e78d26052634ee97dea4e850351db`) = release candidate `9362d24`/`fa84be6` + this change. Files: `components/reportAdapter.ts` and `components/ReportView.tsx` only. No backend, contract, or session-shape change. Checked first: #14 still at `fa84be6`, no newer heads, no other local work.
+
+**Trace.** Finish → `ProblemRoom.loadReport(session)` → `requestReport(session, "auto")` → `POST /api/report`. Before, `auto` replaced **any** failure with `fixtures/report.json` labeled "(no API key)". Retry report → `handleRetryReport(attemptId)` → `loadReport(record.session)` re-sends the stored Session, so a retry is the same attempt.
+
+**Now, in `auto` mode:**
+| Route response | UI |
+|---|---|
+| 200 | real report |
+| 503 `provider_unavailable`, `retryable:false` (not configured) | labeled fixture "(no API key)": the zero-key demo is unchanged |
+| 404 / not an API response | labeled fixture "(report service unavailable)" |
+| 503 / timeout with `retryable:true`, or a network error | error card ("Report timed out" / "Report unavailable") with **Retry report**, same attempt |
+| 400 `invalid_request` / `unknown_problem` | error card, **no fixture**, no Retry (re-sending identical data can't succeed) |
+
+**Checks** (Edge via Playwright on `next start`; `/api/report` stubbed per case unless noted). **16/16 pass:**
+- Timeout on Finish → "Report timed out" + Retry report, no fixture. **Retry → real report, no fixture badge.** Exactly 2 requests. **The retry body is byte-identical to the first (same ids, turns, snapshots, runs).** Still one attempt card; the evidence chip opens the cited lines; Retry problem → empty Attempt 2; no page errors.
+- Retryable provider failure → error + Retry. Dropped connection → "Couldn't reach the report service…" + Retry.
+- Invalid request (400) → error text shown, no fixture, no Retry.
+- Not configured → "FIXTURE DATA (no API key)". Route missing → "FIXTURE DATA (report service unavailable)".
+- **Zero-key demo against the real route (no stub, no key) → "FIXTURE DATA (no API key)".**
+
+Also on `5419848`:
+- landing 23/23 (`next start`)
+- regression A/B/C unchanged
+- all 10 dev checks pass (`live-*` ×8, `report-check`, `runner-check`)
+- `npm run lint` clean; `npm run build` passes
+
+**Real provider: not run** (no key on this machine). With a key, a real timeout or provider error now shows Retry report instead of fixture feedback.
