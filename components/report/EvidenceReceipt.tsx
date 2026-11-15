@@ -19,13 +19,17 @@ export function EvidenceReceipt({ refValue, session, onClose }: Props) {
     const turn = session.turns.find((t) => t.id === refValue.turnId);
     body = turn ? (
       <figure data-testid="evidence-quote">
-        <blockquote className="whitespace-pre-wrap rounded-r-[18px] border-l-4 border-maroon bg-cream-2/95 p-5 shadow-sm">
-          <p className="font-serif text-[17px] italic leading-relaxed text-ink sm:text-[18px]">
+        <blockquote className="whitespace-pre-wrap rounded-r-[18px] border-l-4 border-rose-500 bg-[#0E0F14]/90 p-5 shadow-inner">
+          <p className="font-serif text-[17px] italic leading-relaxed text-zinc-100 sm:text-[18px]">
             “{turn.text}”
           </p>
         </blockquote>
-        <figcaption className="mt-2.5 pl-2 font-mono text-xs font-medium text-ink-muted">
-          {turn.speaker === "student" ? "You" : "Interviewer"} · {turn.id}
+        <figcaption className="mt-2.5 pl-2 font-mono text-xs font-medium text-zinc-400">
+          <span className={turn.speaker === "student" ? "text-cyan-400 font-semibold" : "text-rose-400 font-semibold"}>
+            {turn.speaker === "student" ? "You" : "Interviewer"}
+          </span>
+          {" · "}
+          {turn.id}
         </figcaption>
       </figure>
     ) : (
@@ -37,7 +41,7 @@ export function EvidenceReceipt({ refValue, session, onClose }: Props) {
     const snap = session.snapshots.findLast((s) => s.codeVersion === refValue.codeVersion);
     body = snap ? (
       <pre
-        className="overflow-x-auto rounded-[18px] bg-panel py-3.5 font-mono text-xs text-zinc-100 shadow-[0_12px_22px_-6px_rgb(90_68_50/0.14)]"
+        className="overflow-x-auto rounded-[18px] bg-[#0E0F14] border border-white/[0.08] py-3.5 font-mono text-xs text-zinc-100 shadow-inner"
         data-testid="evidence-code"
       >
         {snap.source.split("\n").map((line, i) => {
@@ -47,9 +51,9 @@ export function EvidenceReceipt({ refValue, session, onClose }: Props) {
             <div
               key={n}
               data-highlighted={hit || undefined}
-              className={`flex px-3.5 leading-5 ${hit ? "bg-amber-400/20 text-amber-200" : ""}`}
+              className={`flex px-3.5 leading-5 ${hit ? "bg-rose-500/20 text-rose-200 border-l-2 border-rose-400" : ""}`}
             >
-              <span className="w-9 shrink-0 select-none text-right text-zinc-500 font-mono pr-4">
+              <span className="w-9 shrink-0 select-none text-right text-zinc-600 font-mono pr-4">
                 {n}
               </span>
               <span className="whitespace-pre text-zinc-100">{line || " "}</span>
@@ -71,20 +75,20 @@ export function EvidenceReceipt({ refValue, session, onClose }: Props) {
 
   return (
     <section
-      className="mt-5 rounded-[22px] bg-cream-3/90 p-5 sm:p-6 shadow-[0_10px_18px_-6px_rgb(90_68_50/0.13)] border border-cream-line/70"
+      className="mt-5 rounded-[22px] bg-[#161720]/95 border border-white/10 p-5 sm:p-6 shadow-2xl relative"
       data-testid="evidence-panel"
     >
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-maroon" aria-hidden />
-          <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-maroon">
+          <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" aria-hidden />
+          <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-rose-400">
             {title}
           </h3>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full px-3 py-1 text-xs font-semibold text-ink-muted hover:text-ink hover:bg-cream-2 transition-colors focus-visible:ring-2 focus-visible:ring-maroon-soft focus-visible:outline-none"
+          className="rounded-full px-3 py-1 text-xs font-mono text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none"
         >
           Close receipt ×
         </button>
@@ -97,16 +101,16 @@ export function EvidenceReceipt({ refValue, session, onClose }: Props) {
 function RunDetail({ run, caseId }: { run: RunResult; caseId?: string }) {
   if (run.status === "error") {
     return (
-      <div className="rounded-[14px] bg-red-50 p-4 text-xs font-mono text-red-900 border border-red-200">
+      <div className="rounded-[14px] bg-red-950/40 p-4 text-xs font-mono text-red-300 border border-red-800/50">
         <p className="font-semibold">{run.error.message}</p>
         {run.error.line !== undefined && (
-          <p className="mt-1 text-red-700">Line {run.error.line}</p>
+          <p className="mt-1 text-red-400">Line {run.error.line}</p>
         )}
       </div>
     );
   }
   return (
-    <div data-testid="evidence-run" className="rounded-[18px] bg-panel p-4 text-zinc-100 shadow-[0_12px_22px_-6px_rgb(90_68_50/0.14)]">
+    <div data-testid="evidence-run" className="rounded-[18px] bg-[#0E0F14] border border-white/[0.08] p-4 text-zinc-100 shadow-inner">
       <div
         className={`mb-3 text-xs font-bold font-mono tracking-wide ${
           run.passed === run.total ? "text-emerald-400" : "text-amber-400"
@@ -123,7 +127,7 @@ function RunDetail({ run, caseId }: { run: RunResult; caseId?: string }) {
               data-case-id={c.caseId}
               data-highlighted={hit || undefined}
               className={`grid grid-cols-[4rem_1fr] gap-x-3 rounded-[10px] px-3.5 py-2 font-mono text-xs leading-relaxed ${
-                hit ? "bg-amber-400/25 ring-1 ring-amber-400" : "bg-[#141211]"
+                hit ? "bg-rose-500/20 ring-1 ring-rose-500" : "bg-[#161720]"
               }`}
             >
               <span className={c.pass ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
@@ -144,9 +148,9 @@ function RunDetail({ run, caseId }: { run: RunResult; caseId?: string }) {
 }
 
 function NotFound({ what }: { what: string }) {
-  return <p className="text-sm font-medium text-amber-800 bg-amber-50 rounded-[12px] p-3">{what}</p>;
+  return <p className="text-sm font-medium text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-[12px] p-3">{what}</p>;
 }
 
 function CalmNote({ what }: { what: string }) {
-  return <p className="text-sm italic text-ink-muted p-2">{what}</p>;
+  return <p className="text-sm font-medium text-zinc-400 bg-zinc-900/60 border border-zinc-800 rounded-[12px] p-3">{what}</p>;
 }
