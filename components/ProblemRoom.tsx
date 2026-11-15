@@ -8,11 +8,14 @@ import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { StartScreen, type MicStatus } from "./StartScreen";
+import { hasJob, type CandidateProfile } from "./landing/profile";
+import { Wordmark } from "./Logo";
 import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode } from "./reportAdapter";
 import { preloadRunner } from "@/lib/runner";
+import { btn } from "./ui/buttons";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -36,6 +39,9 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   const [view, setView] = useState<"start" | "room" | "report">("start");
   const [records, setRecords] = useState<AttemptRecord[]>([]);
   const [micStatus, setMicStatus] = useState<MicStatus>("unchecked");
+  // From the landing page. Browser-only and display-only: never added to the
+  // Session, the token request, or the Live session (no backend fields for it).
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
@@ -324,7 +330,16 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   }
 
   if (view === "start") {
-    return <StartScreen micStatus={micStatus} onMicStatus={setMicStatus} onStart={() => setView("room")} />;
+    return (
+      <StartScreen
+        micStatus={micStatus}
+        onMicStatus={setMicStatus}
+        onStart={(p) => {
+          setProfile(p);
+          setView("room");
+        }}
+      />
+    );
   }
 
   if (view === "report") {
@@ -337,11 +352,21 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
       <header className="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
-        <span className="text-xl font-semibold tracking-tight">Interviewlenz</span>
+        <Wordmark size={26} />
         <span className="hidden text-base text-zinc-400 md:inline">
           Python · {problem.title}
           {attemptNumber > 1 && ` · Attempt ${attemptNumber}`}
         </span>
+        {profile && hasJob(profile.job) && (
+          <span
+            className="hidden max-w-xs truncate rounded-full border border-brand-coral/40 bg-brand-coral/10 px-3 py-1 text-sm text-brand-coral lg:inline"
+            data-testid="target-role"
+            title="From your setup. Tailored rounds are a preview."
+          >
+            Practicing for {profile.job.role.trim() || "your role"}
+            {profile.job.company.trim() && ` at ${profile.job.company.trim()}`}
+          </span>
+        )}
         <span className="ml-auto text-sm text-zinc-500" data-testid="session-stats">
           {attempt.snapshots.length} snapshots · {attempt.runs.length} runs · {attempt.turns.length} turns
         </span>
@@ -385,7 +410,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
         <button
           onClick={handleFinish}
           disabled={running}
-          className="rounded-lg bg-sky-600 px-5 py-2 text-base font-semibold text-white hover:bg-sky-500 disabled:opacity-60"
+          className={`${btn.secondary} px-5 py-2 text-base`}
         >
           Finish
         </button>
@@ -421,7 +446,7 @@ export function ProblemRoom({ problem }: { problem: Problem }) {
             <button
               onClick={handleRun}
               disabled={running}
-              className="flex min-w-[7rem] items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-base font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${btn.primary} min-w-[7rem] px-5 py-2 text-base`}
             >
               {running ? (
                 <>

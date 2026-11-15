@@ -37,7 +37,7 @@ export function CaseSkeleton({ count = 4 }: { count?: number }) {
 export function ReportSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-label="Writing your report" role="status">
-      <div className="h-24 animate-pulse rounded-lg border border-sky-500/20 bg-sky-500/5" />
+      <div className="h-24 animate-pulse rounded-lg border border-brand-coral/20 bg-brand-coral/5" />
       {[0, 1, 2].map((i) => (
         <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
           <div className="mb-3 flex gap-2">

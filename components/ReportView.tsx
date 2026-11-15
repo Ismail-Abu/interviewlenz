@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiError, EvidenceRef, Finding, Report, RunResult, Session } from "@/lib/contract";
 import { ReportSkeleton } from "./Skeletons";
+import { Wordmark } from "./Logo";
+import { btn } from "./ui/buttons";
 
 export interface AttemptRecord {
   session: Session;
@@ -21,7 +23,7 @@ interface Props {
 
 const RATING_STYLE: Record<Finding["rating"], string> = {
   strong: "bg-emerald-500/15 text-emerald-400",
-  ok: "bg-sky-500/15 text-sky-300",
+  ok: "bg-zinc-200/10 text-zinc-100",
   needs_work: "bg-red-500/15 text-red-400",
   insufficient_evidence: "bg-zinc-700/50 text-zinc-300",
 };
@@ -49,12 +51,12 @@ export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
-        <span className="text-xl font-semibold tracking-tight">Interviewlenz</span>
+        <Wordmark size={26} />
         <span className="text-base text-zinc-400">Interview report</span>
         <button
           onClick={onRetryAttempt}
           disabled={busy}
-          className="ml-auto rounded-lg bg-emerald-600 px-5 py-2 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+          className={`${btn.primary} ml-auto px-5 py-2 text-base`}
         >
           Retry problem
         </button>
@@ -122,7 +124,7 @@ function ReportCard({
           <div className="mt-1 text-zinc-400">Your session is saved.</div>
           <button
             onClick={() => onRetryReport(session.attemptId)}
-            className="mt-3 rounded-md border border-red-400/50 px-3 py-1.5 text-sm font-semibold text-red-200 hover:bg-red-500/20"
+            className={`${btn.secondary} mt-3 px-3 py-1.5 text-sm`}
           >
             Retry report
           </button>
@@ -131,8 +133,8 @@ function ReportCard({
 
       {report && (
         <>
-          <section className="rounded-lg border border-sky-500/40 bg-sky-500/10 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-sky-300">Next step</div>
+          <section className="rounded-lg border border-brand-coral/40 bg-brand-coral/10 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-brand-coral">Next step</div>
             <p className="mt-1 text-lg font-medium leading-snug text-zinc-50" data-testid="next-step">{report.nextStep}</p>
           </section>
 
@@ -158,7 +160,7 @@ function ReportCard({
                         onClick={() => setSelected(ref)}
                         className={`rounded-md border px-3 py-1.5 font-mono text-sm transition-colors ${
                           sameRef(selected, ref)
-                            ? "border-sky-400 bg-sky-500/20 text-sky-100"
+                            ? "border-brand-coral bg-brand-coral/15 text-zinc-50"
                             : "border-zinc-700 text-zinc-300 hover:border-zinc-500"
                         }`}
                       >
@@ -195,7 +197,7 @@ function ReportCard({
                     else turnRefs.current.delete(t.id);
                   }}
                   className={`rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed transition-colors ${
-                    hit ? "bg-amber-400/20 ring-2 ring-amber-400" : t.speaker === "student" ? "bg-zinc-800" : "bg-sky-500/10"
+                    hit ? "bg-amber-400/20 ring-2 ring-amber-400" : t.speaker === "student" ? "bg-zinc-800" : "bg-brand-coral/10"
                   }`}
                 >
                   <div className="mb-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
@@ -253,9 +255,9 @@ function EvidencePanel({
   }
 
   return (
-    <section className="rounded-lg border border-sky-500/40 bg-zinc-900 p-4" data-testid="evidence-panel">
+    <section className="rounded-lg border border-brand-coral/40 bg-zinc-900 p-4" data-testid="evidence-panel">
       <div className="mb-3 flex items-center">
-        <h3 className="font-mono text-sm text-sky-200">{title}</h3>
+        <h3 className="font-mono text-sm text-brand-coral">{title}</h3>
         <button onClick={onClose} className="ml-auto text-xs text-zinc-400 hover:text-zinc-200">
           Close
         </button>
