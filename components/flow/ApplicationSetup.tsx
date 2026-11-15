@@ -4,6 +4,7 @@
 // PRESENTATION OWNER: Gemini #2. Controlled component: renders props and calls callbacks.
 import { Wordmark } from "../Logo";
 import { JobForm } from "../landing/JobForm";
+import { RolePresets } from "../landing/RolePresets";
 import { ResumeDrop } from "../landing/ResumeDrop";
 import { TailorPanel } from "../landing/TailorPanel";
 import { coverBtn, coverBtnSm } from "../ui/buttons";
@@ -52,7 +53,7 @@ export function ApplicationSetup({
           </h1>
           <p className="mt-2 max-w-2xl text-[16px] leading-relaxed text-ink-muted">
             Paste the job listing or just type the role. Adding your resume is optional. Next you&apos;ll review your
-            tailored two-round interview plan before anything starts.
+            tailored plan — Technical Coding Interview, then Behavioral Deep-Dive — before anything starts.
           </p>
         </div>
 
@@ -67,6 +68,11 @@ export function ApplicationSetup({
               <p className="mb-4 text-xs text-ink-muted">
                 Company name, role title, level, or full listing text.
               </p>
+              <RolePresets
+                job={draft.job}
+                onPick={(job) => onDraftChange({ ...draft, job })}
+                className="mb-5"
+              />
               <JobForm job={draft.job} onChange={(job) => onDraftChange({ ...draft, job })} />
             </div>
           </section>
@@ -151,29 +157,32 @@ export function ApplicationSetup({
           </div>
         </div>
 
-        {/* Secondary Standalone Quick Practice */}
+        {/* Skip the plan and start an interview immediately. */}
         <div className="border-t border-cream-line/60 pt-6">
-          <p className="text-sm text-ink-muted">
-            Prefer a quick standalone practice without a plan?{" "}
+          <p className="text-sm font-semibold text-ink">Skip the plan and start now</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            No plan is generated. You can always come back and build one.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => onQuickPractice("coding")}
-              className="font-semibold text-maroon-deep underline-offset-4 hover:underline"
+              className={coverBtnSm.secondary}
               data-testid="setup-quick-coding"
             >
-              Quick coding round
-            </button>{" "}
-            ·{" "}
+              <span aria-hidden>⚡</span> Quick Start: Technical Coding
+            </button>
             <button
               type="button"
               onClick={() => onQuickPractice("behavioral")}
-              className="font-semibold text-maroon-deep underline-offset-4 hover:underline"
+              className={coverBtnSm.secondary}
               data-testid="setup-quick-behavioral"
             >
-              Quick behavioral round
+              <span aria-hidden>⚡</span> Quick Start: Behavioral Deep-Dive
             </button>
-          </p>
+          </div>
         </div>
+
       </main>
     </div>
   );
