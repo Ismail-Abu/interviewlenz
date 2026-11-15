@@ -83,14 +83,14 @@ export function ResumeDrop({ images, onChange }: Props) {
         }}
         data-testid="resume-drop"
         className={`flex min-h-36 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-6 text-center transition-colors ${
-          dragging ? "border-brand-coral bg-brand-coral/10" : "border-zinc-700 bg-zinc-900/60 hover:border-zinc-500"
+          dragging ? "border-maroon bg-cream-3" : "border-[#d9c8b0] bg-white/70 hover:border-maroon-soft"
         }`}
       >
-        <svg viewBox="0 0 24 24" className="h-8 w-8 text-brand-coral" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+        <svg viewBox="0 0 24 24" className="h-8 w-8 text-maroon" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
           <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <span className="text-base font-semibold text-zinc-100">Drop resume screenshots, or click to choose</span>
-        <span className="text-sm text-zinc-400">
+        <span className="text-base font-semibold text-ink">Drop resume screenshots, or click to choose</span>
+        <span className="text-sm text-ink-muted">
           PNG, JPG, or WebP · up to {RESUME_LIMITS.maxFiles} images · you can also paste with Ctrl/⌘+V
         </span>
       </button>
@@ -108,7 +108,7 @@ export function ResumeDrop({ images, onChange }: Props) {
       />
 
       {problems.length > 0 && (
-        <ul className="flex flex-col gap-1 text-sm text-amber-300" role="alert">
+        <ul className="flex flex-col gap-1 text-sm text-[#7a4600]" role="alert">
           {problems.map((p) => (
             <li key={p}>{p}</li>
           ))}
@@ -118,10 +118,10 @@ export function ResumeDrop({ images, onChange }: Props) {
       {images.length > 0 && (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="resume-list">
           {images.map((img, i) => (
-            <li key={img.id} className="group relative overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
+            <li key={img.id} className="group relative overflow-hidden rounded-[14px] bg-white shadow-warm">
               {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
               <img src={img.url} alt={`Resume screenshot ${i + 1}`} className="h-28 w-full object-cover object-top" />
-              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs text-zinc-400">
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs text-ink-muted">
                 <span className="truncate" title={img.name}>
                   {img.name}
                 </span>
@@ -131,7 +131,7 @@ export function ResumeDrop({ images, onChange }: Props) {
                 type="button"
                 onClick={() => remove(img.id)}
                 aria-label={`Remove ${img.name}`}
-                className="absolute right-1.5 top-1.5 rounded-md bg-zinc-950/85 px-2 py-0.5 text-sm text-zinc-200 hover:bg-brand"
+                className="absolute right-1.5 top-1.5 rounded-md bg-ink/85 px-2 py-0.5 text-sm text-white hover:bg-maroon"
               >
                 ✕
               </button>

@@ -24,3 +24,14 @@ export const coverBtn = {
   secondary: `${coverBase} bg-cream-3 text-maroon-deep hover:bg-[#EFE0CA]`,
   neutral: `${coverBase} text-ink-muted hover:text-ink hover:bg-cream-2`,
 } as const;
+
+// Compact cover buttons (inline actions inside setup cards). Same colours.
+const coverSmBase =
+  "inline-flex items-center justify-center gap-2 rounded-[14px] font-semibold " +
+  "text-sm px-3.5 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60";
+
+export const coverBtnSm = {
+  primary: `${coverSmBase} bg-maroon text-white hover:bg-maroon-hover`,
+  secondary: `${coverSmBase} bg-cream-3 text-maroon-deep hover:bg-[#EFE0CA]`,
+  neutral: `${coverSmBase} text-ink-muted hover:text-ink hover:bg-cream-3`,
+} as const;

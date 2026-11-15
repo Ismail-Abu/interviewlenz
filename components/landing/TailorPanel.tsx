@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BehavioralContext } from "@/lib/contract";
 import { TAILORING_LIMITS } from "@/lib/behavioral";
-import { btn } from "../ui/buttons";
+import { coverBtnSm } from "../ui/buttons";
 import type { JobInfo, ResumeImage } from "./profile";
 import { analyzeTailoring, draftToContext, prepareRequest, type Draft } from "./tailor";
 
@@ -20,7 +20,7 @@ type Status =
   | { kind: "error"; message: string; tooLarge?: boolean }
   | { kind: "ready"; empty: boolean };
 
-const field = "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-base text-zinc-100 placeholder:text-zinc-600";
+const field = "w-full rounded-[14px] bg-white px-3 py-2.5 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] placeholder:text-[#8a7b70] focus:ring-2 focus:ring-maroon-soft";
 
 // Optional personalization for the behavioral round. Analysis runs ONLY on
 // "Prepare my interview"; the preview is editable and its edits are what the
@@ -116,21 +116,21 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
   const hasInput = resume.length > 0 || job.listing.trim().length > 0;
 
   return (
-    <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6" data-testid="tailor-panel">
+    <div className="rounded-[26px] bg-cream-2 p-6 shadow-warm" data-testid="tailor-panel">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         data-testid="tailor-toggle"
-        className={`${btn.neutral} px-4 py-2 text-base`}
+        className={coverBtnSm.secondary}
       >
         {open ? "Hide tailoring" : "Tailor this interview"}
       </button>
-      <span className="ml-3 text-sm text-zinc-500">Optional, for the behavioral round.</span>
+      <span className="ml-3 text-sm text-ink-muted">Optional, for the behavioral round.</span>
 
       {open && (
         <div className="mt-4 flex flex-col gap-4">
-          <p className="rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm leading-relaxed text-zinc-300" data-testid="tailor-disclosure">
+          <p className="rounded-[18px] bg-white/70 p-3 text-sm leading-relaxed text-ink" data-testid="tailor-disclosure">
             When you select <strong>Prepare my interview</strong>, the resume pages you added above (resized in your browser)
             and the job listing are sent to Google Gemini to suggest one project and one practice focus. Nothing is sent before
             that. The files and the listing are not used in the interview itself: only the project and focus you confirm below.
@@ -141,31 +141,31 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
               onClick={prepare}
               disabled={status.kind === "preparing" || !hasInput}
               data-testid="prepare-tailoring"
-              className={`${btn.primary} px-5 py-2.5 text-base`}
+              className={coverBtnSm.primary}
             >
               {status.kind === "preparing" ? "Preparing…" : "Prepare my interview"}
             </button>
-            <button type="button" onClick={manual} data-testid="manual-tailoring" className={`${btn.neutral} px-5 py-2.5 text-base`}>
+            <button type="button" onClick={manual} data-testid="manual-tailoring" className={coverBtnSm.secondary}>
               Enter details manually
             </button>
           </div>
-          {!hasInput && <p className="text-sm text-zinc-500">Add resume pages or a job listing above to prepare, or enter details manually.</p>}
+          {!hasInput && <p className="text-sm text-ink-muted">Add resume pages or a job listing above to prepare, or enter details manually.</p>}
 
           {status.kind === "error" && (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200" role="alert" data-testid="tailor-error">
+            <div className="rounded-[18px] bg-[#fbe9c8] p-3 text-sm text-[#7a4600]" role="alert" data-testid="tailor-error">
               {status.message}
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" onClick={manual} className={`${btn.neutral} px-3 py-1.5 text-sm`}>
+                <button type="button" onClick={manual} className={coverBtnSm.secondary}>
                   Enter details manually
                 </button>
-                <button type="button" onClick={onStartGeneric} className={`${btn.neutral} px-3 py-1.5 text-sm`}>
+                <button type="button" onClick={onStartGeneric} className={coverBtnSm.secondary}>
                   Start a generic round
                 </button>
               </div>
             </div>
           )}
           {status.kind === "ready" && status.empty && !draft?.project && !draft?.focus && (
-            <p className="text-sm text-zinc-400" data-testid="tailor-empty">
+            <p className="text-sm text-ink-muted" data-testid="tailor-empty">
               Nothing specific enough was found. Enter details manually or start a generic round.
             </p>
           )}
@@ -173,8 +173,8 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
           {draft && (draft.project || draft.focus) && (
             <div className="grid gap-4 lg:grid-cols-2" data-testid="tailor-preview">
               {draft.project && (
-                <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4">
-                  <legend className="px-1 text-sm font-semibold text-zinc-300">Project to ask about</legend>
+                <fieldset className="flex flex-col gap-2 rounded-[22px] bg-white/70 p-4">
+                  <legend className="px-1 text-sm font-semibold text-ink">Project to ask about</legend>
                   <input
                     className={field}
                     value={draft.project.name}
@@ -192,18 +192,18 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
                     aria-label="Project summary"
                   />
                   {draft.project.excerpt && (
-                    <blockquote className="border-l-2 border-zinc-600 pl-3 text-sm italic text-zinc-400" data-testid="project-excerpt">
+                    <blockquote className="border-l-2 border-maroon-soft pl-3 text-sm italic text-ink-muted" data-testid="project-excerpt">
                       From your resume (verbatim, not sent to the interviewer): “{draft.project.excerpt}”
                     </blockquote>
                   )}
-                  <button type="button" onClick={() => update({ ...draft, project: undefined })} className={`${btn.neutral} self-start px-3 py-1 text-sm`} data-testid="remove-project">
+                  <button type="button" onClick={() => update({ ...draft, project: undefined })} className={`${coverBtnSm.neutral} self-start`} data-testid="remove-project">
                     Remove project
                   </button>
                 </fieldset>
               )}
               {draft.focus && (
-                <fieldset className="flex flex-col gap-2 rounded-xl border border-zinc-800 p-4">
-                  <legend className="px-1 text-sm font-semibold text-zinc-300">Practice focus</legend>
+                <fieldset className="flex flex-col gap-2 rounded-[22px] bg-white/70 p-4">
+                  <legend className="px-1 text-sm font-semibold text-ink">Practice focus</legend>
                   <input
                     className={field}
                     value={draft.focus.skill}
@@ -221,11 +221,11 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
                     aria-label="Focus detail"
                   />
                   {draft.focus.excerpt && (
-                    <blockquote className="border-l-2 border-zinc-600 pl-3 text-sm italic text-zinc-400" data-testid="focus-excerpt">
+                    <blockquote className="border-l-2 border-maroon-soft pl-3 text-sm italic text-ink-muted" data-testid="focus-excerpt">
                       From the listing (verbatim, not sent to the interviewer): “{draft.focus.excerpt}”
                     </blockquote>
                   )}
-                  <button type="button" onClick={() => update({ ...draft, focus: undefined })} className={`${btn.neutral} self-start px-3 py-1 text-sm`} data-testid="remove-focus">
+                  <button type="button" onClick={() => update({ ...draft, focus: undefined })} className={`${coverBtnSm.neutral} self-start`} data-testid="remove-focus">
                     Remove focus
                   </button>
                 </fieldset>

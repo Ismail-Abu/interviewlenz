@@ -37,23 +37,27 @@ interface WordmarkProps {
   size?: number;
   tagline?: boolean;
   className?: string;
+  // "light" for the cream cover page: crimson mark, ink text, maroon "lenz".
+  // Defaults to "dark" so the interview room is unchanged.
+  tone?: "dark" | "light";
 }
 
 // Mark + "Interviewlenz" for the dark UI: white "Interview", coral mark and "lenz".
-export function Wordmark({ size = 28, tagline = false, className = "" }: WordmarkProps) {
+export function Wordmark({ size = 28, tagline = false, className = "", tone = "dark" }: WordmarkProps) {
+  const light = tone === "light";
   return (
     <span className={`inline-flex items-center ${className}`} style={{ gap: size * 0.38 }}>
-      <LogoMark size={size} className="shrink-0 text-[#FE6B73]" />
+      <LogoMark size={size} className={`shrink-0 ${light ? "text-[#C8102E]" : "text-[#FE6B73]"}`} />
       <span className="flex flex-col items-start text-left">
         <span
-          className="font-brand font-bold leading-none tracking-[-0.02em] text-zinc-50"
+          className={`font-brand font-bold leading-none tracking-[-0.02em] ${light ? "text-ink" : "text-zinc-50"}`}
           style={{ fontSize: size * 0.82 }}
           aria-label="Interviewlenz"
         >
-          Interview<span className="text-[#FE6B73]">lenz</span>
+          Interview<span className={light ? "text-maroon" : "text-[#FE6B73]"}>lenz</span>
         </span>
         {tagline && (
-          <span className="font-brand mt-[0.45em] leading-none tracking-[0.03em] text-zinc-400" style={{ fontSize: size * 0.24 }}>
+          <span className={`font-brand mt-[0.45em] leading-none tracking-[0.03em] ${light ? "text-ink-muted" : "text-zinc-400"}`} style={{ fontSize: size * 0.24 }}>
             Mock interviews for CS students
           </span>
         )}
