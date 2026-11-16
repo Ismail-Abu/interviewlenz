@@ -238,7 +238,7 @@ NEXTAUTH_URL="http://localhost:3000"
 
 ## 👥 The Team
 
-* **Ismail Abu-shanab** [GitHub] [LinkedIn] — Backend Architecture, Gemini Live API Integration, Pyodide WebAssembly Runner, Solana Proof-of-Skill, CI/CD Pipeline
-* **Hamza Ahmed** [GitHub] [LinkedIn] — Frontend Systems, Interaction Design & Editorial Architecture
+* **Ismail Abu-shanab** ([GitHub](https://github.com/Ismail-Abu) · [LinkedIn](https://www.linkedin.com/in/ismail-abu-shanab-231089272/)) — Backend Architecture, Gemini Live API Integration, Pyodide WebAssembly Runner, Solana Proof-of-Skill, CI/CD Pipeline
+* **Hamza Ahmed** ([GitHub](https://github.com/Hamza-BU) · [LinkedIn]) — Frontend Systems, Interaction Design & Editorial Architecture
 
 *Built with passion at **Hack the Nest 2026** at Eastern Michigan University.*
