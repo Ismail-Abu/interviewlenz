@@ -1,3 +1,4 @@
+import { behavioralOpeningExtra, behavioralQuestion } from "@/lib/behavioral";
 import type {
   BehavioralContext,
   ApiError,
@@ -98,7 +99,6 @@ function wire(client: LiveClient, h: VoiceHandlers) {
 // A behavioral round: no coding problem; openingExtra (optional) shapes the opener.
 export interface BehavioralRound {
   type: "behavioral";
-  openingExtra?: string;
   context?: BehavioralContext;
 }
 
@@ -123,7 +123,7 @@ export async function openVoice(
 
   const realFactory = testClientFactory() ?? REAL_CLIENT;
   if (!isApiError(token) && realFactory) {
-    const real = realFactory({ turnSeed, ...(round ? { round: "behavioral", openingExtra: round.openingExtra } : {}) });
+    const real = realFactory({ turnSeed, ...(round ? { round: "behavioral", openingExtra: behavioralOpeningExtra(round.context, roleContext) } : {}) });
     // Hold the real client's events until connect() settles: lib/live.ts emits
     // its error before throwing. On success, replay them and pass through; on
     // failure, drop them so they never overwrite the scripted fallback.
@@ -148,11 +148,11 @@ export async function openVoice(
       phase = "abandoned";
       held.length = 0;
       real.end();
-      return openMock(problem, h, "voice connection failed", turnSeed, round);
+      return openMock(problem, h, "voice connection failed", turnSeed, round, roleContext);
     }
   }
 
-  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged", turnSeed, round);
+  return openMock(problem, h, isApiError(token) ? "no API key" : "voice client not merged", turnSeed, round, roleContext);
 }
 
 async function openMock(
@@ -161,8 +161,9 @@ async function openMock(
   reason: string,
   turnSeed: number,
   round?: BehavioralRound,
+  role?: RoleContext,
 ): Promise<VoiceConnection> {
-  const mock = new MockLiveClient(turnSeed, round ? "behavioral" : "coding");
+  const mock = new MockLiveClient(turnSeed, round ? "behavioral" : "coding", behavioralQuestion(round?.context, role));
   wire(mock, h);
   await mock.connect(MOCK_TOKEN, round ? undefined : problem);
   return { client: mock, mode: "mock", mockReason: reason };
@@ -204,6 +205,7 @@ class MockLiveClient implements LiveClient {
   constructor(
     private turnSeq = 0,
     private readonly round: "coding" | "behavioral" = "coding",
+    private readonly openingQuestion?: string,
   ) {}
   // Behavioral demo script (MOCK VOICE): the interviewer probes a missing detail
   // in each scripted answer. Not a model; the real interviewer listens.
@@ -254,8 +256,9 @@ class MockLiveClient implements LiveClient {
   private nextBehavioral(wait: number) {
     const step = MockLiveClient.BEHAVIORAL[this.behavioralStep];
     if (!step) return;
+    const question = this.behavioralStep === 0 && this.openingQuestion ? this.openingQuestion : step[0];
     this.behavioralStep += 1;
-    this.say(step[0], step[1], wait);
+    this.say(question, step[1], wait);
   }
 
   async startMic() {
