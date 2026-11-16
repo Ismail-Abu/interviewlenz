@@ -7,13 +7,13 @@
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-interviewlenz.us-C8102E?style=for-the-badge&logo=googlechrome&logoColor=white)](https://interviewlenz.us)
 [![Watch Demo Video](https://img.shields.io/badge/Demo%20Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/SxCWmpXQZL0)
-[![CI Checks](https://img.shields.io/badge/CI%20Checks-19%2F19%20Passed-10B981?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/Ismail-Abu/interviewlenz)
-[![Gemini 2.0 Live](https://img.shields.io/badge/AI-Gemini%202.0%20Live-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
+[![PR checks](https://github.com/Ismail-Abu/interviewlenz/actions/workflows/pr.yml/badge.svg)](https://github.com/Ismail-Abu/interviewlenz/actions/workflows/pr.yml)
+[![Gemini 2.5 Live](https://img.shields.io/badge/AI-Gemini%202.5%20Live%20%2B%203.8%20Flash-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
 [![Solana Devnet](https://img.shields.io/badge/Blockchain-Solana%20Devnet-14F195?style=for-the-badge&logo=solana&logoColor=black)](https://explorer.solana.com/?cluster=devnet)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.4.6-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 
-**Built for Hack the Nest 2026 at Eastern Michigan University**  
-**Team:** Ismail Abu-shanab & Hamza
+**🏆 1st Place, Best Use of SSOJet, Hack the Nest 2026 (Eastern Michigan University)**  
+**Team:** Ismail Abu-shanab & Hamza Ahmed
 
 </div>
 
@@ -45,7 +45,7 @@ Most coding interview prep tools grade your code like a silent autograder: you t
 
 In actual industry interviews at Google, Stripe, or Amazon, writing code is only 50% of the evaluation. **Interviewers grade how you think out loud.** They want to hear your tradeoffs, your edge-case analysis, and how you respond when challenged.
 
-**Interviewlenz bridges this gap.** It pairs an in-browser Python IDE with **Google Gemini 2.0 Multimodal Live API**, creating an AI interviewer that hears you talk in real time, inspects your code as you write it, watches unit test executions, and asks grounded follow-up questions to challenge your assumptions.
+**Interviewlenz bridges this gap.** It pairs an in-browser Python IDE with **Google Gemini Live API (Gemini 2.5 Flash Native Audio)**, creating an AI interviewer that hears you talk in real time, inspects your code as you write it, watches unit test executions, and asks grounded follow-up questions to challenge your assumptions.
 
 ---
 
@@ -53,8 +53,8 @@ In actual industry interviews at Google, Stripe, or Amazon, writing code is only
 
 During **Hack the Nest 2026**, our team built Interviewlenz using a coordinated ecosystem centered around **Google Gemini**:
 
-* **Google Gemini 2.0 Live & Flash:** The standout core intelligence of our platform. It powers the real-time bidirectional voice interview engine over WebSockets, keeps live code understanding synchronized as you type, and generates grounded post-interview scorecards. Gemini also served as our primary intelligence coordinating workflow, problem decomposition, and version control.
-* **Solana Devnet:** Solves credential inflation with immutable **Proof-of-Skill on-chain attestations**. Every candidate who achieves a Solid or Strong scorecard receives a cryptographically signed SPL Memo transaction on Solana Devnet, linking an unforgeable proof-of-work hash directly to Solana Explorer.
+* **Google Gemini 2.5 Flash Native Audio (Live) & Gemini 3.8 Flash (report):** The standout core intelligence of our platform. It powers the real-time bidirectional voice interview engine over WebSockets, keeps live code understanding synchronized as you type, and generates grounded post-interview scorecards. Developed with AI coding assistants.
+* **Solana Devnet:** Issues a **signed SPL Memo attestation on Solana Devnet (demo network)**. Every candidate who achieves a Solid or Strong scorecard receives a signed memo transaction containing a hash of their result, viewable on Solana Explorer.
 * **Lovable.dev & GitHub:** Lovable enabled rapid scaffolding of our initial editorial UI design system. We brought the codebase into GitHub with an automated suite of 19 deterministic CI tests to ensure rock-solid stability and zero regressions.
 * **ElevenLabs:** Powers neural text-to-speech fallback and audio debriefs, giving candidates lifelike spoken commentary on demand.
 * **SSOJet:** Enterprise-grade single sign-on authentication, supporting secure OIDC hosted login with NextAuth.
@@ -78,9 +78,9 @@ During **Hack the Nest 2026**, our team built Interviewlenz using a coordinated 
 - **Accessible & Tactile:** Keyboard navigation trap exits (`Ctrl+Shift+M`), responsive mobile layouts, and custom emerald green Run Code control.
 
 ### ⛓️ Solana On-Chain Proof-of-Skill Attestations
-- When a candidate finishes an interview rated **Solid** or **Strong**, Interviewlenz mints a cryptographic attestation to **Solana Devnet**.
-- Emits a signed SPL Memo transaction containing a SHA-256 digest of `[attemptId, band, timestamp]`.
-- Candidates receive an immutable verifiable receipt with direct links to **Solana Explorer**.
+- When a candidate finishes an interview rated **Solid** or **Strong**, Interviewlenz issues a **signed SPL Memo attestation on Solana Devnet (demo network)**.
+- The memo contains a SHA-256 digest of `[attemptId, band, timestamp]`.
+- Candidates get a receipt with a direct link to the transaction on **Solana Explorer**.
 
 ### 📊 Grounded Telemetry Scorecard & Debrief
 - Synthesizes session telemetry (transcripts, code snapshots, test runs) into an actionable post-interview debrief.
@@ -122,8 +122,8 @@ flowchart LR
     end
 
     subgraph AI ["AI & Blockchain Ecosystem"]
-        GeminiLive["Google Gemini 2.0 Live (WebSocket)"]
-        GeminiFlash["Google Gemini 2.0 Flash (Scorer)"]
+        GeminiLive["Gemini 2.5 Flash Native Audio (Live, WebSocket)"]
+        GeminiFlash["Gemini 3.8 Flash (Scorer)"]
         ElevenLabs["ElevenLabs Neural Voice"]
         Solana["Solana Devnet (SPL Memo)"]
     end
@@ -147,8 +147,8 @@ flowchart LR
 | **Language & Styling** | TypeScript, [Tailwind CSS](https://tailwindcss.com/), Lucide Icons, Instrument Serif |
 | **Code Editor** | [@monaco-editor/react](https://github.com/suren-atoyan/monaco-react) |
 | **Python Sandbox** | [Pyodide](https://pyodide.org/) (WebAssembly Python in Web Worker) |
-| **Live Voice AI** | [Google Gemini 2.0 Multimodal Live API](https://ai.google.dev/) via WebSockets |
-| **Evaluation AI** | Google Gemini 2.0 Flash with JSON schema grounding |
+| **Live Voice AI** | [Gemini 2.5 Flash Native Audio](https://ai.google.dev/) via the Gemini Live API (WebSockets) |
+| **Evaluation AI** | Gemini 3.8 Flash with JSON schema grounding |
 | **Blockchain** | [Solana Devnet](https://solana.com/) (SPL Memo Program) |
 | **Voice Synthesis** | [ElevenLabs](https://elevenlabs.io/) Neural Voice API |
 | **Authentication** | [SSOJet](https://ssojet.com/) Enterprise Hosted Login & NextAuth |
@@ -215,10 +215,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ### Environment Configuration
 To enable live Gemini voice, ElevenLabs audio, and Solana Proof-of-Skill attestations, create a `.env.local` file:
 ```env
-# Google Gemini 2.0 Live & Scorer
+# Google Gemini Live voice & report scorer
 GEMINI_API_KEY="your-gemini-api-key"
-LIVE_MODEL="models/gemini-2.0-flash-exp"
-REPORT_MODEL="gemini-2.0-flash"
+LIVE_MODEL="gemini-2.5-flash-native-audio-preview-12-2025"
+REPORT_MODEL="gemini-3.8-flash"
 
 # ElevenLabs Speech Synthesis
 ELEVENLABS_API_KEY="your-elevenlabs-key"
@@ -238,7 +238,7 @@ NEXTAUTH_URL="http://localhost:3000"
 
 ## 👥 The Team
 
-* **Ismail Abu-shanab** — Backend Architecture, Gemini 2.0 Multimodal Live API Integration, Pyodide WebAssembly Runner, Solana Proof-of-Skill, CI/CD Pipeline
-* **Hamza** — Frontend Systems, Interaction Design & Editorial Architecture
+* **Ismail Abu-shanab** [GitHub] [LinkedIn] — Backend Architecture, Gemini Live API Integration, Pyodide WebAssembly Runner, Solana Proof-of-Skill, CI/CD Pipeline
+* **Hamza Ahmed** [GitHub] [LinkedIn] — Frontend Systems, Interaction Design & Editorial Architecture
 
 *Built with passion at **Hack the Nest 2026** at Eastern Michigan University.*
