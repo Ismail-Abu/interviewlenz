@@ -12,6 +12,9 @@ import { FindingCard } from "./report/FindingCard";
 import { EvidenceReceipt } from "./report/EvidenceReceipt";
 import { ReportExtras } from "./report/ReportExtras";
 import { DownloadDebrief } from "./report/DownloadDebrief";
+import { HiringDecision } from "./report/HiringDecision";
+import { lower } from "@/lib/hiring";
+import type { HiringRecommendation } from "@/lib/contract";
 import { buildDebrief, categoryLabel, describeEvidence, TRACK_LABEL, TRACK_SHORT } from "./report/debrief";
 
 interface Props {
@@ -46,6 +49,11 @@ export function FullMockSummary({ codingRecord, behavioralRecord, onRetryReport,
   const scores = { coding: scoreOf("coding", codingRecord), behavioral: scoreOf("behavioral", behavioralRecord) };
   const overall = scoreOverall([scores.coding, scores.behavioral].filter((s): s is RoundScore => s !== null));
   const ready = (["coding", "behavioral"] as const).filter((r) => scores[r]).length;
+  // A loop is decided by its weakest round: one "no" is a no.
+  const votes = (["coding", "behavioral"] as const)
+    .map((r) => records[r]?.report?.assessment?.recommendation)
+    .filter((v): v is HiringRecommendation => !!v);
+  const decision = votes.length ? votes.reduce(lower) : undefined;
   const started = (["coding", "behavioral"] as const).filter((r) => records[r]).length;
 
   const weaker = [scores.coding, scores.behavioral]
@@ -58,6 +66,7 @@ export function FullMockSummary({ codingRecord, behavioralRecord, onRetryReport,
     buildDebrief({
       roleLabel,
       overall: overall.band,
+      decision,
       keyTakeaway: action ? `${categoryLabel(action.category)}: ${action.why}` : undefined,
       tracks: (["coding", "behavioral"] as const).map((round) => ({ round, session: records[round]?.session, report: records[round]?.report ?? null })),
     });
@@ -94,6 +103,8 @@ export function FullMockSummary({ codingRecord, behavioralRecord, onRetryReport,
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-6 sm:px-6">
         <DebriefHero
           overall={overall}
+          decision={decision}
+          decisionPartial={votes.length < 2}
           roleLabel={roleLabel}
           rounds={(["coding", "behavioral"] as const).map((round) => ({ round, score: scores[round], state: stateOf(records[round]) }))}
         />
@@ -288,6 +299,7 @@ function TrackCard({
 
       {status === "done" && report && score && (
         <>
+          {report.assessment && <HiringDecision assessment={report.assessment} />}
           {score.caveat && (
             <p className="rounded-xl bg-muted/50 border border-border px-4 py-2.5 text-xs text-muted-foreground" data-testid={`score-caveat-${round}`}>
               {score.caveat}

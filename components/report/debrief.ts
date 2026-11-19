@@ -1,7 +1,8 @@
 // Presentation helpers shared by the summary and the report: track names,
 // rubric labels, evidence descriptions resolved against THIS attempt's session,
 // and the downloadable debrief. Pure: no React, no network.
-import type { EvidenceRef, Finding, Report, RoundType, Session, TranscriptTurn } from "@/lib/contract";
+import type { EvidenceRef, Finding, HiringRecommendation, Report, RoundType, Session, TranscriptTurn } from "@/lib/contract";
+import { RECOMMENDATION_LABEL } from "@/lib/hiring";
 import { isBehavioralSession } from "@/lib/behavioral";
 import { BAND_LABEL, scoreRound, type Band } from "@/lib/score";
 
@@ -79,11 +80,13 @@ export function buildDebrief(opts: {
   roleLabel?: string;
   tracks: { round: RoundType; session?: Session; report?: Report | null }[];
   overall: Band;
+  decision?: HiringRecommendation;
   keyTakeaway?: string;
 }): string {
   const out: string[] = ["# Interviewlenz debrief", ""];
   if (opts.roleLabel) out.push(opts.roleLabel, "");
   out.push(`Overall: ${BAND_LABEL[opts.overall]}`, "");
+  if (opts.decision) out.push(`Overall hiring decision: ${RECOMMENDATION_LABEL[opts.decision]} (the weaker round decides)`, "");
   if (opts.keyTakeaway) out.push(`Key takeaway: ${opts.keyTakeaway}`, "");
   for (const t of opts.tracks) {
     out.push(`## ${TRACK_LABEL[t.round]}`);
@@ -98,6 +101,14 @@ export function buildDebrief(opts: {
     const score = scoreRound(t.round, t.report.findings);
     out.push(`Band: ${BAND_LABEL[score.band]} (${score.ratedCount} of ${score.totalCount} dimensions assessed)`);
     if (score.caveat) out.push(`Note: ${score.caveat}`);
+    const a = t.report.assessment;
+    if (a) {
+      out.push("", `Hiring decision: ${RECOMMENDATION_LABEL[a.recommendation]}${a.proposed ? ` (evaluator proposed ${RECOMMENDATION_LABEL[a.proposed]}; capped)` : ""}`, a.summary);
+      for (const c of a.caps) out.push(`- Cap: ${c}`);
+      for (const x of a.strengths) out.push(`- Strength: ${x}`);
+      for (const x of a.concerns) out.push(`- Concern: ${x}`);
+      if (a.toRaise) out.push(`To move up a level: ${a.toRaise}`);
+    }
     out.push("", `Next step to practice: ${t.report.nextStep}`, "");
     for (const f of t.report.findings) {
       out.push(`- ${categoryLabel(f.category)} — ${RATING_WORD[f.rating]}: ${f.summary}`);

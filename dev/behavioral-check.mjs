@@ -70,7 +70,7 @@ console.log("== 1. Token route selects the instruction by round");
   assert("1c roundType behavioral -> behavioral instruction", beh.r.status === 200 && beh.si === behavioralInstructions({}));
   assert("1d behavioral instruction never mentions the coding problem, code, or runs", !/contains.?duplicate|\[RUN|\[CODE|nums/i.test(beh.si) && /no coding problem/i.test(beh.si));
   assert("1e it opens with one engineering-story question and probes one missing detail", /\[START\]/.test(beh.si) && /engineering-story question/.test(beh.si) && /ask about that ONE detail/.test(beh.si) && /personally investigated or changed/.test(beh.si) && /how they checked whether the change helped/.test(beh.si));
-  assert("1e2 it mixes follow-ups with new questions: at most one follow-up per story, then a different theme", /at most ONE follow-up per story/.test(beh.si) && /completely different engineering-story question/.test(beh.si) && /Never reuse a theme/.test(beh.si));
+  assert("1e2 it mixes follow-ups with new questions: at most two follow-ups per story, then a different theme", /at most TWO follow-ups per story, usually one, and sometimes none/.test(beh.si) && /completely different engineering-story question/.test(beh.si) && /Never reuse a theme/.test(beh.si));
   const withRole = await mint({ sessionId: "s1", roundType: "behavioral", roleContext: { role: "Backend Intern", company: "Acme Payments", jobDescription: "SECRET-LISTING-TEXT build APIs" } });
   assert("1f behavioral role framing uses title/company only; the raw listing is never in the session", withRole.si.includes("Backend Intern") && !withRole.si.includes("SECRET-LISTING-TEXT"));
   const bad = await post(token, { sessionId: "s1", roundType: "system-design" });
@@ -117,7 +117,7 @@ let c;
   const cc = createLiveClient({ followupSettleMs: 0 });
   cc.onTurn(() => {}); cc.onState(() => {}); cc.onError(() => {});
   await cc.connect({ token: "t", model: "m", expiresAt: "2099-01-01T00:00:00Z" }, containsDuplicate);
-  assert("2h coding client still opens with the Contains Duplicate approach question", globalThis.__SENT__.some((m) => m.tc && m.text.includes('approach to "Contains Duplicate"')));
+  assert("2h coding client still opens with the Contains Duplicate approach question", globalThis.__SENT__.some((m) => m.tc && m.text.includes('"Contains Duplicate"') && m.text.includes("explain their approach")));
   cc.end();
 }
 

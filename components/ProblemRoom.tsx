@@ -26,7 +26,8 @@ import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome
 import { preloadJava, preloadRunner } from "@/lib/runner";
 import { getProblem, randomProblem } from "@/lib/problems";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
-import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
+import { behavioralOpeningExtra, formatBehavioralTimeCue, isBehavioralSession } from "@/lib/behavioral";
+import { formatTechnicalTimeCue } from "@/lib/prompts";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
   ssr: false,
@@ -38,6 +39,15 @@ const DEV = process.env.NODE_ENV !== "production";
 type AttemptIds = Pick<Session, "sessionId" | "attemptId" | "priorAttemptId">;
 type AttemptData = Pick<CodingSession, "turns" | "snapshots" | "runs">;
 const EMPTY_ATTEMPT: AttemptData = { turns: [], snapshots: [], runs: [] };
+
+// Identifies exactly what a report was built from: the attempt, its latest
+// code version and run, and how many transcript turns it had.
+function preloadKey(s: Session): string {
+  const coding = isBehavioralSession(s) ? null : s;
+  const lastSnap = coding?.snapshots.at(-1)?.codeVersion ?? 0;
+  const lastRun = coding?.runs.at(-1)?.codeVersion ?? 0;
+  return `${s.attemptId}:snap${lastSnap}:run${lastRun}:turns${s.turns.length}`;
+}
 
 // Upper bound on how long the newest editor version can wait before it is
 // written to the active Live session. Also the floor on the gap between two
@@ -231,6 +241,31 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     onExpire: () => finishRound(true),
   });
 
+  // Time cues (lib/live.ts sendCue): a real interviewer watches the clock.
+  // Technical: about 45 minutes in a real loop, so a hint-mode nudge at 25
+  // minutes and a wrap-up at 40. Behavioral: 3 minutes and 1 minute left.
+  // Each cue is sent once per attempt, only while a real voice session is live.
+  const cuesSent = useRef(new Set<string>());
+  useEffect(() => {
+    if (!clockKey || !connected || !live.current?.sendCue) return;
+    const min = clock.elapsedMs / 60_000;
+    const due: [string, string][] =
+      round === "behavioral"
+        ? [
+            ["b3", formatBehavioralTimeCue(3)],
+            ["b1", formatBehavioralTimeCue(1)],
+          ].filter(([id]) => min >= BEHAVIORAL_LIMIT_MS / 60_000 - (id === "b3" ? 3 : 1)) as [string, string][]
+        : ([
+            ["c25", formatTechnicalTimeCue(25, false)],
+            ["c40", formatTechnicalTimeCue(40, true)],
+          ] as [string, string][]).filter(([id]) => min >= (id === "c25" ? 25 : 40));
+    // Only the newest due cue matters (the client also keeps just the latest).
+    const next = due.filter(([id]) => !cuesSent.current.has(`${clockKey}:${id}`)).at(-1);
+    if (!next) return;
+    for (const [id] of due) cuesSent.current.add(`${clockKey}:${id}`);
+    live.current.sendCue(next[1]);
+  }, [clock.elapsedMs, clockKey, connected, round]);
+
   // Code-context sync (B5): the real client gets the editor buffer silently via
   // syncCode, once on connect and after a typing pause. Refs, not state, so a
   // timer or a just-resolved connect always sees the latest buffer.
@@ -271,7 +306,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     sync().schedule();
   }
 
-  async function handleConnect() {
+  async function handleConnect(target: Problem = problem) {
     setLiveError(null);
     setConnecting(true);
     const gen = ++connGen.current;
@@ -280,7 +315,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     try {
       const conn = await openVoice(
         ids().sessionId,
-        problem,
+        target,
         {
           onState: (s: LiveState) => {
             if (!current()) return;
@@ -380,6 +415,31 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     }
   }
 
+  // Start a clean attempt: no transcript, code history, runs, clock, voice
+  // session, or background report from a previous one. `fresh` starts a new
+  // interview (new session, earlier reports cleared); otherwise it is another
+  // attempt in the same session (Retry, Practice again, next round) and links
+  // back to the prior attempt.
+  function resetAttempt(fresh: boolean) {
+    endLive();
+    const prior = idsRef.current;
+    idsRef.current =
+      fresh || !prior
+        ? { sessionId: crypto.randomUUID(), attemptId: crypto.randomUUID() }
+        : { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
+    turnCount.current = 0;
+    setAttempt(EMPTY_ATTEMPT);
+    setAttemptSeq((n) => n + 1);
+    setVoiceMode(null);
+    setMockReason(undefined);
+    preloadedReportRef.current = null;
+    if (fresh) {
+      setCodingRecords([]);
+      setBehavioralRecords([]);
+      setTimings({});
+    }
+  }
+
   function endLive() {
     connGen.current++;
     cancelPendingSync();
@@ -401,7 +461,9 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   // voice session so the interviewer is not left listening, and drops any
   // in-flight plan request.
   function goHome() {
-    endLive();
+    // An interview left midway is abandoned: nothing of it carries over.
+    if (view === "room") resetAttempt(false);
+    else endLive();
     planRequest.current += 1;
     setSetupStatus({ kind: "editing" });
     setView("start");
@@ -469,6 +531,11 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     }
   }
 
+  const fullSessionRef = useRef(fullSession);
+  useEffect(() => {
+    fullSessionRef.current = fullSession;
+  });
+
   // Speculative report preloader: evaluates in the background while candidate speaks/codes
   const preloadedReportRef = useRef<{
     attemptId: string;
@@ -479,7 +546,9 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
 
   function schedulePreload() {
     try {
-      const s = fullSession();
+      // Called from voice callbacks created at connect time: read the latest
+      // render's session, not the one captured then.
+      const s = fullSessionRef.current();
       const isBeh = isBehavioralSession(s);
       // Need minimum context to evaluate:
       // For coding: at least 1 test run or 2 spoken turns
@@ -487,9 +556,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
       if (!isBeh && s.runs.length === 0 && s.turns.length < 2) return;
       if (isBeh && s.turns.length < 2) return;
 
-      const lastSnap = !isBeh && s.snapshots.length > 0 ? s.snapshots[s.snapshots.length - 1].codeVersion : 0;
-      const lastRun = !isBeh && s.runs.length > 0 ? s.runs[s.runs.length - 1].codeVersion : 0;
-      const key = `${s.attemptId}:snap${lastSnap}:run${lastRun}:turns${s.turns.length}`;
+      const key = preloadKey(s);
 
       if (preloadedReportRef.current?.key === key) return;
 
@@ -523,8 +590,10 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     const cached = preloadedReportRef.current;
     let outcome: ReportOutcome | null = null;
 
-    // Check if a preloaded report is ready or in-flight for this attempt
-    if (cached && cached.attemptId === target.attemptId) {
+    // Reuse a preloaded report only if it was built from this exact session
+    // (same attempt, code, runs and transcript); an earlier snapshot would miss
+    // whatever happened after it.
+    if (cached && cached.attemptId === target.attemptId && cached.key === preloadKey(target)) {
       if (cached.outcome && cached.outcome.ok) {
         outcome = cached.outcome;
       } else if (cached.promise) {
@@ -600,12 +669,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   }
 
   function handleContinueToBehavioral() {
-    endLive();
-    const prior = ids();
-    idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
-    turnCount.current = 0;
-    setAttempt(EMPTY_ATTEMPT);
-    setAttemptSeq((n) => n + 1);
+    resetAttempt(false);
     setRound("behavioral");
     setView("room");
   }
@@ -616,13 +680,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   }
 
   function handleRetryAttempt() {
-    const prior = ids();
-    idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
-    endLive();
-    turnCount.current = 0;
-    setAttempt(EMPTY_ATTEMPT);
-    setAttemptSeq((n) => n + 1);
-    setLiveError(null);
+    resetAttempt(false);
 
     if (round === "coding") {
       loadProblem(problem); // retry is another attempt at the same problem
@@ -631,13 +689,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   }
 
   function handlePracticeAgain(targetRound: RoundType, nextProblem?: Problem) {
-    endLive();
-    const prior = ids();
-    idsRef.current = { sessionId: prior.sessionId, attemptId: crypto.randomUUID(), priorAttemptId: prior.attemptId };
-    turnCount.current = 0;
-    setAttempt(EMPTY_ATTEMPT);
-    setAttemptSeq((n) => n + 1);
-    setLiveError(null);
+    resetAttempt(false);
 
     if (targetRound === "coding") {
       // A fresh practice run gets a different problem; excluding the current one
@@ -652,19 +704,21 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
 
   function handleSwitchProblem(next: Problem) {
     if (next.id === problem.id) return;
+    // A different problem is a different interview: its transcript, code and
+    // runs must not mix with the old problem's. Keep the voice on if it was.
+    const wasLive = !!live.current;
+    resetAttempt(false);
     loadProblem(next);
-    if (live.current) {
-      void handleReconnect();
-    }
+    if (wasLive) void handleConnect(next);
   }
 
   // Quick standalone practice: no plan.
   function startQuick(p: CandidateProfile, m: PracticeMode, ctx?: BehavioralContext) {
+    resetAttempt(true);
     setActivePlan(null);
     setProfile(p);
     setPracticeMode(m);
     setBehavioralContext(ctx);
-    setAttemptSeq((n) => n + 1);
     if (m === "behavioral") {
       setRound("behavioral");
     } else {
@@ -698,13 +752,10 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     setPracticeMode("full-mock");
     // The plan names its problem (lib/plan.ts); load that one, not a random one.
     const planned = getProblem(plan.technical.problemId) ?? problem;
-    if (idsRef.current) handlePracticeAgain("coding", planned); // fresh attempt, editor reset
-    else {
-      loadProblem(planned);
-      setAttemptSeq((n) => n + 1);
-      setRound("coding");
-      setView("room");
-    }
+    resetAttempt(true); // a new interview: nothing from an earlier one carries over
+    loadProblem(planned);
+    setRound("coding");
+    setView("room");
   }
 
   if (view === "setup") {

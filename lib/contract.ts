@@ -209,6 +209,10 @@ export interface LiveClient {
   // version; a newer snapshot supersedes an unsent older one. Optional so
   // existing clients (e.g. the scripted mock) stay valid without implementing it.
   syncCode?(snapshot: CodeSnapshot): void;
+  // Tell the interviewer something it should pace itself by (a [TIME] cue),
+  // delivered at a safe boundary without interrupting the candidate. The
+  // interviewer acts on it at its next natural turn. Optional (proposed).
+  sendCue?(text: string): void;
   end(): void;
   onState(cb: (state: LiveState) => void): void;
   onTurn(cb: (turn: TranscriptTurn) => void): void;
@@ -241,7 +245,29 @@ export interface Finding {
 }
 
 export interface ReportRequest { session: Session }
+
+// Hiring recommendation on the 4-point scale real interview loops use
+// (PROPOSED November 19). Ordered from worst to best.
+export const HIRING_RECOMMENDATIONS = ["strong_no_hire", "lean_no_hire", "lean_hire", "strong_hire"] as const;
+export type HiringRecommendation = (typeof HIRING_RECOMMENDATIONS)[number];
+
+export interface HiringAssessment {
+  // Final decision after the server's hard caps (never higher than they allow).
+  recommendation: HiringRecommendation;
+  // What the evaluator proposed before the caps, when the caps lowered it.
+  proposed?: HiringRecommendation;
+  // Debrief-style summary: two or three sentences.
+  summary: string;
+  strengths: string[];
+  concerns: string[];
+  // What would have changed the decision to the next level up.
+  toRaise: string;
+  // Deterministic reasons the recommendation was capped, in plain words.
+  caps: string[];
+}
+
 export interface Report {
+  assessment?: HiringAssessment;
   skillProof?: { signature: string; digest: string; explorerUrl: string };
   skillProofUnavailable?: boolean;
   reportId: string;

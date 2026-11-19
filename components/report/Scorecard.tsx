@@ -1,6 +1,8 @@
 "use client";
 
-import type { RoundType } from "@/lib/contract";
+import type { HiringRecommendation, RoundType } from "@/lib/contract";
+import { RECOMMENDATION_MEANING } from "@/lib/hiring";
+import { RecommendationPill } from "./HiringDecision";
 import { BAND_LABEL, type Band, type DimensionScore, type OverallScore, type RoundScore, type RunFacts } from "@/lib/score";
 import { categoryLabel, RATING_WORD, TRACK_LABEL } from "./debrief";
 
@@ -139,8 +141,12 @@ export function DebriefHero({
   overall,
   rounds,
   roleLabel,
+  decision,
+  decisionPartial,
 }: {
   overall: OverallScore;
+  decision?: HiringRecommendation;
+  decisionPartial?: boolean;
   rounds: { round: RoundType; score: RoundScore | null; state: "done" | "loading" | "error" | "missing" }[];
   roleLabel?: string;
 }) {
@@ -158,6 +164,14 @@ export function DebriefHero({
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <BandBadge band={overall.band} size="lg" testId="score-overall-band" />
+        {decision && (
+          <>
+            <RecommendationPill value={decision} size="lg" testId="overall-decision" />
+            <span className="text-xs text-muted-foreground">
+              {decisionPartial ? "Decision from the one round evaluated so far." : "Overall decision: the weaker round decides, as in a real loop."}
+            </span>
+          </>
+        )}
       </div>
 
       <h1 className="mt-4 text-3xl sm:text-4xl font-semibold tracking-[-0.03em] text-foreground">
@@ -165,7 +179,7 @@ export function DebriefHero({
       </h1>
 
       <p className="mt-3 max-w-2xl text-[16px] leading-relaxed text-secondary-foreground" data-testid="overall-summary">
-        {overall.caveat ?? "Strong algorithmic implementation and comprehensive reasoning recorded across session rounds."}
+        {overall.caveat ?? (decision ? RECOMMENDATION_MEANING[decision] : "Both rounds were scored from the rubric evidence below.")}
       </p>
 
       {/* Rounds status bar */}

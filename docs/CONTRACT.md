@@ -322,3 +322,11 @@ Reconnect reuses the **current attempt's existing client** — do not build a ne
 ### Transcript IDs (attempt-scoped)
 
 IDs stay `t1, t2, ...` and must be unique for the whole attempt. The counter is seeded per client: `createLiveClient(options?: { turnSeed?: number }): LiveClient`. Pass `turnSeed` = the number of turns already in the attempt (e.g. `session.turns.length`) when building the real client **and** the scripted fallback, so numbering continues across a reconnect, an End→Start within the attempt, and a voice-mode switch. Reconnecting the same client needs no seed (it continues on its own). A new attempt (Retry) builds a client with `turnSeed: 0` and may restart at `t1`. Do not use a single global counter shared across unrelated attempts.
+
+### sendCue (pacing; proposed November 19)
+
+`sendCue(text: string): void` (optional on `LiveClient`) gives the interviewer a [TIME] cue to pace itself by. The client delivers it only while the interviewer is waiting for an answer and the candidate has paused, mutes the one-word acknowledgement, and keeps only the newest undelivered cue. The wording lives in lib/prompts.ts (`formatTechnicalTimeCue`) and lib/behavioral.ts (`formatBehavioralTimeCue`).
+
+### Hiring assessment (proposed November 19)
+
+`Report` gains an optional `assessment: HiringAssessment` (lib/contract.ts): `recommendation` is one of `strong_no_hire`, `lean_no_hire`, `lean_hire`, `strong_hire`; plus `summary`, `strengths[]`, `concerns[]` (up to three each), `toRaise`, `caps[]` (plain-language reasons the server lowered the vote), and `proposed` when a cap lowered the evaluator's vote. The caps live in lib/hiring.ts and only ever lower the recommendation. Reports without it (older reports, fixtures) render as before.

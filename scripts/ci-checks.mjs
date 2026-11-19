@@ -43,6 +43,8 @@ const CHECKS = [
   "live-disconnect-check.mjs",
   "live-run-evidence-check.mjs",
   "live-code-sync-check.mjs",
+  "live-cue-check.mjs",
+  "hiring-check.mjs",
   "java-runner-check.mjs",
   "plan-check.mjs",
 ];

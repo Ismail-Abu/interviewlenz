@@ -12,6 +12,7 @@ import { UnrunDraftDisclosure } from "./report/UnrunDraftDisclosure";
 import { BandBadge, DimensionMeters } from "./report/Scorecard";
 import { ReportExtras } from "./report/ReportExtras";
 import { DownloadDebrief } from "./report/DownloadDebrief";
+import { HiringDecision } from "./report/HiringDecision";
 import { buildDebrief, TRACK_LABEL } from "./report/debrief";
 import { BAND_LABEL, scoreOverall, scoreRound } from "@/lib/score";
 import { timingLabel, type RoundTiming } from "./roundClock";
@@ -209,6 +210,7 @@ function ReportCard({
       {/* Report Findings & Verdict */}
       {report && (
         <>
+          {report.assessment && <HiringDecision assessment={report.assessment} />}
           {score && score.dimensions.length > 0 && (
             <section className="flex flex-col gap-4 rounded-xl bg-background border border-border p-5 shadow-sm" data-testid="attempt-scorecard">
               <div className="flex flex-wrap items-center gap-3">

@@ -16,6 +16,8 @@ import { getProblem } from "../../../lib/problems";
 import { normalizeRoleContext, ROLE_DATA_RULE, roleContextBlock } from "../../../lib/roleContext";
 import type { BehavioralSession, CodingSession, RoleContext } from "../../../lib/contract";
 import { BEHAVIORAL_CATEGORIES, normalizeBehavioralContext, type BehavioralCategory } from "../../../lib/behavioral";
+import { HIRING_RECOMMENDATIONS, type HiringAssessment } from "../../../lib/contract";
+import { behavioralCap, codingCap, isRecommendation, lower, type Cap } from "../../../lib/hiring";
 
 // Runs on the default Node.js runtime so GEMINI_API_KEY stays server-side.
 
@@ -282,7 +284,47 @@ interface RawFinding {
 interface RawReport {
   findings?: RawFinding[];
   nextStep?: string;
+  assessment?: {
+    recommendation?: unknown;
+    summary?: unknown;
+    strengths?: unknown;
+    concerns?: unknown;
+    toRaise?: unknown;
+  };
 }
+
+// The hiring assessment the evaluator returns (both rounds).
+const ASSESSMENT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    recommendation: { type: Type.STRING, enum: [...HIRING_RECOMMENDATIONS] },
+    summary: { type: Type.STRING },
+    strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+    concerns: { type: Type.ARRAY, items: { type: Type.STRING } },
+    toRaise: { type: Type.STRING },
+  },
+  required: ["recommendation", "summary", "strengths", "concerns", "toRaise"],
+  propertyOrdering: ["recommendation", "summary", "strengths", "concerns", "toRaise"],
+};
+
+// Shared by both evaluators: how a competitive loop decides.
+const HIRING_BAR = [
+  "",
+  "The bar (be strict; this is a competitive big-tech loop where most candidates are rejected):",
+  "- Calibrate against a strong candidate at a top tech company today, not against the average student. Do not grade on effort or on a curve.",
+  "- When the evidence is ambiguous between two ratings, choose the LOWER one. Ambiguity defaults to no.",
+  "- strong means clearly above the bar, done independently and without prompting. Anything the candidate did only after the interviewer asked or hinted is at most ok.",
+  "- ok means meets the bar with minor gaps. needs_work means below the bar.",
+  "- Something the candidate had a real chance to do but did not do is needs_work, not insufficient_evidence (cite the evidence that shows the gap, such as the turn or code version where it should have happened). Use insufficient_evidence only when the attempt genuinely captured no data for it.",
+  "- Write like a real interviewer's debrief: direct, specific, and unsoftened. No praise for routine steps, no encouragement filler, no hedging words like 'great start'.",
+  "",
+  "assessment (the hiring recommendation, like the interviewer's vote in a debrief):",
+  "- recommendation: strong_no_hire (a clear miss on a core signal), lean_no_hire (on balance a no: gaps outweigh strengths, or the evidence is mixed or incomplete), lean_hire (on balance a yes with real gaps), strong_hire (clearly above the bar on every core signal with little or no help). Reserve strong_hire for exceptional performance.",
+  "- summary: two or three sentences a hiring committee would read first, leading with the decision's main reason.",
+  "- strengths: up to three specific things done well, each tied to evidence; empty if there were none.",
+  "- concerns: up to three specific gaps, most important first, each tied to evidence.",
+  "- toRaise: one sentence on exactly what would have moved this to the next level up.",
+].join("\n");
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -317,9 +359,10 @@ const RESPONSE_SCHEMA = {
       },
     },
     nextStep: { type: Type.STRING },
+    assessment: ASSESSMENT_SCHEMA,
   },
-  required: ["findings", "nextStep"],
-  propertyOrdering: ["findings", "nextStep"],
+  required: ["findings", "nextStep", "assessment"],
+  propertyOrdering: ["findings", "nextStep", "assessment"],
 };
 
 const SYSTEM_INSTRUCTION = [
@@ -340,6 +383,18 @@ const SYSTEM_INSTRUCTION = [
   "- Only describe what the student said if it appears in the transcript. If no transcript was captured, rate spoken_reasoning and clarification insufficient_evidence and do not describe anything the student said.",
   "- Each summary is one or two sentences.",
   "- nextStep is one concrete thing the student should practice next.",
+  "",
+  "Always include findings for correctness, approach, and complexity: they are the core signals.",
+  "Category standards at this bar:",
+  "- correctness: strong only if the final tested version passes every case and handles edge cases the candidate raised themselves; any failing case in the final version is needs_work.",
+  "- clarification: strong only if they asked about inputs or edge cases unprompted before coding; if they started coding without asking anything, needs_work.",
+  "- approach: strong only if they reached an optimal approach independently and explained it before coding; reached only after a hint is at most ok; needed several hints, or stayed with a brute force, is needs_work.",
+  "- complexity: strong only if they stated both time and space complexity correctly without being asked; correct only when asked is ok; wrong, incomplete, or never stated is needs_work.",
+  "- testing: strong only if they traced their code on examples or named edge cases themselves before declaring it done; relying only on the Run button is at most ok; failures left uninvestigated are needs_work.",
+  "- spoken_reasoning: strong only if they narrated their thinking clearly throughout and it matched the code; long silences or claims that contradict the code are needs_work.",
+  "- code_clarity: judge naming, structure, and readability as a code reviewer at that company would.",
+  "- Count hints: one small nudge is normal; several hints, or the interviewer pointing out a bug, lowers the affected categories.",
+  HIRING_BAR,
   "Return JSON matching the provided schema. No prose outside the JSON.",
 ].join("\n");
 
@@ -565,12 +620,16 @@ export async function POST(request: Request): Promise<Response> {
   const nextStep = typeof parsed.nextStep === "string" ? parsed.nextStep.trim().slice(0, MAX_SUMMARY_CHARS) : "";
   if (findings.length === 0 || nextStep === "") return json(INCOMPLETE, 503);
 
+  const lastSnapshot = coding.snapshots.at(-1);
+  const lastRun = coding.runs.at(-1);
+  const unrunDraft = !!lastSnapshot && !!lastRun && lastSnapshot.codeVersion > lastRun.codeVersion;
   const report: Report = {
     reportId: `report-${session.attemptId.slice(0, 8)}-${Date.now().toString(36)}`,
     sessionId: session.sessionId,
     attemptId: session.attemptId,
     findings,
     nextStep,
+    assessment: normalizeAssessment(parsed.assessment, codingCap(findings, coding.runs, unrunDraft)),
     createdAt: new Date().toISOString(),
   };
 
@@ -604,9 +663,38 @@ function insufficientBehavioral(session: BehavioralSession, lead: string, nextSt
     attemptId: session.attemptId,
     findings,
     nextStep,
+    assessment: normalizeAssessment(undefined, behavioralCap(findings), lead),
     createdAt: new Date().toISOString(),
   };
   return json(report, 200);
+}
+
+// The evaluator's vote, bounded and then capped. Caps only ever lower it. A
+// missing or malformed vote falls back to the cap with its reasons, never to a
+// better outcome than the evidence allows.
+const MAX_LIST_ITEMS = 3;
+function strings(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+    .slice(0, MAX_LIST_ITEMS)
+    .map((x) => x.trim().slice(0, MAX_SUMMARY_CHARS));
+}
+function normalizeAssessment(raw: RawReport["assessment"], cap: Cap, fallbackSummary?: string): HiringAssessment {
+  const proposed = isRecommendation(raw?.recommendation) ? raw.recommendation : undefined;
+  // Without a vote, the most a candidate gets is the cap, and never strong_hire.
+  const recommendation = proposed ? lower(proposed, cap.max) : lower(cap.max, "lean_hire");
+  const text = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, MAX_SUMMARY_CHARS * 2) : "");
+  const concerns = strings(raw?.concerns);
+  return {
+    recommendation,
+    ...(proposed && proposed !== recommendation ? { proposed } : {}),
+    summary: text(raw?.summary) || fallbackSummary || cap.reasons[0] || "The evaluator gave no summary.",
+    strengths: strings(raw?.strengths),
+    concerns: concerns.length ? concerns : cap.reasons.slice(0, MAX_LIST_ITEMS),
+    toRaise: text(raw?.toRaise),
+    caps: cap.reasons,
+  };
 }
 
 const BEHAVIORAL_SCHEMA = {
@@ -635,9 +723,10 @@ const BEHAVIORAL_SCHEMA = {
       },
     },
     nextStep: { type: Type.STRING },
+    assessment: ASSESSMENT_SCHEMA,
   },
-  required: ["findings", "nextStep"],
-  propertyOrdering: ["findings", "nextStep"],
+  required: ["findings", "nextStep", "assessment"],
+  propertyOrdering: ["findings", "nextStep", "assessment"],
 };
 
 const BEHAVIORAL_SYSTEM = [
@@ -648,8 +737,16 @@ const BEHAVIORAL_SYSTEM = [
   "- Judge ONLY what the candidate said in the transcript. Cite candidate turns by turnId. Never cite an interviewer turn as the candidate's performance.",
   "- Every finding must cite at least one candidate turn, or be insufficient_evidence with an empty evidence array. Never invent quotes or details.",
   "- Context the interviewer used to choose a question (target role, a project or skill to ask about) is NOT evidence that the candidate demonstrated anything.",
-  "- If a category was not covered in their answers, rate it insufficient_evidence and say what was missing.",
+  "- If a category was not covered in their answers at all, rate it insufficient_evidence and say what was missing.",
   "- Each summary is one or two sentences; nextStep is one concrete thing to practice.",
+  "",
+  "Category standards at this bar:",
+  "- specificity: strong only with concrete systems, numbers, dates, or scale; generic or hypothetical answers ('I usually...', 'I would...') are needs_work.",
+  "- personal_contribution: strong only if they clearly said what THEY did ('I'), with decisions they owned; mostly 'we', or detail only after being asked, is at most ok; unclear ownership is needs_work.",
+  "- reasoning: strong only if they explained why, including alternatives or trade-offs they weighed; actions with no reasons are needs_work.",
+  "- outcome: strong only with a measurable result and how they knew; a vague result ('it worked', 'it was fine') is needs_work. Reflection on what they learned or would change strengthens it.",
+  "- Answers that stay shallow under follow-up questions, sound rehearsed without depth, or need the interviewer to drag out basic details are a concern.",
+  HIRING_BAR,
 ].join("\n");
 
 async function behavioralReport(session: BehavioralSession): Promise<Response> {
@@ -764,6 +861,7 @@ async function behavioralReport(session: BehavioralSession): Promise<Response> {
     attemptId: session.attemptId,
     findings,
     nextStep,
+    assessment: normalizeAssessment(parsed.assessment, behavioralCap(findings)),
     createdAt: new Date().toISOString(),
   };
   return json(await attachSkillProof(report, "behavioral"), 200);

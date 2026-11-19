@@ -14,7 +14,7 @@ import type {
   TranscriptTurn,
 } from "./contract";
 import { formatCodeContext, formatOpening, formatReconnected,
-  formatCodeComment, formatCodeSync, formatRunEvidence, formatRunFollowup } from "./prompts";
+  formatCodeComment, formatCodeSync, formatQuietCheckIn, formatRunEvidence, formatRunFollowup } from "./prompts";
 import { formatBehavioralOpening, formatBehavioralReconnect } from "./behavioral";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
@@ -40,6 +40,12 @@ const STUDENT_SETTLE_MS = 1500;
 // the turn is sent), and their speech interrupts and un-mutes the reply.
 const COMMIT_IDLE_MS = 500;
 const COMMIT_MAX_WAIT_MS = 3000;
+// Quiet check-in thresholds: how long a real interviewer would typically let a
+// candidate sit in silence (no speech, no edits) before checking in. Coding
+// candidates often think quietly; behavioral silence after a question is rarer.
+const QUIET_CODING_MS = 75_000;
+const QUIET_BEHAVIORAL_MS = 25_000;
+const QUIET_POLL_MS = 5_000;
 
 // Local, opt-in correlation trace for debugging a Run end to end: set
 // globalThis.__ILZ_LIVE_TRACE__ = [] in a dev console or test. Metadata only
@@ -156,6 +162,15 @@ class BrowserLiveClient implements LiveClient {
   private followupTimer: ReturnType<typeof setTimeout> | null = null;
   // The latest Run whose follow-up was written, awaiting a grounded reply.
   private awaitingConfirmation: { runId: number; v: number; passed?: number; total?: number } | null = null;
+  // A [TIME] cue waiting for a safe boundary (latest wins). See sendCue.
+  private cuePending: string | null = null;
+  // Quiet check-in: like a real interviewer, say something once when the
+  // candidate has been silent (no speech, no edits) for a while after a question.
+  private lastEditAt = 0;
+  private lastInterviewerDoneAt = 0;
+  private studentTurns = 0;
+  private quietCheckedAt = -1; // studentTurns when we last checked in (once per silence)
+  private quietTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     turnSeed = 0,
@@ -282,6 +297,8 @@ class BrowserLiveClient implements LiveClient {
       this.disconnected = false;
       this.pendingInput = "";
       this.pendingOutput = "";
+      this.lastInterviewerDoneAt = Date.now();
+      this.startQuietWatch();
       this.pump();
     } catch (error) {
       if (!current()) return; // superseded; stay quiet
@@ -350,6 +367,7 @@ class BrowserLiveClient implements LiveClient {
   // Preserves the buffer even while disconnected, so it is restored on reconnect.
   syncCode(snapshot: CodeSnapshot): void {
     if (this.round === "behavioral") return; // no code in a behavioral round
+    if (snapshot.codeVersion > this.currentBufferVersion) this.lastEditAt = Date.now();
     this.observeVersion(snapshot.codeVersion, snapshot.source, snapshot.language);
     // Version only — never the source. The sink is dev-only (see trace()).
     trace({ conn: this.connectionSeq, stage: "buffer-queued", v: snapshot.codeVersion });
@@ -432,7 +450,80 @@ class BrowserLiveClient implements LiveClient {
     this.pumpOpening();
     this.pumpFollowup();
     this.pumpCodeComment();
+    this.pumpCue();
     this.pumpCodeSync();
+  }
+
+  // Queue a [TIME] cue (lib/prompts.ts, lib/behavioral.ts). It is delivered
+  // only while the interviewer is waiting for an answer and the candidate has
+  // paused, and its one-word acknowledgement is muted like a [SYNC] commit, so
+  // the candidate is never interrupted; the interviewer applies it at its next
+  // natural turn. A newer cue replaces an undelivered one.
+  sendCue(text: string): void {
+    this.cuePending = text;
+    this.pump();
+  }
+
+  private pumpCue(): void {
+    if (!this.session || !this.cuePending || this.modelTurnActive) return;
+    if (!this.outstanding || this.pendingInput !== "") return;
+    const wait = this.lastStudentActivityAt + this.settleMs - Date.now();
+    if (wait > 0) {
+      if (!this.followupTimer) {
+        this.followupTimer = setTimeout(() => {
+          this.followupTimer = null;
+          this.pump();
+        }, wait);
+      }
+      return;
+    }
+    try {
+      this.session.sendClientContent({
+        turns: [{ role: "user", parts: [{ text: `${this.cuePending}\nFor now, reply with exactly one word: Okay.` }] }],
+        turnComplete: true,
+      });
+      this.cuePending = null;
+      this.markCommitted();
+      this.syncTurnActive = true; // mute the acknowledgement
+      this.modelTurnActive = true;
+      trace({ conn: this.connectionSeq, stage: "cue" });
+    } catch {
+      this.markDisconnected();
+    }
+  }
+
+  // Checked every few seconds while connected. Fires at most once per
+  // interviewer question, only while the mic is on and the candidate owes an
+  // answer, and the model's check-in is spoken (not muted).
+  private startQuietWatch(): void {
+    if (this.quietTimer) return;
+    this.quietTimer = setInterval(() => this.checkQuiet(), QUIET_POLL_MS);
+    // Never keep a Node process (dev checks) alive just for this.
+    (this.quietTimer as { unref?: () => void }).unref?.();
+  }
+
+  private stopQuietWatch(): void {
+    if (this.quietTimer) clearInterval(this.quietTimer);
+    this.quietTimer = null;
+  }
+
+  private checkQuiet(): void {
+    if (!this.session || !this.micActive || this.modelTurnActive || !this.outstanding) return;
+    if (this.pendingInput !== "" || this.quietCheckedAt === this.studentTurns) return;
+    const quietFor = Date.now() - Math.max(this.lastStudentActivityAt, this.lastEditAt, this.lastInterviewerDoneAt);
+    if (quietFor < (this.round === "behavioral" ? QUIET_BEHAVIORAL_MS : QUIET_CODING_MS)) return;
+    try {
+      this.session.sendClientContent({
+        turns: [{ role: "user", parts: [{ text: formatQuietCheckIn(this.round) }] }],
+        turnComplete: true,
+      });
+      this.quietCheckedAt = this.studentTurns;
+      this.markCommitted();
+      this.modelTurnActive = true;
+      trace({ conn: this.connectionSeq, stage: "quiet-check-in" });
+    } catch {
+      this.markDisconnected();
+    }
   }
 
   // Commit the delivered code so a spoken question can see it (lowest
@@ -642,6 +733,7 @@ class BrowserLiveClient implements LiveClient {
   // buffer and the latest Run.
   private markDisconnected(): void {
     this.session = null;
+    this.stopQuietWatch();
     this.modelTurnActive = false;
     this.syncTurnActive = false;
     if (this.disconnected) return;
@@ -658,6 +750,11 @@ class BrowserLiveClient implements LiveClient {
   end(): void {
     this.ending = true;
     this.cancelFollowupTimer();
+    this.stopQuietWatch();
+    this.cuePending = null;
+    this.lastEditAt = 0;
+    this.studentTurns = 0;
+    this.quietCheckedAt = -1;
     if (this.commitTimer) clearTimeout(this.commitTimer);
     this.commitTimer = null;
     this.commitDue = false;
@@ -771,6 +868,7 @@ class BrowserLiveClient implements LiveClient {
       }
       this.syncTurnActive = false;
       this.modelTurnActive = false;
+      this.lastInterviewerDoneAt = Date.now();
       this.setState(this.micActive ? "listening" : "idle");
       // Natural turn boundary: deliver queued evidence and any owed follow-up.
       this.pump();
@@ -872,6 +970,7 @@ class BrowserLiveClient implements LiveClient {
     if (this.history.length > 20) this.history.shift();
     if (speaker === "interviewer" && this.awaitingConfirmation) this.checkGrounded(trimmed);
     if (speaker === "student") {
+      this.studentTurns += 1;
       // Only a completed student turn answers the outstanding question; an owed
       // follow-up (if any) may now be raised at this boundary.
       this.outstanding = false;
