@@ -70,7 +70,77 @@ const LIMITS = {
   casesPerRun: 20,
   fieldChars: 2_000,
 };
-const PROVIDER_TIMEOUT_MS = Number(process.env.REPORT_TIMEOUT_MS) || 25_000;
+const PROVIDER_TIMEOUT_MS = Number(process.env.REPORT_TIMEOUT_MS) || 40_000;
+
+// Gemini models are sometimes overloaded for minutes at a time. An overloaded
+// model either refuses quickly ("high demand", HTTP 503 / 429) or just hangs
+// for close to a minute. So the request goes to the next model in
+// REPORT_FALLBACK_MODELS (comma-separated) as soon as the current one refuses,
+// or alongside it once it has been silent for REPORT_HEDGE_MS. The first
+// usable answer wins and the other calls are aborted. Everything shares the
+// one PROVIDER_TIMEOUT_MS budget. Any other error is not retried.
+const DEFAULT_FALLBACK_MODELS = "gemini-3.5-flash,gemini-3.5-flash-lite";
+const HEDGE_MS = Number(process.env.REPORT_HEDGE_MS) || 5_000;
+
+function reportModels(primary: string): string[] {
+  const extra = (process.env.REPORT_FALLBACK_MODELS ?? DEFAULT_FALLBACK_MODELS).split(",").map((m) => m.trim()).filter(Boolean);
+  return [...new Set([primary, ...extra])];
+}
+
+function isOverloaded(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  if (status === 503 || status === 429) return true;
+  return /"code":\s*(503|429)|UNAVAILABLE|RESOURCE_EXHAUSTED/.test(String((err as Error | null)?.message ?? ""));
+}
+
+type GenerateRequest = Omit<Parameters<GoogleGenAI["models"]["generateContent"]>[0], "model">;
+
+type GenerateResponse = Awaited<ReturnType<GoogleGenAI["models"]["generateContent"]>>;
+
+function generateWithFallback(ai: GoogleGenAI, primary: string, req: GenerateRequest): Promise<GenerateResponse> {
+  const models = reportModels(primary);
+  const outer = req.config?.abortSignal;
+  return new Promise((resolve, reject) => {
+    const controllers: AbortController[] = [];
+    let next = 0;
+    let pending = 0;
+    let settled = false;
+    let hedge: ReturnType<typeof setTimeout> | undefined;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hedge);
+      outer?.removeEventListener("abort", onAbort);
+      for (const c of controllers) c.abort();
+      fn();
+    };
+    const onAbort = () => finish(() => reject(new Error("aborted")));
+    outer?.addEventListener("abort", onAbort);
+    if (outer?.aborted) return onAbort();
+
+    const launch = () => {
+      if (settled || next >= models.length) return;
+      const model = models[next++];
+      const controller = new AbortController();
+      controllers.push(controller);
+      pending++;
+      clearTimeout(hedge);
+      // Still silent after HEDGE_MS: start the next model alongside this one.
+      if (next < models.length) hedge = setTimeout(launch, HEDGE_MS);
+      ai.models.generateContent({ ...req, model, config: { ...req.config, abortSignal: controller.signal } }).then(
+        (res) => finish(() => resolve(res)),
+        (err) => {
+          pending--;
+          if (settled) return;
+          if (isOverloaded(err) && next < models.length) return launch();
+          // Another model may still answer; fail only when none is left.
+          if (pending === 0 && (next >= models.length || !isOverloaded(err))) finish(() => reject(err));
+        },
+      );
+    };
+    launch();
+  });
+}
 const MAX_FINDINGS = 7;
 const MAX_SUMMARY_CHARS = 400;
 
@@ -464,8 +534,7 @@ export async function POST(request: Request): Promise<Response> {
   }, PROVIDER_TIMEOUT_MS);
   try {
     const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: PROVIDER_TIMEOUT_MS } });
-    const call = ai.models.generateContent({
-      model,
+    const call = generateWithFallback(ai, model, {
       contents: buildPrompt(coding, role.value),
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -632,8 +701,7 @@ async function behavioralReport(session: BehavioralSession): Promise<Response> {
   }, PROVIDER_TIMEOUT_MS);
   try {
     const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: PROVIDER_TIMEOUT_MS } });
-    const call = ai.models.generateContent({
-      model,
+    const call = generateWithFallback(ai, model, {
       contents: parts.join("\n"),
       config: {
         systemInstruction: BEHAVIORAL_SYSTEM,
