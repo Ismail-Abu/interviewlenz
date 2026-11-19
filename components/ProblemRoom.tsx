@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { ApiError, ApplicationTarget, BehavioralContext, CodeSnapshot, CodingSession, InterviewPlan, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
+import type { ApiError, ApplicationTarget, BehavioralContext, CodeLanguage, CodeSnapshot, CodingSession, InterviewPlan, LiveClient, LiveState, Problem, RoundType, RunResult, Session } from "@/lib/contract";
 import { ProblemPanel } from "./ProblemPanel";
 import { ResultsPanel } from "./ResultsPanel";
 import { VoicePanel } from "./VoicePanel";
@@ -23,7 +23,7 @@ import { EditorSkeleton } from "./Skeletons";
 import { runCodeAdapter, type RunMode } from "./runCodeAdapter";
 import { fetchLiveToken, isApiError, openVoice, type BehavioralRound, type VoiceMode } from "./liveAdapter";
 import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome } from "./reportAdapter";
-import { preloadRunner } from "@/lib/runner";
+import { preloadJava, preloadRunner } from "@/lib/runner";
 import { getProblem, randomProblem } from "@/lib/problems";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
 import { behavioralOpeningExtra, isBehavioralSession } from "@/lib/behavioral";
@@ -52,6 +52,13 @@ function lineCount(source: string): number {
   return n;
 }
 
+// The starter code for a problem in the chosen language.
+function starterFor(problem: Problem, language: CodeLanguage): string {
+  return language === "java" && problem.java ? problem.java.starterCode : problem.starterCode;
+}
+
+const LANGUAGE_LABEL: Record<CodeLanguage, string> = { python: "Python 3", java: "Java 21" };
+
 export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   // Which problem this attempt is on. The prop is only the starting value:
   // selection happens per attempt on the client, because picking in the server
@@ -64,8 +71,14 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     setProblem(next);
     lastSyncedVersion.current = null;
     sync().reset();
-    latest.current = { codeVersion: 1, source: next.starterCode };
-    setSource(next.starterCode);
+    drafts.current = {};
+    // Keep the chosen language unless this problem has no Java version.
+    const lang = languageRef.current === "java" && !next.java ? "python" : languageRef.current;
+    languageRef.current = lang;
+    setLanguage(lang);
+    const starter = starterFor(next, lang);
+    latest.current = { codeVersion: 1, source: starter };
+    setSource(starter);
     setCodeVersion(1);
     setResult(null);
     setFromFixture(false);
@@ -169,6 +182,13 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
 
   const [source, setSource] = useState(problem.starterCode);
   const [codeVersion, setCodeVersion] = useState(1);
+  // Python or Java, chosen from the editor's dropdown. The ref is read by
+  // callbacks (code sync, Run) so they always see the current choice. Each
+  // language keeps its own draft for the current problem, so switching back and
+  // forth never loses code.
+  const [language, setLanguage] = useState<CodeLanguage>("python");
+  const languageRef = useRef<CodeLanguage>("python");
+  const drafts = useRef<Partial<Record<CodeLanguage, string>>>({});
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<RunMode>("real");
@@ -226,7 +246,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     if (!live.current || !syncEnabled.current) return;
     const cur = latest.current;
     if (lastSyncedVersion.current === cur.codeVersion) return;
-    live.current.syncCode?.({ codeVersion: cur.codeVersion, source: cur.source, at: new Date().toISOString() });
+    live.current.syncCode?.({ codeVersion: cur.codeVersion, source: cur.source, at: new Date().toISOString(), language: languageRef.current });
     lastSyncedVersion.current = cur.codeVersion;
   }
 
@@ -377,6 +397,16 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     setLiveError(null);
   }
 
+  // Logo and back arrow: return to the start screen from anywhere. Ends any live
+  // voice session so the interviewer is not left listening, and drops any
+  // in-flight plan request.
+  function goHome() {
+    endLive();
+    planRequest.current += 1;
+    setSetupStatus({ kind: "editing" });
+    setView("start");
+  }
+
   function handleEdit(next: string) {
     const prev = latest.current.source;
     const v = latest.current.codeVersion + 1;
@@ -393,10 +423,26 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     else scheduleSync();
   }
 
+  // Dropdown: switch the editor between Python and Java. Saves this language's
+  // draft, restores (or starts) the other one as a new code version, so the
+  // interviewer is told about the switch like any other edit.
+  function handleLanguageChange(next: CodeLanguage) {
+    if (next === languageRef.current) return;
+    if (next === "java" && !problem.java) return;
+    drafts.current[languageRef.current] = latest.current.source;
+    languageRef.current = next;
+    setLanguage(next);
+    setResult(null);
+    setFromFixture(false);
+    if (next === "java") void preloadJava();
+    handleEdit(drafts.current[next] ?? starterFor(problem, next));
+  }
+
   async function handleRun() {
     const curSource = latest.current.source;
     const curVersion = latest.current.codeVersion;
-    const snapshot: CodeSnapshot = { codeVersion: curVersion, source: curSource, at: new Date().toISOString() };
+    const curLanguage = languageRef.current;
+    const snapshot: CodeSnapshot = { codeVersion: curVersion, source: curSource, at: new Date().toISOString(), language: curLanguage };
     setAttempt((s) => ({ ...s, snapshots: [...s.snapshots, snapshot] }));
     setRunning(true);
     try {
@@ -405,7 +451,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
           sessionId: ids().sessionId,
           problemId: problem.id,
           codeVersion: curVersion,
-          language: "python",
+          language: curLanguage,
           source: curSource,
         },
         mode,
@@ -672,11 +718,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         sendPreview={sendPreview(target)}
         canAnalyze={Boolean(j.role.trim() || j.listing.trim() || j.company.trim())}
         onAnalyze={handleBuildPlan}
-        onBack={() => {
-          planRequest.current += 1;
-          setSetupStatus({ kind: "editing" });
-          setView("start");
-        }}
+        onBack={goHome}
         onQuickPractice={(m) => startQuick({ resume: draft.resume, job: draft.job }, m, m === "coding" ? undefined : draft.resumeContext)}
       />
     );
@@ -690,6 +732,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         onEdit={(edits) => setPlan((p) => (p ? revisePlan(p, edits) : p))}
         onStart={handleStartPlan}
         onBack={() => setView("setup")}
+        onHome={goHome}
         starting={false}
       />
     );
@@ -715,7 +758,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     return (
       <div className="flex min-h-screen flex-col bg-background text-foreground [color-scheme:light]" data-testid="full-mock-transition" {...planMarker}>
         <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur px-6 py-4 flex items-center justify-between">
-          <Wordmark size={24} tone="light" />
+          <Wordmark size={24} tone="light" onHome={goHome} />
           <span className="text-xs font-semibold text-muted-foreground">Technical Coding Complete · Transition</span>
         </header>
 
@@ -733,7 +776,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
             </h1>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
               {lastCodingRun?.status === "completed"
-                ? `Your Python solution passed ${lastCodingRun.passed} of ${lastCodingRun.total} test cases.`
+                ? `Your ${(lastCodingSession?.snapshots.at(-1)?.language ?? "python") === "java" ? "Java" : "Python"} solution passed ${lastCodingRun.passed} of ${lastCodingRun.total} test cases.`
                 : "Your coding draft and interview responses have been saved."}
               {lastCodingRecord && timings[lastCodingRecord.session.attemptId] && (
                 <span data-testid="transition-coding-time">
@@ -803,7 +846,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         behavioralRecord={withTiming(behavioralRecords.at(-1))}
         onRetryReport={handleRetryReport}
         onPracticeAgain={handlePracticeAgain}
-        onReturnHome={() => setView("start")}
+        onReturnHome={goHome}
         roleLabel={
           profile && hasJob(profile.job)
             ? `Practicing for ${profile.job.role.trim() || "your role"}${profile.job.company.trim() ? ` at ${profile.job.company.trim()}` : ""}`
@@ -834,6 +877,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
           records={activeRecords}
           onRetryReport={handleRetryReport}
           onRetryAttempt={handleRetryAttempt}
+          onHome={goHome}
         />
       </div>
     );
@@ -867,6 +911,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
           attemptNumber={attemptNumber}
           focusLabel={focusLabel}
           onFinish={handleFinish}
+          onHome={goHome}
           clock={{ started: behavioralStarted, elapsedMs: clock.elapsedMs, limitMs: BEHAVIORAL_LIMIT_MS }}
         />
       </div>
@@ -881,7 +926,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
             <button
               type="button"
               aria-label="Back to Interviewlenz home"
-              onClick={() => setView("start")}
+              onClick={goHome}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
             >
               <svg
@@ -901,7 +946,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
                 <path d="M19 12H5" />
               </svg>
             </button>
-            <Wordmark size={22} tone="light" />
+            <Wordmark size={22} tone="light" onHome={goHome} />
             <div className="min-w-0 leading-tight">
               <p className="truncate text-sm font-medium text-foreground" data-testid="target-role">
                 <span className="text-muted-foreground">Practicing for: </span>
@@ -919,12 +964,12 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
                     Full Mock Loop · Round 1 of 2 (Coding)
                   </span>
                   <p className="truncate text-xs text-muted-foreground">
-                    Problem: {problem.title} (Python 3) · Behavioral follows
+                    Problem: {problem.title} ({LANGUAGE_LABEL[language]}) · Behavioral follows
                   </p>
                 </div>
               ) : (
                 <p className="truncate text-xs text-muted-foreground">
-                  Problem: {problem.title} (Python 3)
+                  Problem: {problem.title} ({LANGUAGE_LABEL[language]})
                 </p>
               )}
             </div>
@@ -1029,7 +1074,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         {/* Left Column: Problem description & Live voice console */}
         <section id="problem-pane" className="flex flex-col border-border lg:min-h-0 lg:border-r bg-background min-w-0 max-w-full">
           <div className="flex-1 px-5 py-6 sm:px-7 lg:overflow-y-auto">
-            <ProblemPanel problem={problem} onSelectProblem={handleSwitchProblem} />
+            <ProblemPanel problem={problem} onSelectProblem={handleSwitchProblem} language={language} />
             <div className="mt-5 pt-3 border-t border-border/60 sm:hidden">
               <button
                 type="button"
@@ -1065,8 +1110,19 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
         <section id="code-pane" className="flex flex-col border-t border-border lg:min-h-0 lg:border-t-0 bg-background min-w-0 max-w-full">
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3 bg-background">
             <div className="flex items-center gap-2 font-mono text-xs text-foreground">
-              <span className="font-semibold text-foreground">solution.py · v{codeVersion}</span>
-              <span className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-muted-foreground">Python 3</span>
+              <span className="font-semibold text-foreground">{language === "java" ? "Solution.java" : "solution.py"} · v{codeVersion}</span>
+              <label className="sr-only" htmlFor="code-language">Language</label>
+              <select
+                id="code-language"
+                data-testid="language-select"
+                value={language}
+                onChange={(e) => handleLanguageChange(e.target.value as CodeLanguage)}
+                disabled={running}
+                className="cursor-pointer rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="python">Python 3</option>
+                <option value="java" disabled={!problem.java}>Java 21</option>
+              </select>
               {result?.status === "completed" && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft border border-emerald-500/20 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-success">
                   ✓ {result.passed} / {result.total} passed in {result.durationMs}ms
@@ -1078,7 +1134,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
 
           {/* Monaco Editor Pane */}
           <div className="mobile-editor-pane min-h-[280px] flex-1 overflow-hidden bg-card border-b border-border lg:h-auto lg:min-h-0">
-            <CodeEditor value={source} onChange={handleEdit} errorLine={error?.line} errorMessage={error?.message} />
+            <CodeEditor value={source} onChange={handleEdit} language={language} errorLine={error?.line} errorMessage={error?.message} />
           </div>
 
           {/* Results Panel */}

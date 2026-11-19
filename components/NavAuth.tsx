@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getProviders, SessionProvider, signIn as startSignIn, signOut, useSession } from "next-auth/react";
+import { activateTheme, deactivateTheme, setTheme, useTheme } from "./theme";
 
 const buttonStyle = "inline-flex h-9 max-w-40 items-center gap-2 whitespace-nowrap rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
 const dialogStyle = "m-auto w-[min(92vw,26rem)] rounded-2xl border border-border bg-card p-6 text-foreground shadow-lift backdrop:bg-black/40";
@@ -75,8 +76,36 @@ export function NavAuth() {
       .catch(() => { if (active) setConfigured(false); });
     return () => { active = false; };
   }, []);
+  // Theme choice is a signed-in feature; without SSOJet nobody is signed in.
+  useEffect(() => { if (configured === false) deactivateTheme(); }, [configured]);
   if (configured === null) return null;
   return configured ? <SessionProvider><SignIn /></SessionProvider> : <RememberMe />;
+}
+
+function ThemeToggle() {
+  const theme = useTheme();
+  const dark = theme === "dark";
+  return (
+    <button
+      type="button"
+      data-testid="theme-toggle"
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      {dark ? (
+        <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      ) : (
+        <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 function SignIn() {
@@ -85,6 +114,13 @@ function SignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+
+  // Signed in: show the saved theme. Signed out or session expired: back to light.
+  // Layout effect so it lands before paint (also re-applies after React's dev remount).
+  useLayoutEffect(() => {
+    if (status === "authenticated") activateTheme();
+    else if (status === "unauthenticated") deactivateTheme();
+  }, [status]);
 
   async function signIn() {
     setError(null);
@@ -102,9 +138,10 @@ function SignIn() {
     return (
       <span className="flex items-center gap-2 text-xs" data-testid="nav-auth-user">
         <span className="hidden max-w-36 truncate font-medium text-foreground sm:inline">{name}</span>
+        <ThemeToggle />
         <button
           type="button"
-          onClick={() => void signOut({ callbackUrl: "/" })}
+          onClick={() => { deactivateTheme(); void signOut({ callbackUrl: "/" }); }}
           className="rounded-md px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           Sign out

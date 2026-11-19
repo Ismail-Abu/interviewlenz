@@ -20,7 +20,7 @@ type Status =
   | { kind: "error"; message: string; tooLarge?: boolean }
   | { kind: "ready"; empty: boolean };
 
-const field = "w-full rounded-[14px] bg-white px-3 py-2.5 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] placeholder:text-[#8a7b70] focus:ring-2 focus:ring-maroon-soft";
+const field = "w-full rounded-[14px] bg-background px-3 py-2.5 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] placeholder:text-[#8a7b70] focus:ring-2 focus:ring-maroon-soft";
 
 // Optional personalization for the behavioral round. Analysis runs ONLY on
 // "Prepare my interview"; the preview is editable and its edits are what the
@@ -130,7 +130,7 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
 
       {open && (
         <div className="mt-4 flex flex-col gap-4">
-          <p className="rounded-[18px] bg-white/70 p-3 text-sm leading-relaxed text-ink" data-testid="tailor-disclosure">
+          <p className="rounded-[18px] bg-background/70 p-3 text-sm leading-relaxed text-ink" data-testid="tailor-disclosure">
             When you select <strong>Prepare my interview</strong>, the resume pages you added above (resized in your browser)
             and the job listing are sent to Google Gemini to suggest one project and one practice focus. Nothing is sent before
             that. The files and the listing are not used in the interview itself: only the project and focus you confirm below.
@@ -173,7 +173,7 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
           {draft && (draft.project || draft.focus) && (
             <div className="grid gap-4 lg:grid-cols-2" data-testid="tailor-preview">
               {draft.project && (
-                <fieldset className="flex flex-col gap-2 rounded-[22px] bg-white/70 p-4">
+                <fieldset className="flex flex-col gap-2 rounded-[22px] bg-background/70 p-4">
                   <legend className="px-1 text-sm font-semibold text-ink">Project to ask about</legend>
                   <input
                     className={field}
@@ -202,7 +202,7 @@ export function TailorPanel({ resume, job, onContextChange, onStartGeneric }: Pr
                 </fieldset>
               )}
               {draft.focus && (
-                <fieldset className="flex flex-col gap-2 rounded-[22px] bg-white/70 p-4">
+                <fieldset className="flex flex-col gap-2 rounded-[22px] bg-background/70 p-4">
                   <legend className="px-1 text-sm font-semibold text-ink">Practice focus</legend>
                   <input
                     className={field}

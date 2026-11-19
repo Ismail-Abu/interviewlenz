@@ -31,6 +31,21 @@ export type ProblemFunction =
   | "is_anagram"
   | "max_profit";
 
+// The languages a coding round can be solved in. Python runs in Pyodide
+// (lib/runner.worker.ts); Java runs in CheerpJ (lib/javaRunner.ts). Both run
+// entirely in the browser.
+export type CodeLanguage = "python" | "java";
+
+// Java form of a problem: `class Solution` with one public method, LeetCode
+// style. The same cases are converted to Java literals by lib/javaHarness.ts.
+export type JavaType = "int" | "int[]" | "String" | "boolean";
+export interface JavaSignature {
+  methodName: string;
+  params: { name: string; type: JavaType }[];
+  returns: JavaType;
+  starterCode: string;
+}
+
 export interface Problem {
   id: ProblemId;
   title: string;
@@ -40,13 +55,15 @@ export interface Problem {
   functionName: ProblemFunction;
   starterCode: string;
   cases: TestCase[];
+  // Absent -> the problem is Python-only.
+  java?: JavaSignature;
 }
 
 export interface RunRequest {
   sessionId: string;
   problemId: Problem["id"];
   codeVersion: number;
-  language: "python";
+  language: CodeLanguage;
   source: string;
 }
 
@@ -87,6 +104,8 @@ export interface CodeSnapshot {
   codeVersion: number;
   source: string;
   at: string;
+  // Absent means Python (every snapshot made before Java existed).
+  language?: CodeLanguage;
 }
 
 // Interview round (PROPOSED with B10, pending Hamza's approval). Omitted means

@@ -11,9 +11,9 @@ import { coverBtn, coverBtnSm } from "../ui/buttons";
 import type { PlanReviewProps } from "./types";
 
 const inputField =
-  "w-full rounded-[14px] bg-white px-3.5 py-2.5 text-sm text-ink ring-1 ring-inset ring-[#D9C8B0] transition-colors focus:outline-none focus:ring-2 focus:ring-maroon-soft";
+  "w-full rounded-[14px] bg-background px-3.5 py-2.5 text-sm text-ink ring-1 ring-inset ring-[#D9C8B0] transition-colors focus:outline-none focus:ring-2 focus:ring-maroon-soft";
 
-export function PlanReview({ plan, application, onEdit, onStart, onBack, starting }: PlanReviewProps) {
+export function PlanReview({ plan, application, onEdit, onStart, onBack, onHome, starting }: PlanReviewProps) {
   const problem = getProblem(plan.technical.problemId);
   const t = plan.target;
   const title = [t.role, t.company && `at ${t.company}`].filter(Boolean).join(" ") || application.roleContext.role || "Your interview";
@@ -73,7 +73,7 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
     const themes = plan.themes.filter((th) => th.round === r);
     if (themes.length === 0) {
       return (
-        <p className="rounded-[18px] bg-white/60 p-4 text-sm text-ink-muted italic">
+        <p className="rounded-[18px] bg-background/60 p-4 text-sm text-ink-muted italic">
           No specific themes configured for this round.
         </p>
       );
@@ -83,7 +83,7 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
         {themes.map((th) => (
           <li
             key={th.id}
-            className="flex items-start justify-between gap-4 rounded-[20px] bg-white/90 p-4 shadow-sm border border-cream-line/50 transition-colors"
+            className="flex items-start justify-between gap-4 rounded-[20px] bg-background/90 p-4 shadow-sm border border-cream-line/50 transition-colors"
             data-testid={`theme-${th.id}`}
           >
             <div className="flex-1">
@@ -131,7 +131,7 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
       <main className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
         {/* Navigation Bar */}
         <div className="flex items-center justify-between gap-3">
-          <Wordmark size={26} tone="light" />
+          <Wordmark size={26} tone="light" onHome={onHome} />
           <button
             type="button"
             onClick={onBack}
@@ -236,7 +236,7 @@ export function PlanReview({ plan, application, onEdit, onStart, onBack, startin
 
         {/* Public Citations */}
         {plan.source === "researched" && plan.citations.length > 0 && (
-          <section className="rounded-[22px] bg-white/70 p-5 text-sm text-ink-muted border border-cream-line/50" data-testid="plan-citations">
+          <section className="rounded-[22px] bg-background/70 p-5 text-sm text-ink-muted border border-cream-line/50" data-testid="plan-citations">
             <h2 className="mb-2 font-bold text-ink">Public Sources & Research References</h2>
             <ul className="flex flex-col gap-1.5 pl-1">
               {plan.citations.map((c) => (

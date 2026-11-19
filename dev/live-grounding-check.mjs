@@ -94,6 +94,7 @@ console.log("== 1. Token route locks the interviewer instruction");
   assert("1g instruction: report latest Run version+score, say what's missing, reconnect only when told", /latest .*run/i.test(si) && /missing/i.test(si) && si.includes("[RECONNECTED]"));
   const aad = locked.realtimeInputConfig?.automaticActivityDetection;
   assert("1h turn detection locked with silence > 850 ms", (aad?.silenceDurationMs ?? 0) > 850, JSON.stringify(aad));
+  assert("1h2 context-window compression (sliding window) is locked in, so long sessions do not hit the context limit", !!locked.contextWindowCompression?.slidingWindow, JSON.stringify(locked.contextWindowCompression));
   assert("1i no diagnostic phrases left in the instruction", !/QUOKKA|diagnostic|test phrase/i.test(si));
   assert("1j response carries only token/model/expiresAt (no key)", JSON.stringify(Object.keys(body).sort()) === JSON.stringify(["expiresAt", "model", "token"]) && !JSON.stringify(body).includes("stub-key"));
 }

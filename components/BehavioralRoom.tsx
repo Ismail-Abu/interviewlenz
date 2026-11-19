@@ -16,6 +16,7 @@ interface Props {
   // Shown under the title when the interview was tailored (confirmed focus only).
   focusLabel?: string;
   onFinish: () => void;
+  onHome: () => void;
   // Countdown for this attempt. It starts with the interview and finishes the
   // round at zero (ProblemRoom owns the clock and the auto-finish).
   clock: { started: boolean; elapsedMs: number; limitMs: number };
@@ -52,7 +53,7 @@ function turnLabel(connected: boolean, state: LiveState | null, disconnected: bo
   return { text: "Your turn — speak naturally out loud", visualizerState: "listening" as const, tone: "text-emerald-700 bg-emerald-50 border-emerald-200" };
 }
 
-export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish, clock }: Props) {
+export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish, onHome, clock }: Props) {
   const left = clock.limitMs - clock.elapsedMs;
   // One message per stage, so a screen reader announces each change once.
   const warning = !clock.started
@@ -75,7 +76,7 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish, clo
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Wordmark size={22} tone="light" />
+            <Wordmark size={22} tone="light" onHome={onHome} />
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-0.5 text-xs font-semibold text-foreground max-sm:hidden">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               Behavioral Deep-Dive Interview

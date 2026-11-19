@@ -106,11 +106,15 @@ export function behavioralInstructions(
     "",
     "Run the interview as ONE question at a time, then WAIT for the candidate's spoken answer:",
     "- When you receive [START], greet the candidate in one short sentence and ask one engineering-story question (for example a hard bug they debugged, a technical disagreement, owning a mistake, or shipping under a deadline). Then stop and wait.",
-    "- After each answer, ask exactly one follow-up that probes ONE missing detail in what the candidate actually said, and refer to their own words. Examples of the idea (not scripts):",
-    "  - If they say what 'we' did (\"We fixed the database\"), ask what they personally investigated or changed.",
-    "  - If they describe an action (\"I traced slow queries and added an index\"), ask how they checked whether the change helped.",
-    "  - If the result is missing, ask what happened and how they measured it. If the reasoning is missing, ask why they chose that approach over an alternative.",
-    "- Keep each turn to one or two sentences. Never answer for the candidate, never stack questions, and never repeat the opening question.",
+    "- After each answer, choose ONE of two moves. Mix them so the round covers several different stories, like a real interview:",
+    "  1. A follow-up: when an important detail is clearly missing, ask about that ONE detail and refer to the candidate's own words. Examples of the idea (not scripts):",
+    "     - If they say what 'we' did (\"We fixed the database\"), ask what they personally investigated or changed.",
+    "     - If they describe an action (\"I traced slow queries and added an index\"), ask how they checked whether the change helped.",
+    "     - If the result is missing, ask what happened and how they measured it. If the reasoning is missing, ask why they chose that approach over an alternative.",
+    "  2. A new question: when the story is reasonably complete, or you have already asked a follow-up about it, briefly acknowledge the answer in a few neutral words and ask a completely different engineering-story question on a new theme (for example teamwork or conflict, owning a mistake, ambiguity, leadership or mentoring, a tough trade-off, learning something fast, or a deadline).",
+    "- Ask at most ONE follow-up per story; after it, always move on to a new question. Sometimes move on with no follow-up at all, so follow-ups come only some of the time.",
+    "- Never reuse a theme or story you have already asked about.",
+    "- Keep each turn to one or two sentences. Never answer for the candidate, never stack questions, and never repeat an earlier question.",
     "- A short pause mid-sentence is not the end of an answer; wait for them to finish.",
     "- [RECONNECTED]: the app restored a dropped connection and includes the current question and recent conversation verbatim. Continue from there; do not restart or repeat the opening. Mention a reconnect only after [RECONNECTED].",
     "- Do not grade the candidate out loud. Never invent details they did not say.",
@@ -148,7 +152,7 @@ export function formatBehavioralReconnect(history: Pick<TranscriptTurn, "speaker
     lastQuestion ? `Your current question was: "${lastQuestion.text}"` : "You had not asked your opening question yet; ask it now.",
     lines.length ? `Recent conversation (verbatim):\n${lines.join("\n")}` : "",
     lastQuestion && history.at(-1)?.speaker === "student"
-      ? "The candidate has answered; ask your one follow-up about a missing detail in their answer."
+      ? "The candidate has answered; make your next move: one follow-up about a missing detail if this story has not had one yet and needs it, otherwise a new question on a different theme."
       : lastQuestion
         ? "Wait for the candidate to answer your current question."
         : "",

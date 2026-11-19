@@ -811,3 +811,61 @@ Production lacks the public SSOJet issuer and client ID. Ismail requested a work
 ## Hosted SSOJet login
 
 Ismail requested real SSOJet sign-in. The server auth route and navigation now use NextAuth OIDC with PKCE, state, nonce and a cookie session. Retired the browser-only callback and display-name token decoding. Added server environment names and callback setup to .env.example and README.md. Lint, production build and all 19 CI suites passed. Chrome completed login, reload and logout against a local signed-token test issuer. Production activation needs the team's SSOJet issuer, client ID, client secret, registered callback and a deployment containing this change.
+
+## Light/dark theme for signed-in users • November 18
+
+Hamza requested a light/dark switch available only while signed in. A sun/moon button beside the user's name in NavAuth toggles `data-theme="dark"` on `<html>`. The choice is saved per browser in localStorage and applies only while an SSOJet session is present. Sign-out, an expired session or an unconfigured SSOJet returns the page to light and keeps the saved choice for the next sign-in. An inline `<head>` script applies it before first paint, following Next's preventing-flash guide. Dark tokens live in app/globals.css, and the amber, emerald, red, rose and sky shades used directly by status badges are inverted. Monaco switches to vs-dark. White input and panel backgrounds in the flow and landing components now use `bg-background`.
+
+Files: components/theme.ts and components/themeScript.ts (new), components/NavAuth.tsx, components/CodeEditor.tsx, app/layout.tsx, app/globals.css, components/flow/PlanReview.tsx, components/flow/ApplicationSetup.tsx, components/landing/JobForm.tsx, components/landing/TailorPanel.tsx.
+
+Validation: lint and production build passed, all 19 CI suites passed. Edge, driven by Playwright against `next start` with a stubbed NextAuth session, passed 16 checks: the toggle shows only when signed in; it switches light, dark, light and dark; dark is set before hydration on reload; sign-out returns to light and hides the toggle; a signed-out visitor with a saved dark choice stays light. No console errors. Screenshots of the dark home page and coding room were reviewed. A real SSOJet login with the toggle was not exercised.
+
+## Logo returns to home • November 18
+
+Hamza requested that clicking the top-left logo and name return to the home page. Wordmark takes an optional `onHome` and renders as a button (`data-testid="logo-home"`, label "Interviewlenz home") when given one. ProblemRoom's new `goHome` ends any live voice session, cancels an in-flight plan request and shows the start screen. It is passed to the coding room, full-mock transition, behavioral room, report, full-mock summary, setup and plan screens. The coding room's existing back arrow now uses `goHome` too; before, leaving the room left a live voice session running. The start screen's logo already linked to `/` and is unchanged. StartScreen accepts `onApply` but never renders it, so setup and plan cannot currently be reached from the UI.
+
+Files: components/Logo.tsx, components/ProblemRoom.tsx, components/BehavioralRoom.tsx, components/ReportView.tsx, components/FullMockSummary.tsx, components/flow/PlanReview.tsx, components/flow/ApplicationSetup.tsx, components/flow/types.ts.
+
+Validation: lint and production build passed, all 19 CI suites passed. Edge, driven by Playwright against `next start` with the voice token stubbed to 503 (mock interviewer), confirmed: the logo returns home from the coding room and the behavioral room; the back arrow still returns home; after starting voice and leaving by the logo, re-entering shows Start Voice again, so the session was ended. The only console error was the stubbed 503. Report, summary, transition, setup and plan screens were checked by build and type-check only.
+
+## Behavioral round mixes follow-ups with new questions • November 18
+
+Hamza reported that the behavioral interviewer asked one opening question and then only follow-ups. The instruction in lib/behavioral.ts required exactly one follow-up after every answer and never moved to a new question. After each answer the interviewer now picks one move: a single follow-up when an important detail is missing, or a brief acknowledgement and a completely different engineering-story question on a new theme. Each story gets at most one follow-up, some answers get none, and themes are not reused. The [RECONNECTED] recap asks for the same next move.
+
+Files: lib/behavioral.ts, dev/behavioral-check.mjs (assertions 1e and 2f updated, 1e2 added).
+
+Validation: lint, type-check and all 19 CI suites passed. The change is to the instruction locked into the Gemini Live token, so how often the model follows up versus moves on was not exercised with the real model.
+
+## Interviewer sees code as it is written • November 18
+
+Hamza reported that the coding interviewer could not see code until it was run, and saw it late even then. Root cause, reproduced against the real Live model with the app's own instruction: lib/live.ts sent each edit as a silent `[CODE vN]` snapshot (`turnComplete:false`). Gemini buffers such content until a complete client turn follows, and the candidate's speech does not commit it, so a spoken question got "I cannot see any code yet". Only a Run (its follow-up is a complete turn) committed the code, which is why it appeared late.
+
+Fix: after a 500 ms typing pause, or at most every 3 s while typing continues, the client sends a short `[SYNC vN]` complete turn (lib/prompts.ts `formatCodeSync`) that commits the buffered snapshot. The model's one-word "Okay." reply is muted: no audio, no transcript turn, no speaking state. A sync is never sent while the interviewer is mid-turn or the candidate is mid-sentence. If the candidate talks over the muted reply, their speech un-mutes the real answer. The opening, Run follow-up and code remark already commit and count as a sync. A reconnect commits the restored code. Behavioral rounds are unaffected. The interviewer instruction gains a `[SYNC vN]` line.
+
+Files: lib/live.ts, lib/prompts.ts, dev/live-code-sync-check.mjs (new, 16 checks), scripts/ci-checks.mjs (added to the allowlist).
+
+Validation: type-check, lint and all 20 CI suites passed. Against the real model (`LIVE_MODEL`, the app's instruction, questions sent on the realtime channel like speech): before, "I have not received any code yet"; after, 3 of 3 runs answered from unrun code ("You are using a set"), and after switching to a sort-based version the model described the new approach. The sync acknowledgement was "Okay." each time (about 1.5-2 s). Not yet exercised: a real microphone session in the browser.
+
+Open risk (pre-existing): ProblemRoom sends a snapshot of the whole buffer up to every 250 ms while typing, and the session has no context-window compression, so very long sessions accumulate many full copies of the code in context. Consider `contextWindowCompression` in the token route.
+
+## Live context-window compression • November 18
+
+Hamza asked to fix the open risk noted above. The token route now locks `contextWindowCompression: { slidingWindow: {} }` into the Live config. Once the context nears its limit, the oldest turns are dropped; the system instruction is always kept, and the latest code is re-sent on every edit. In a very long session, the oldest conversation and an old Run's evidence can fall out of the model's memory; the latest Run is re-sent only after a reconnect or a new Run.
+
+Files: app/api/live-token/route.ts, dev/live-grounding-check.mjs (assertion 1h2).
+
+Validation: type-check, lint and all 20 CI suites passed. A real token minted exactly like the route (v1beta, locked config including the compression setting) opened a Live session on `LIVE_MODEL` that returned audio and "Hello! It's nice to meet you.". A session long enough to trigger compression was not run.
+
+## Java option for coding rounds • November 18
+
+Hamza requested Java alongside Python, chosen from a dropdown in the editor, running in the browser with no pop-up. The editor header's "Python 3" badge is now a Python 3 / Java 21 dropdown. Each language keeps its own draft per problem, and a switch is a new code version, so the interviewer hears about it like any edit. The problem panel, examples, file name, Monaco language and header labels follow the choice.
+
+How Java runs: lib/javaRunner.ts loads CheerpJ 5.0 (a JVM in WebAssembly, from its CDN) the first time Java is chosen, then calls java/IlzMem.java in library mode from public/cheerpj/ilz-runner.jar. IlzMem compiles the candidate's `class Solution` with javac in memory, loads it in a fresh class loader, and runs a harness generated per problem by lib/javaHarness.ts. It returns the same RunResult shape with Java-style display strings. CheerpJ runs on the page's main thread, so IlzMem inserts a time guard into every loop and method body on the same line. A runaway loop ends as "Execution exceeded the 5 second limit", and the guard yields 1 ms every 50 ms so the tab stays responsive.
+
+Shared contract (proposed, needs Ismail's agreement): RunRequest.language is "python" | "java"; Problem gains an optional `java` signature; CodeSnapshot gains an optional `language` (absent means Python). The interviewer instruction now says Python or Java, and [CODE]/[RUN] messages name the language. docs/CONTRACT.md notes the change.
+
+Files: java/IlzMem.java, scripts/build-java-runner.mjs, public/cheerpj/ilz-runner.jar (built artifact, committed because the deployment has no JDK), lib/javaHarness.ts, lib/javaRunner.ts, lib/runner.ts, lib/contract.ts, lib/problems.ts, lib/prompts.ts, lib/live.ts, components/ProblemRoom.tsx, components/CodeEditor.tsx, components/ProblemPanel.tsx, components/ResultsPanel.tsx, docs/CONTRACT.md, dev/java-runner-check.mjs (new; skips without JDK 21+), scripts/ci-checks.mjs.
+
+Validation: type-check, lint and all 21 CI suites passed (java-runner-check: 20 checks on a local JDK 26 JVM, all four bank problems 4/4, plus errors, captured output and four runaway-loop shapes). Edge, driven by Playwright against `next start`, passed 19 checks: first Java run 4/4 in about 11 s (starting Java), later runs about 1 s, buggy code 3/4 with stdout, a syntax error on line 3 marked in the editor, an infinite loop timed out at about 6 s while the page stayed responsive, Java worked after a timeout, both drafts survived switching, Python still 4/4, and no CheerpJ element was visible. Real Gemini Live with the app's instruction, a Java [CODE]/[SYNC] and a question on the realtime channel: 2 of 2 named Java and the sort-based approach (one earlier run got no reply to either message and looked like a transient model stall).
+
+Open: CheerpJ's free licence covers personal, educational and hobby use; commercial use needs a paid licence (cheerpj.com/licensing). Java depends on CheerpJ's CDN being reachable. The first Java run downloads the JVM (about 10 s). Problems generated by /api/generate-problem have no Java signature, so Java is disabled for them. Retry and Practice again keep the chosen language.

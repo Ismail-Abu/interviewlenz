@@ -8,7 +8,7 @@ interface Props {
 }
 
 const field =
-  "w-full rounded-[14px] bg-white px-3 py-2.5 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] placeholder:text-[#8a7b70] focus:ring-2 focus:ring-maroon-soft";
+  "w-full rounded-[14px] bg-background px-3 py-2.5 text-base text-ink ring-1 ring-inset ring-[#d9c8b0] placeholder:text-[#8a7b70] focus:ring-2 focus:ring-maroon-soft";
 
 export function JobForm({ job, onChange }: Props) {
   const set = <K extends keyof JobInfo>(k: K, v: JobInfo[K]) => onChange({ ...job, [k]: v });

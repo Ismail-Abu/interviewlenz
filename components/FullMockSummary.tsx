@@ -66,7 +66,7 @@ export function FullMockSummary({ codingRecord, behavioralRecord, onRetryReport,
     <div className="min-h-screen bg-background text-foreground antialiased selection:bg-rose-500/20 [color-scheme:light]" data-testid="full-mock-summary">
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-          <Wordmark size={24} tone="light" />
+          <Wordmark size={24} tone="light" onHome={onReturnHome} />
           <span className="hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:inline">
             Executive Telemetry Debrief
           </span>

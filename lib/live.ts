@@ -14,7 +14,7 @@ import type {
   TranscriptTurn,
 } from "./contract";
 import { formatCodeContext, formatOpening, formatReconnected,
-  formatCodeComment, formatRunEvidence, formatRunFollowup } from "./prompts";
+  formatCodeComment, formatCodeSync, formatRunEvidence, formatRunFollowup } from "./prompts";
 import { formatBehavioralOpening, formatBehavioralReconnect } from "./behavioral";
 
 // See the note in app/api/live-token/route.ts about the v1alpha/v1beta
@@ -27,6 +27,19 @@ const OUTPUT_SAMPLE_RATE = 24000; // Live API output: 16-bit PCM, 24 kHz
 // Speech resuming cancels the wait. (Server turn detection is locked into the
 // token: 1.2 s silence, low end-of-speech sensitivity; see the token route.)
 const STUDENT_SETTLE_MS = 1500;
+// Making new code visible to a SPOKEN question. A silent snapshot
+// (turnComplete:false) is buffered by Gemini and only becomes part of the
+// conversation when a complete turn follows; the candidate's speech does not do
+// that. Verified against the live model: a question asked by voice after a
+// silent [CODE] snapshot got "I have not received any code yet". So after the
+// candidate pauses typing (or at least every COMMIT_MAX_WAIT_MS while typing)
+// the app sends a short [SYNC] turn that commits the buffer. The model answers
+// it with one word, which is muted (never played, never in the transcript).
+// Short on purpose: a candidate often types and then speaks at once. If they
+// talk over the muted reply, the code is already committed (that happens when
+// the turn is sent), and their speech interrupts and un-mutes the reply.
+const COMMIT_IDLE_MS = 500;
+const COMMIT_MAX_WAIT_MS = 3000;
 
 // Local, opt-in correlation trace for debugging a Run end to end: set
 // globalThis.__ILZ_LIVE_TRACE__ = [] in a dev console or test. Metadata only
@@ -93,6 +106,7 @@ class BrowserLiveClient implements LiveClient {
   // lowers these. Preserved across a disconnect for this attempt.
   private currentBufferVersion = 0;
   private currentBufferSource = "";
+  private currentBufferLanguage: CodeSnapshot["language"] = undefined;
   // Highest "not run yet" buffer version this session has received.
   private lastSentBufferVersion = 0;
   // Versions that have been run (never labeled "not run yet").
@@ -111,6 +125,14 @@ class BrowserLiveClient implements LiveClient {
   // buffer after a reconnect). It establishes the baseline and earns no
   // remark: the student has not written it.
   private commentBaselineSet = false;
+  // Highest code version committed into the conversation (visible to a spoken
+  // question). See COMMIT_IDLE_MS.
+  private committedVersion = 0;
+  private commitDue = false;
+  private commitTimer: ReturnType<typeof setTimeout> | null = null;
+  private firstUncommittedAt = 0;
+  // True while the model answers a [SYNC] commit: its audio and words are muted.
+  private syncTurnActive = false;
   // True between the interviewer's first audio/transcript and its turnComplete.
   private modelTurnActive = false;
   // True while the interviewer has asked a question and is waiting for the
@@ -251,6 +273,10 @@ class BrowserLiveClient implements LiveClient {
       if (!this.openingSent) this.openingPending = true;
       this.deliveredRunEpoch = 0;
       this.lastSentBufferVersion = 0;
+      this.committedVersion = 0;
+      this.syncTurnActive = false;
+      // Restored code must be committed again on the new session.
+      this.commitDue = this.currentBufferVersion > 0;
       this.modelTurnActive = false;
       this.outstanding = false;
       this.disconnected = false;
@@ -324,7 +350,7 @@ class BrowserLiveClient implements LiveClient {
   // Preserves the buffer even while disconnected, so it is restored on reconnect.
   syncCode(snapshot: CodeSnapshot): void {
     if (this.round === "behavioral") return; // no code in a behavioral round
-    this.observeVersion(snapshot.codeVersion, snapshot.source);
+    this.observeVersion(snapshot.codeVersion, snapshot.source, snapshot.language);
     // Version only — never the source. The sink is dev-only (see trace()).
     trace({ conn: this.connectionSeq, stage: "buffer-queued", v: snapshot.codeVersion });
     // Owe at most one remark about this version. A Run follow-up always wins.
@@ -336,6 +362,34 @@ class BrowserLiveClient implements LiveClient {
       this.codeCommentOwed = true;
     }
     this.pump();
+    this.scheduleCommit();
+  }
+
+  // Book a [SYNC] commit for after a short typing pause, but never later than
+  // COMMIT_MAX_WAIT_MS after the first uncommitted edit, so steady typing is
+  // still committed every few seconds. Each new edit pushes the idle deadline.
+  private scheduleCommit(): void {
+    if (this.round === "behavioral") return;
+    const now = Date.now();
+    if (!this.firstUncommittedAt) this.firstUncommittedAt = now;
+    const due = Math.min(now + COMMIT_IDLE_MS, this.firstUncommittedAt + COMMIT_MAX_WAIT_MS);
+    if (this.commitTimer) clearTimeout(this.commitTimer);
+    this.commitTimer = setTimeout(() => {
+      this.commitTimer = null;
+      this.commitDue = true;
+      this.pump();
+    }, Math.max(0, due - now));
+  }
+
+  // The code version the session has received (silently or with a Run).
+  private deliveredVersion(): number {
+    const run = this.deliveredRunEpoch > 0 && this.latestRun ? this.latestRun.result.codeVersion : 0;
+    return Math.max(this.lastSentBufferVersion, run);
+  }
+
+  // Any complete turn the app sends commits the buffered snapshot with it.
+  private markCommitted(): void {
+    this.committedVersion = Math.max(this.committedVersion, this.deliveredVersion());
   }
 
   // Record a completed Run — exact version, source, and score kept together —
@@ -347,7 +401,7 @@ class BrowserLiveClient implements LiveClient {
     if (this.round === "behavioral") return; // no Runs in a behavioral round
     const version = result.codeVersion;
     this.runVersions.add(version);
-    this.observeVersion(version, snapshot.source);
+    this.observeVersion(version, snapshot.source, snapshot.language);
     // An older Run completing late never replaces newer Run evidence, and does
     // not earn its own question. Re-running the same version does replace it.
     if (this.latestRun && version < this.latestRun.result.codeVersion) {
@@ -365,10 +419,11 @@ class BrowserLiveClient implements LiveClient {
   // Record the newest code the student has. A higher version supersedes the
   // buffer; an equal/older version never lowers it (a late v4 Run must not
   // overwrite a current v5 buffer).
-  private observeVersion(version: number, source: string): void {
+  private observeVersion(version: number, source: string, language?: CodeSnapshot["language"]): void {
     if (version >= this.currentBufferVersion) {
       this.currentBufferVersion = version;
       this.currentBufferSource = source;
+      this.currentBufferLanguage = language;
     }
   }
 
@@ -377,6 +432,47 @@ class BrowserLiveClient implements LiveClient {
     this.pumpOpening();
     this.pumpFollowup();
     this.pumpCodeComment();
+    this.pumpCodeSync();
+  }
+
+  // Commit the delivered code so a spoken question can see it (lowest
+  // priority: an opening, Run follow-up, or remark already commits it). Not
+  // gated by an outstanding question: the candidate often codes while one is
+  // open. Never while the interviewer is mid-turn or the candidate is speaking.
+  private pumpCodeSync(): void {
+    if (this.round === "behavioral" || !this.session || !this.commitDue) return;
+    if (this.modelTurnActive) return;
+    if (this.pendingInput !== "") return; // candidate is mid-utterance
+    const target = this.deliveredVersion();
+    if (target <= this.committedVersion) {
+      this.commitDue = false;
+      this.firstUncommittedAt = 0;
+      return;
+    }
+    const wait = this.lastStudentActivityAt + this.settleMs - Date.now();
+    if (wait > 0) {
+      if (!this.followupTimer) {
+        this.followupTimer = setTimeout(() => {
+          this.followupTimer = null;
+          this.pump();
+        }, wait);
+      }
+      return;
+    }
+    try {
+      this.session.sendClientContent({
+        turns: [{ role: "user", parts: [{ text: formatCodeSync(target) }] }],
+        turnComplete: true,
+      });
+      this.commitDue = false;
+      this.firstUncommittedAt = 0;
+      this.committedVersion = target;
+      this.syncTurnActive = true; // mute the one-word acknowledgement
+      this.modelTurnActive = true;
+      trace({ conn: this.connectionSeq, stage: "code-sync", v: target });
+    } catch {
+      this.markDisconnected();
+    }
   }
 
   // First connect of an attempt: ask the interviewer to open with the approach question.
@@ -392,6 +488,7 @@ class BrowserLiveClient implements LiveClient {
       });
       this.openingPending = false;
       this.openingSent = true;
+      this.markCommitted();
       this.modelTurnActive = true;
       this.outstanding = true; // the opening is a question; wait for the answer
       trace({ conn: this.connectionSeq, stage: "opening" });
@@ -437,6 +534,7 @@ class BrowserLiveClient implements LiveClient {
           codeVersion: this.currentBufferVersion,
           source: this.currentBufferSource,
           at: new Date().toISOString(),
+          ...(this.currentBufferLanguage ? { language: this.currentBufferLanguage } : {}),
         }),
       );
     }
@@ -494,6 +592,7 @@ class BrowserLiveClient implements LiveClient {
       });
       this.codeCommentOwed = false;
       this.lastCommentedVersion = this.currentBufferVersion;
+      this.markCommitted();
       this.modelTurnActive = true;
       trace({ conn: this.connectionSeq, stage: "code-comment", v: this.currentBufferVersion });
     } catch {
@@ -524,6 +623,7 @@ class BrowserLiveClient implements LiveClient {
         turnComplete: true,
       });
       this.followupOwed = false;
+      this.markCommitted();
       this.modelTurnActive = true; // a turn is coming
       this.outstanding = true; // we just posed a question
       const r = this.latestRun.result;
@@ -543,6 +643,7 @@ class BrowserLiveClient implements LiveClient {
   private markDisconnected(): void {
     this.session = null;
     this.modelTurnActive = false;
+    this.syncTurnActive = false;
     if (this.disconnected) return;
     this.disconnected = true;
     this.setState("error");
@@ -557,6 +658,12 @@ class BrowserLiveClient implements LiveClient {
   end(): void {
     this.ending = true;
     this.cancelFollowupTimer();
+    if (this.commitTimer) clearTimeout(this.commitTimer);
+    this.commitTimer = null;
+    this.commitDue = false;
+    this.firstUncommittedAt = 0;
+    this.committedVersion = 0;
+    this.syncTurnActive = false;
     this.connectionSeq += 1; // invalidate any in-flight connect() / stale socket callbacks
     this.micActive = false;
     this.cleanupMic();
@@ -602,14 +709,20 @@ class BrowserLiveClient implements LiveClient {
   }
 
   private handleMessage(message: LiveServerMessage): void {
+    const content = message.serverContent;
+    // The candidate speaking (or the server cutting the turn off) ends a muted
+    // [SYNC] acknowledgement: whatever the model says next is a real reply.
+    if (this.syncTurnActive && (content?.interrupted || content?.inputTranscription?.text)) {
+      this.syncTurnActive = false;
+    }
+
     const audio = message.data; // concatenated base64 PCM (24 kHz)
-    if (audio) {
+    if (audio && !this.syncTurnActive) {
       this.modelTurnActive = true; // the interviewer is producing a turn
       this.setState("speaking");
       this.playAudio(audio);
     }
 
-    const content = message.serverContent;
     if (!content) return;
 
     // Transcription streams text across chunks, and a completion event can carry
@@ -630,7 +743,7 @@ class BrowserLiveClient implements LiveClient {
       }
     }
 
-    if (content.outputTranscription) {
+    if (content.outputTranscription && !this.syncTurnActive) {
       if (content.outputTranscription.text) this.pendingOutput += content.outputTranscription.text;
       if (content.outputTranscription.text || content.outputTranscription.finished) {
         this.modelTurnActive = true;
@@ -656,6 +769,7 @@ class BrowserLiveClient implements LiveClient {
         this.pendingOutput = "";
         this.emitTurn("interviewer", text);
       }
+      this.syncTurnActive = false;
       this.modelTurnActive = false;
       this.setState(this.micActive ? "listening" : "idle");
       // Natural turn boundary: deliver queued evidence and any owed follow-up.

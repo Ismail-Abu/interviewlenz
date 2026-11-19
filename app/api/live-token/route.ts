@@ -172,6 +172,12 @@ export async function POST(request: Request): Promise<Response> {
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             sessionResumption: {},
+            // While typing, the client sends the whole buffer up to every 250 ms
+            // (lib/codeSync.ts), so a long session piles up many full copies of
+            // the code. A sliding window drops the oldest turns once the context
+            // nears its limit (the system instruction is always kept); the
+            // latest code is re-sent on every edit, so nothing current is lost.
+            contextWindowCompression: { slidingWindow: {} },
             systemInstruction,
             realtimeInputConfig: TURN_DETECTION,
           },

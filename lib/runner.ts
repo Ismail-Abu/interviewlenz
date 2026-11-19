@@ -68,6 +68,11 @@ function ensureRunner(): Runner {
   return runner;
 }
 
+// Start Java (CheerpJ) loading in the background. Never rejects.
+export function preloadJava(): Promise<void> {
+  return import("./javaRunner").then((m) => m.preloadJavaRunner(), () => undefined);
+}
+
 // Create the worker and begin loading Pyodide. Safe to call repeatedly; later
 // calls reuse the existing worker. Never rejects.
 export function preloadRunner(): Promise<void> {
@@ -101,6 +106,12 @@ export async function runCode(req: RunRequest): Promise<RunResult> {
         message: `Unknown problem: ${req.problemId}`,
         retryable: false,
       });
+    }
+
+    // Java runs in CheerpJ (lib/javaRunner.ts), loaded only when first needed.
+    if (req.language === "java") {
+      const { runJava } = await import("./javaRunner");
+      return runJava(req, problem);
     }
 
     const active = ensureRunner();

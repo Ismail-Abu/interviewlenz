@@ -44,6 +44,7 @@ export interface PlanReviewProps {
   onEdit: (edits: PlanEdits) => void; // remove a theme, edit or remove the behavioral focus
   onStart: () => void; // "Start technical round": freezes this revision
   onBack: () => void; // back to setup, inputs kept
+  onHome: () => void; // logo: to Home
   starting: boolean;
 }
 

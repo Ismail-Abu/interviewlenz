@@ -50,6 +50,8 @@ The UI increments codeVersion on every edit and captures a snapshot on Run. runC
 }
 ```
 
+`language` is `"python"` or `"java"` (proposed November 18; see CURRENT.md). A Java request sends a `class Solution` whose method is named by the problem's optional `java` signature (`lib/problems.ts`); it runs in the browser with CheerpJ (`lib/javaRunner.ts`) and returns the same `RunResult` shape, with Java-style display strings (`true`, `[0, 1]`, `"text"`). `CodeSnapshot` gains an optional `language`; absent means Python.
+
 ### Set-based solution
 
 ```json

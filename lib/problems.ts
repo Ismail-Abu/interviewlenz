@@ -18,6 +18,12 @@ export const containsDuplicate: Problem = {
   constraints: ["The input is a list of integers."],
   functionName: "contains_duplicate",
   starterCode: "def contains_duplicate(nums):\n    pass\n",
+  java: {
+    methodName: "containsDuplicate",
+    params: [{ name: "nums", type: "int[]" }],
+    returns: "boolean",
+    starterCode: "class Solution {\n    public boolean containsDuplicate(int[] nums) {\n        \n    }\n}\n",
+  },
   cases: [
     { id: "c1", args: [[1, 2, 3, 1]], expected: true },
     { id: "c2", args: [[1, 2, 3, 4]], expected: false },
@@ -40,6 +46,12 @@ export const twoSum: Problem = {
   constraints: ["The input is a list of integers and an integer target.", "Exactly one valid answer exists."],
   functionName: "two_sum",
   starterCode: "def two_sum(nums, target):\n    pass\n",
+  java: {
+    methodName: "twoSum",
+    params: [{ name: "nums", type: "int[]" }, { name: "target", type: "int" }],
+    returns: "int[]",
+    starterCode: "class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        \n    }\n}\n",
+  },
   cases: [
     { id: "c1", args: [[2, 7, 11, 15], 9], expected: [0, 1] },
     { id: "c2", args: [[3, 2, 4], 6], expected: [1, 2] },
@@ -59,6 +71,12 @@ export const validAnagram: Problem = {
   constraints: ["Both inputs are lowercase ASCII strings.", "Either string may be empty."],
   functionName: "is_anagram",
   starterCode: "def is_anagram(s, t):\n    pass\n",
+  java: {
+    methodName: "isAnagram",
+    params: [{ name: "s", type: "String" }, { name: "t", type: "String" }],
+    returns: "boolean",
+    starterCode: "class Solution {\n    public boolean isAnagram(String s, String t) {\n        \n    }\n}\n",
+  },
   cases: [
     { id: "c1", args: ["anagram", "nagaram"], expected: true },
     { id: "c2", args: ["rat", "car"], expected: false },
@@ -80,6 +98,12 @@ export const maxProfit: Problem = {
   constraints: ["The input is a list of integers.", "You must buy before you sell."],
   functionName: "max_profit",
   starterCode: "def max_profit(prices):\n    pass\n",
+  java: {
+    methodName: "maxProfit",
+    params: [{ name: "prices", type: "int[]" }],
+    returns: "int",
+    starterCode: "class Solution {\n    public int maxProfit(int[] prices) {\n        \n    }\n}\n",
+  },
   cases: [
     { id: "c1", args: [[7, 1, 5, 3, 6, 4]], expected: 5 },
     { id: "c2", args: [[7, 6, 4, 3, 1]], expected: 0 },

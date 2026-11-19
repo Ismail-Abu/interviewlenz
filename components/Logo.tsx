@@ -40,10 +40,28 @@ interface WordmarkProps {
   // "light" for the cream cover page: crimson mark, ink text, maroon "lenz".
   // Defaults to "dark" so the interview room is unchanged.
   tone?: "dark" | "light";
+  // When set, the logo becomes a button that returns to the start screen.
+  onHome?: () => void;
 }
 
 // Mark + "Interviewlenz" for the dark UI: white "Interview", coral mark and "lenz".
-export function Wordmark({ size = 28, tagline = false, className = "", tone = "dark" }: WordmarkProps) {
+export function Wordmark({ onHome, ...props }: WordmarkProps) {
+  if (!onHome) return <WordmarkArt {...props} />;
+  return (
+    <button
+      type="button"
+      onClick={onHome}
+      aria-label="Interviewlenz home"
+      title="Back to home"
+      data-testid="logo-home"
+      className="inline-flex shrink-0 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <WordmarkArt {...props} />
+    </button>
+  );
+}
+
+function WordmarkArt({ size = 28, tagline = false, className = "", tone = "dark" }: Omit<WordmarkProps, "onHome">) {
   const light = tone === "light";
   return (
     <span className={`inline-flex items-center ${className}`} style={{ gap: size * 0.38 }}>

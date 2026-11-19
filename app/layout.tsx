@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk, Instrument_Serif } from "next/font/google";
 import "./globals.css";
+import { THEME_SCRIPT } from "@/components/themeScript";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,9 +36,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${instrumentSerif.variable} h-full bg-white text-slate-900 antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${instrumentSerif.variable} h-full bg-background text-foreground antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-white text-slate-900">{children}</body>
+      <head>
+        {/* Applies a signed-in user's dark theme before first paint. See components/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
     </html>
   );
 }

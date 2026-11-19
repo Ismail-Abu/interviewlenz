@@ -31,7 +31,7 @@ export function ApplicationSetup({
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
         {/* Navigation Bar */}
         <div className="flex items-center justify-between gap-3">
-          <Wordmark size={26} tone="light" />
+          <Wordmark size={26} tone="light" onHome={onBack} />
           <button
             type="button"
             onClick={onBack}
@@ -59,7 +59,7 @@ export function ApplicationSetup({
 
         {/* Role & Resume Input Sections */}
         <fieldset disabled={busy} className="grid gap-6 lg:grid-cols-2">
-          <section className="flex flex-col justify-between rounded-[26px] bg-white/80 p-6 shadow-warm border border-cream-line/60">
+          <section className="flex flex-col justify-between rounded-[26px] bg-background/80 p-6 shadow-warm border border-cream-line/60">
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-ink">The role</h2>
@@ -77,7 +77,7 @@ export function ApplicationSetup({
             </div>
           </section>
 
-          <section className="flex flex-col justify-between rounded-[26px] bg-white/80 p-6 shadow-warm border border-cream-line/60">
+          <section className="flex flex-col justify-between rounded-[26px] bg-background/80 p-6 shadow-warm border border-cream-line/60">
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-ink">Your resume</h2>

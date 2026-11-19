@@ -10,7 +10,7 @@ interface Props {
 const ERROR_TITLE: Partial<Record<string, string>> = {
   syntax_error: "Syntax error",
   timeout: "Timed out",
-  runner_unavailable: "Python runner unavailable",
+  runner_unavailable: "Code runner unavailable",
 };
 
 // Icon + word + color, so pass/fail never relies on color alone.

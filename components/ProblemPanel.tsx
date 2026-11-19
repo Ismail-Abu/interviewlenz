@@ -1,5 +1,5 @@
 import Markdown from "react-markdown";
-import type { Problem } from "@/lib/contract";
+import type { CodeLanguage, Problem } from "@/lib/contract";
 import { problems } from "@/lib/problems";
 
 function py(value: unknown): string {
@@ -10,20 +10,28 @@ function py(value: unknown): string {
     .replace(/\bnull\b/g, "None");
 }
 
+// Java shows plain literals: true/false, [1, 2].
+function java(value: unknown): string {
+  return JSON.stringify(value).replace(/,/g, ", ");
+}
+
 export function ProblemPanel({
   problem,
   onSelectProblem,
+  language = "python",
 }: {
   problem: Problem;
   onSelectProblem?: (p: Problem) => void;
+  language?: CodeLanguage;
 }) {
+  const show = language === "java" ? java : py;
   return (
     <article className="flex flex-col text-foreground">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-            Python 3
+            {language === "java" ? "Java 21" : "Python 3"}
           </span>
           <span className="text-xs text-muted-foreground">
             {problem.id === "max-profit" ? "FinTech · Quantitative / Greedy" : "Easy · Arrays & Hashing"}
@@ -58,7 +66,7 @@ export function ProblemPanel({
 
       {/* Prompt */}
       <div className="mt-3 text-[15px] leading-relaxed text-secondary-foreground/90 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_p]:mb-3">
-        <Markdown>{problem.prompt}</Markdown>
+        <Markdown>{language === "java" ? problem.prompt.replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false") : problem.prompt}</Markdown>
       </div>
 
       {/* Examples */}
@@ -74,11 +82,11 @@ export function ProblemPanel({
             <div>
               <span className="text-muted-foreground">Input: </span>
               {/* The example names its own parameters, so the panel adds none. */}
-              <span className="text-foreground">{py(ex.input)}</span>
+              <span className="text-foreground">{show(ex.input)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Output: </span>
-              <span className="font-semibold text-emerald-600">{py(ex.output)}</span>
+              <span className="font-semibold text-emerald-600">{show(ex.output)}</span>
             </div>
             {ex.explanation && (
               <div className="mt-1.5 font-sans text-xs text-muted-foreground border-t border-border/60 pt-1.5">

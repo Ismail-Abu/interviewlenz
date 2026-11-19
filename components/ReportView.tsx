@@ -31,9 +31,10 @@ interface Props {
   records: AttemptRecord[];
   onRetryReport: (attemptId: string) => void;
   onRetryAttempt: () => void;
+  onHome: () => void;
 }
 
-export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
+export function ReportView({ records, onRetryReport, onRetryAttempt, onHome }: Props) {
   const busy = records.some((r) => r.status === "loading");
   const latestIsBehavioral = isBehavioralSession(records.at(-1)?.session);
   // The latest scored attempt per track, for the downloadable debrief.
@@ -49,7 +50,7 @@ export function ReportView({ records, onRetryReport, onRetryAttempt }: Props) {
   return (
     <div className="min-h-screen bg-background text-foreground antialiased selection:bg-rose-500/20 selection:text-foreground">
       <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-xl shadow-sm sm:px-6">
-        <Wordmark size={26} tone="light" />
+        <Wordmark size={26} tone="light" onHome={onHome} />
         <span className="hidden text-xs font-mono font-bold uppercase tracking-wider text-muted-foreground sm:inline">
           Telemetry Evaluation Report
         </span>

@@ -41,11 +41,13 @@ function canonicalInstructions(problem: Problem): string {
   // client-side systemInstruction is ignored).
   return [
     `You are a friendly but rigorous technical interviewer for the problem "${problem.title}".`,
-    "The candidate solves it in Python in a live voice interview. Speak only in English.",
+    "The candidate solves it in Python or Java (they choose, and may switch) in a live voice interview. Speak only in English.",
     "",
     "The problem:",
     problem.prompt,
-    `The candidate must implement the function \`${problem.functionName}\`.`,
+    `In Python the candidate must implement the function \`${problem.functionName}\`` +
+      (problem.java ? `; in Java, the method \`${problem.java.methodName}\` of \`class Solution\`` : "") +
+      ". Each [CODE] and [RUN] message names the language of that code; discuss it in that language.",
     examples ? `Worked examples (the expected behavior):\n${examples}` : "",
     constraints ? `Constraints:\n${constraints}` : "",
     "",
@@ -61,6 +63,7 @@ function canonicalInstructions(problem: Problem): string {
     "How you receive information (text messages from the app, never spoken by the candidate):",
     "- [START]: begin the interview with your opening question.",
     "- [CODE vN]: a snapshot of the current editor buffer, version N (not run yet). It updates immediately as the candidate writes code. Keep your understanding continuously synchronized with this code so whenever the candidate speaks, explains, or asks a question, you reference their latest code in real time.",
+    "- [SYNC vN]: the app confirming [CODE vN] is the candidate's latest code. Reply with exactly the one word 'Okay.' and nothing else; the candidate does not hear it. When the candidate later asks about their code, use the latest [CODE] you have, even before any Run.",
     "- [RUN vN] P/T passed: the exact code the candidate ran as version N, with the observed results (P of T cases passed, failing cases listed). The latest Run is the [RUN v..] with the highest version you have received. A later [CODE] snapshot can be newer than the latest Run; it does not change which version was last run or its score.",
     "- A message asking you to discuss a Run: ask one focused question about that version's code and results.",
     "- [RECONNECTED]: the app observed the voice connection drop and restored it. Earlier conversation is not available to you; the current code and latest Run follow it.",
@@ -107,7 +110,7 @@ export function formatRunEvidence(
     );
   }
 
-  lines.push("Code:", "```python", numberLines(snapshot.source), "```");
+  lines.push(`Code (${languageName(snapshot)}):`, "```" + fence(snapshot), numberLines(snapshot.source), "```");
   return lines.join("\n");
 }
 
@@ -142,17 +145,31 @@ export function formatReconnected(): string {
 // the model without asking anything. The source is line-numbered.
 export function formatCodeContext(snapshot: CodeSnapshot): string {
   return [
-    `[CODE v${snapshot.codeVersion}] current working buffer (not run yet):`,
-    "```python",
+    `[CODE v${snapshot.codeVersion}] current working buffer, ${languageName(snapshot)} (not run yet):`,
+    "```" + fence(snapshot),
     numberLines(snapshot.source),
     "```",
   ].join("\n");
 }
 
+// Snapshots made before Java existed carry no language: they are Python.
+const languageName = (s: CodeSnapshot) => (s.language === "java" ? "Java" : "Python");
+const fence = (s: CodeSnapshot) => (s.language === "java" ? "java" : "python");
+
 function numberLines(source: string): string {
   const rows = source.split("\n");
   const width = String(rows.length).length;
   return rows.map((line, i) => `${String(i + 1).padStart(width)}  ${line}`).join("\n");
+}
+
+// Commits the buffered [CODE vN] snapshot into the conversation so a spoken
+// question can see it (lib/live.ts, COMMIT_IDLE_MS). The one-word reply is muted
+// by the client; it is never played or shown to the candidate.
+export function formatCodeSync(codeVersion: number): string {
+  return (
+    `[SYNC v${codeVersion}] Editor sync from the app, not from the candidate: ` +
+    `[CODE v${codeVersion}] above is now their latest code. Reply with exactly one word: Okay.`
+  );
 }
 
 // A request for ONE short remark about the code the student has just written,
