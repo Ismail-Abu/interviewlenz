@@ -18,6 +18,16 @@ import type { BehavioralSession, CodingSession, RoleContext } from "../../../lib
 import { BEHAVIORAL_CATEGORIES, normalizeBehavioralContext, type BehavioralCategory } from "../../../lib/behavioral";
 import { HIRING_RECOMMENDATIONS, type HiringAssessment } from "../../../lib/contract";
 import { behavioralCap, codingCap, isRecommendation, lower, type Cap } from "../../../lib/hiring";
+import { questionTimeStart } from "../../../lib/transcript";
+
+// Turns after the interviewer invites the candidate's own questions are the
+// candidate's question time: shown to the evaluator as context, never evidence.
+function splitQuestionTime<T extends Pick<TranscriptTurn, "speaker" | "text">>(turns: readonly T[]): { evaluated: T[]; questions: T[] } {
+  const q = questionTimeStart(turns);
+  return q < 0 ? { evaluated: [...turns], questions: [] } : { evaluated: turns.slice(0, q + 1), questions: turns.slice(q + 1) };
+}
+const QUESTION_TIME_HEADER =
+  "=== Candidate's questions for the interviewer at the end (context only: NOT evidence, do not rate or cite these turns) ===";
 
 // Runs on the default Node.js runtime so GEMINI_API_KEY stays server-side.
 
@@ -415,8 +425,13 @@ function buildPrompt(session: CodingSession, role?: RoleContext): string {
 
   parts.push("\n=== Transcript turns (cite with kind:turn, turnId) ===");
   if (session.turns.length === 0) parts.push("(none) No transcript was captured for this attempt. Do not describe anything the student said.");
-  for (const t of session.turns as TranscriptTurn[]) {
+  const { evaluated, questions } = splitQuestionTime(session.turns as TranscriptTurn[]);
+  for (const t of evaluated) {
     parts.push(`${t.id} (${t.speaker}) @ ${t.at}: ${t.text}`);
+  }
+  if (questions.length) {
+    parts.push("", QUESTION_TIME_HEADER);
+    for (const t of questions) parts.push(`(${t.speaker}) @ ${t.at}: ${t.text}`);
   }
 
   parts.push("\n=== Code snapshots (cite with kind:code, codeVersion) ===");
@@ -449,10 +464,9 @@ function buildPrompt(session: CodingSession, role?: RoleContext): string {
 
 // --- evidence validation -------------------------------------------------
 function buildValidators(session: CodingSession) {
-  const turnIds = new Set<string>((session.turns as TranscriptTurn[]).map((t) => t.id));
-  const studentTurnIds = new Set<string>(
-    (session.turns as TranscriptTurn[]).filter((t) => t.speaker === "student").map((t) => t.id),
-  );
+  const { evaluated } = splitQuestionTime(session.turns as TranscriptTurn[]);
+  const turnIds = new Set<string>(evaluated.map((t) => t.id));
+  const studentTurnIds = new Set<string>(evaluated.filter((t) => t.speaker === "student").map((t) => t.id));
   const snapshotVersions = new Map<number, number>(); // version -> line count
   for (const s of session.snapshots as CodeSnapshot[]) snapshotVersions.set(s.codeVersion, lineCount(s.source));
   const runCaseIds = new Map<number, Set<string>>(); // version -> caseIds
@@ -754,7 +768,8 @@ async function behavioralReport(session: BehavioralSession): Promise<Response> {
   if (!role.ok) return invalid(role.message);
   const focus = normalizeBehavioralContext((session as { behavioralContext?: unknown }).behavioralContext);
   if (!focus.ok) return invalid(focus.message);
-  const student = session.turns.filter((t) => t.speaker === "student");
+  const { evaluated, questions } = splitQuestionTime(session.turns);
+  const student = evaluated.filter((t) => t.speaker === "student");
   const words = student.reduce((n, t) => n + t.text.split(/\s+/).filter(Boolean).length, 0);
   if (student.length === 0) {
     return insufficientBehavioral(
@@ -776,7 +791,11 @@ async function behavioralReport(session: BehavioralSession): Promise<Response> {
   if (!apiKey || !model) return json(NOT_CONFIGURED, 503);
 
   const parts = ["=== Behavioral interview transcript (cite candidate turns by turnId) ==="];
-  for (const t of session.turns) parts.push(`${t.id} (${t.speaker === "student" ? "candidate" : "interviewer"}) @ ${t.at}: ${t.text}`);
+  for (const t of evaluated) parts.push(`${t.id} (${t.speaker === "student" ? "candidate" : "interviewer"}) @ ${t.at}: ${t.text}`);
+  if (questions.length) {
+    parts.push("", QUESTION_TIME_HEADER);
+    for (const t of questions) parts.push(`(${t.speaker === "student" ? "candidate" : "interviewer"}) @ ${t.at}: ${t.text}`);
+  }
   if (focus.value) {
     // What the interviewer chose to ask about. Never evidence of performance.
     const bits = [

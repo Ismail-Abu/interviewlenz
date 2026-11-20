@@ -163,7 +163,7 @@ class BrowserLiveClient implements LiveClient {
   // The latest Run whose follow-up was written, awaiting a grounded reply.
   private awaitingConfirmation: { runId: number; v: number; passed?: number; total?: number } | null = null;
   // A [TIME] cue waiting for a safe boundary (latest wins). See sendCue.
-  private cuePending: string | null = null;
+  private cuePending: { text: string; speak: boolean } | null = null;
   // Quiet check-in: like a real interviewer, say something once when the
   // candidate has been silent (no speech, no edits) for a while after a question.
   private lastEditAt = 0;
@@ -459,8 +459,10 @@ class BrowserLiveClient implements LiveClient {
   // paused, and its one-word acknowledgement is muted like a [SYNC] commit, so
   // the candidate is never interrupted; the interviewer applies it at its next
   // natural turn. A newer cue replaces an undelivered one.
-  sendCue(text: string): void {
-    this.cuePending = text;
+  // With `speak`, the interviewer acts on the cue out loud at once (used when
+  // time is up), still only while it is waiting and the candidate has paused.
+  sendCue(text: string, opts?: { speak?: boolean }): void {
+    this.cuePending = { text, speak: !!opts?.speak };
     this.pump();
   }
 
@@ -479,12 +481,13 @@ class BrowserLiveClient implements LiveClient {
     }
     try {
       this.session.sendClientContent({
-        turns: [{ role: "user", parts: [{ text: `${this.cuePending}\nFor now, reply with exactly one word: Okay.` }] }],
+        turns: [{ role: "user", parts: [{ text: this.cuePending.speak ? this.cuePending.text : `${this.cuePending.text}\nFor now, reply with exactly one word: Okay.` }] }],
         turnComplete: true,
       });
+      const spoken = this.cuePending.speak;
       this.cuePending = null;
       this.markCommitted();
-      this.syncTurnActive = true; // mute the acknowledgement
+      if (!spoken) this.syncTurnActive = true; // mute the acknowledgement
       this.modelTurnActive = true;
       trace({ conn: this.connectionSeq, stage: "cue" });
     } catch {

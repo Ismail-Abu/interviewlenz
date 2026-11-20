@@ -10,7 +10,8 @@ import { BehavioralRoom } from "./BehavioralRoom";
 import { ReportView, type AttemptRecord } from "./ReportView";
 import { FullMockSummary } from "./FullMockSummary";
 import { recordAttempt } from "./historyStore";
-import { BEHAVIORAL_LIMIT_MS, describeClock, formatClock, useRoundClock, type RoundTiming } from "./roundClock";
+import { BEHAVIORAL_LIMIT_MS, OVERTIME_MS, describeClock, formatClock, useRoundClock, type RoundTiming } from "./roundClock";
+import { isGoodbye } from "@/lib/transcript";
 import { StartScreen, type MicStatus, type PracticeMode } from "./StartScreen";
 import { EMPTY_JOB, hasJob, toRoleContext, type CandidateProfile } from "./landing/profile";
 import { ApplicationSetup } from "./flow/ApplicationSetup";
@@ -26,7 +27,7 @@ import { DEFAULT_REPORT_MODE, requestReport, type ReportMode, type ReportOutcome
 import { preloadJava, preloadRunner } from "@/lib/runner";
 import { getProblem, randomProblem } from "@/lib/problems";
 import { CodeSyncScheduler, DEFAULT_SYNC_INTERVAL_MS } from "@/lib/codeSync";
-import { behavioralOpeningExtra, formatBehavioralTimeCue, isBehavioralSession } from "@/lib/behavioral";
+import { behavioralOpeningExtra, formatBehavioralOvertimeCue, formatBehavioralTimeCue, isBehavioralSession } from "@/lib/behavioral";
 import { formatTechnicalTimeCue } from "@/lib/prompts";
 
 const CodeEditor = dynamic(() => import("./CodeEditor"), {
@@ -238,12 +239,48 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     view !== "room" ? null : round === "coding" ? `coding-${attemptSeq}` : behavioralStarted ? `behavioral-${attemptSeq}` : null;
   const clock = useRoundClock(clockKey, {
     limitMs: round === "behavioral" ? BEHAVIORAL_LIMIT_MS : undefined,
-    onExpire: () => finishRound(true),
+    onExpire: () => startOvertime(),
+  });
+
+  // Overtime (behavioral). At the limit a live interview is not cut off
+  // mid-sentence: the interviewer is told time is up and closes with the
+  // candidate's questions. The round ends when the interviewer says goodbye
+  // (after its audio finishes), or OVERTIME_MS after the limit at the latest.
+  // Without a live voice session there is nothing to wrap up, so it ends at once.
+  // Transcript length when overtime began; null when not in overtime.
+  const [overtimeFrom, setOvertimeFrom] = useState<number | null>(null);
+  const overtime = overtimeFrom !== null;
+  // An overtime close and a click on Finish can land in the same moment.
+  const finishing = useRef(false);
+  function startOvertime() {
+    if (voiceModeRef.current !== "live" || !live.current) {
+      finishRound(true);
+      return;
+    }
+    setOvertimeFrom(attempt.turns.length);
+    live.current.sendCue?.(formatBehavioralOvertimeCue(), { speak: true });
+  }
+  const saidGoodbye =
+    overtime && attempt.turns.slice(overtimeFrom).some((t) => t.speaker === "interviewer" && isGoodbye(t.text));
+  useEffect(() => {
+    if (!overtime || view !== "room") return;
+    const capped = clock.elapsedMs >= BEHAVIORAL_LIMIT_MS + OVERTIME_MS;
+    const lost = !connected || disconnected;
+    if (capped || lost) {
+      finishRound(true);
+      return;
+    }
+    if (saidGoodbye && liveState !== "speaking") {
+      // Let the last words finish playing before the room closes.
+      const t = setTimeout(() => finishRound(true), 1200);
+      return () => clearTimeout(t);
+    }
   });
 
   // Time cues (lib/live.ts sendCue): a real interviewer watches the clock.
   // Technical: about 45 minutes in a real loop, so a hint-mode nudge at 25
-  // minutes and a wrap-up at 40. Behavioral: 3 minutes and 1 minute left.
+  // minutes and a wrap-up at 40. Behavioral: 5 minutes left (keep going: the
+  // model has no clock and tends to wind down early), 3, and 1 minute left.
   // Each cue is sent once per attempt, only while a real voice session is live.
   const cuesSent = useRef(new Set<string>());
   useEffect(() => {
@@ -251,10 +288,13 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     const min = clock.elapsedMs / 60_000;
     const due: [string, string][] =
       round === "behavioral"
-        ? [
-            ["b3", formatBehavioralTimeCue(3)],
-            ["b1", formatBehavioralTimeCue(1)],
-          ].filter(([id]) => min >= BEHAVIORAL_LIMIT_MS / 60_000 - (id === "b3" ? 3 : 1)) as [string, string][]
+        ? ([
+            ["b5", formatBehavioralTimeCue(5), 5],
+            ["b3", formatBehavioralTimeCue(3), 3],
+            ["b1", formatBehavioralTimeCue(1), 1],
+          ] as [string, string, number][])
+            .filter(([, , left]) => min >= BEHAVIORAL_LIMIT_MS / 60_000 - left)
+            .map(([id, text]) => [id, text] as [string, string])
         : ([
             ["c25", formatTechnicalTimeCue(25, false)],
             ["c40", formatTechnicalTimeCue(40, true)],
@@ -306,7 +346,15 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     sync().schedule();
   }
 
-  async function handleConnect(target: Problem = problem) {
+  // Start Voice button. Takes no arguments on purpose: it is passed straight
+  // to onClick, and a click event must never be mistaken for a problem.
+  function handleConnect() {
+    void connectVoice(problem);
+  }
+
+  // `target` is explicit so a problem switch can connect on the problem it just
+  // loaded (state from that render is not visible here yet).
+  async function connectVoice(target: Problem) {
     setLiveError(null);
     setConnecting(true);
     const gen = ++connGen.current;
@@ -432,6 +480,8 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     setAttemptSeq((n) => n + 1);
     setVoiceMode(null);
     setMockReason(undefined);
+    setOvertimeFrom(null);
+    finishing.current = false;
     preloadedReportRef.current = null;
     if (fresh) {
       setCodingRecords([]);
@@ -635,14 +685,20 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
   }
 
   function finishRound(timedOut: boolean) {
-    if (view !== "room") return;
+    if (view !== "room" || finishing.current) return;
+    finishing.current = true;
     const measured = clockKey ? clock.read(clockKey) : null;
     endLive();
     const finished = fullSession();
     if (measured !== null) {
       const timing: RoundTiming =
         round === "behavioral"
-          ? { durationMs: timedOut ? BEHAVIORAL_LIMIT_MS : Math.min(measured, BEHAVIORAL_LIMIT_MS), limitMs: BEHAVIORAL_LIMIT_MS, timedOut }
+          ? {
+              durationMs: timedOut ? BEHAVIORAL_LIMIT_MS : Math.min(measured, BEHAVIORAL_LIMIT_MS),
+              limitMs: BEHAVIORAL_LIMIT_MS,
+              timedOut,
+              ...(timedOut && measured > BEHAVIORAL_LIMIT_MS ? { overtimeMs: Math.min(measured - BEHAVIORAL_LIMIT_MS, OVERTIME_MS) } : {}),
+            }
           : { durationMs: measured };
       setTimings((t) => ({ ...t, [finished.attemptId]: timing }));
     }
@@ -709,7 +765,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
     const wasLive = !!live.current;
     resetAttempt(false);
     loadProblem(next);
-    if (wasLive) void handleConnect(next);
+    if (wasLive) void connectVoice(next);
   }
 
   // Quick standalone practice: no plan.
@@ -963,7 +1019,7 @@ export function ProblemRoom({ problem: initialProblem }: { problem: Problem }) {
           focusLabel={focusLabel}
           onFinish={handleFinish}
           onHome={goHome}
-          clock={{ started: behavioralStarted, elapsedMs: clock.elapsedMs, limitMs: BEHAVIORAL_LIMIT_MS }}
+          clock={{ started: behavioralStarted, elapsedMs: clock.elapsedMs, limitMs: BEHAVIORAL_LIMIT_MS, overtime }}
         />
       </div>
     );

@@ -7,11 +7,16 @@ import { useEffect, useRef, useState } from "react";
 export const BEHAVIORAL_LIMIT_MS = 10 * 60_000;
 export const WARN_AT_MS = 2 * 60_000;
 export const FINAL_WARN_AT_MS = 60_000;
+// After the limit, a live interview gets up to this long to finish the
+// candidate's questions; it ends as soon as the interviewer says goodbye.
+export const OVERTIME_MS = 2 * 60_000;
 
 export interface RoundTiming {
   durationMs: number;
   limitMs?: number;
   timedOut?: boolean;
+  // Time spent past the limit on the candidate's questions.
+  overtimeMs?: number;
 }
 
 // "4:07", or "1:02:03" past an hour.
@@ -32,7 +37,9 @@ export function describeClock(ms: number): string {
 
 // "Time: 12:34", or for a limited round "Time: 7:05 of 10:00" / "Time's up (10:00)".
 export function timingLabel(t: RoundTiming): string {
-  if (t.timedOut && t.limitMs) return `Time's up (${formatClock(t.limitMs)})`;
+  if (t.timedOut && t.limitMs) {
+    return `Time's up (${formatClock(t.limitMs)})${t.overtimeMs && t.overtimeMs >= 1000 ? ` + ${formatClock(t.overtimeMs)} for your questions` : ""}`;
+  }
   return t.limitMs ? `Time: ${formatClock(t.durationMs)} of ${formatClock(t.limitMs)}` : `Time: ${formatClock(t.durationMs)}`;
 }
 

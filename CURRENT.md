@@ -919,3 +919,31 @@ Fix: one `resetAttempt(fresh)` used by every path. A new interview from home get
 Files: components/ProblemRoom.tsx, dev/browser/drive-reset.mjs (new browser check; needs playwright-core and Edge).
 
 Validation: type-check, lint and all 23 CI suites passed. drive-reset.mjs in Edge against the dev server: 16 of 16 passed; against the previous ProblemRoom 11 of 16 failed (the bugs above).
+
+## Interviewer used Contains Duplicate for every problem • November 19
+
+Hamza reported that the technical interviewer always talked about Contains Duplicate. Regression from the clean-attempt fix above: `handleConnect` gained an optional problem parameter, but the Start interview button passes it straight to onClick, so React handed it the click event as the problem. The token request then carried no problemId and the token route fell back to Contains Duplicate (reproduced in Edge with the real Live model: Two Sum on screen, interviewer described Contains Duplicate). Fix: the button handler takes no arguments and calls `connectVoice(problem)`; a problem switch calls `connectVoice(next)`.
+
+Files: components/ProblemRoom.tsx, dev/browser/drive-reset.mjs (check B3).
+
+Validation: lint and all 23 CI suites passed; drive-reset 17 of 17. Real Live model in Edge, two runs: the token carried problemId (two-sum, valid-anagram) and the interviewer opened with Valid Anagram when it was on screen.
+
+## Behavioral interviewer no longer wraps up early • November 19
+
+Hamza reported the behavioral interviewer saying it was nearly out of time with about 5 minutes left. The app's [TIME] cues fire only at 3 and 1 minutes left, so none had been sent: the model has no clock and judged the time itself from the conversation (the instruction called the round "about 10 minutes"). Reproduced with the real Live model and no cues: after four answers it said "Let's switch gears one last time". Fix (lib/behavioral.ts): the instruction no longer states a length and says the interviewer cannot see a clock, must never say time is short or "one last question", and moves to Closing only after the one-minute [TIME] cue. A new cue at 5 minutes left says there is plenty of time (components/ProblemRoom.tsx). The coding instruction gets the same no-clock rule (lib/prompts.ts).
+
+Files: lib/behavioral.ts, lib/prompts.ts, components/ProblemRoom.tsx, dev/live-cue-check.mjs (1h).
+
+Validation: CI suites passed. Real Live model, same six answers with no cues, two runs: no time talk or wrap-up, a new story question each time. With the one-minute cue it still thanked the candidate, asked for their questions and closed.
+
+## Behavioral overtime for the candidate's questions • November 19
+
+Hamza asked what happens if the candidate asks questions past the time limit, then asked for a grace period. Before: at 10:00 the room finished at once, closing the voice session mid-sentence and dropping any half-finished turn, and the closing Q&A was graded like the rest of the transcript.
+
+Now (components/ProblemRoom.tsx, components/BehavioralRoom.tsx, components/roundClock.ts): at the limit a live interview enters overtime. The interviewer gets a spoken [TIME] cue (`sendCue(text, { speak: true })`, lib/live.ts; `formatBehavioralOvertimeCue`, lib/behavioral.ts): no more interview questions, invite the candidate's questions if not yet done, answer briefly, and end with "That's all for today." The round finishes when the interviewer says goodbye (lib/transcript.ts `isGoodbye`; after its audio stops), at `OVERTIME_MS` (2 minutes) past the limit, or if the voice drops; without a live voice session it finishes at once as before. The clock shows "Your questions · +m:ss" and the banner explains it. The attempt's time reads "Time's up (10:00) + m:ss for your questions" (`RoundTiming.overtimeMs`). A guard stops a goodbye and a Finish click from finishing twice.
+
+Report (app/api/report/route.ts): turns after the interviewer's "...questions for me?" (lib/transcript.ts `questionTimeStart`) are given to the evaluator under a "not evidence" header without turn IDs and cannot be cited, in both rounds. The report transcript shows a "Your questions for the interviewer · not graded" divider.
+
+Files: lib/transcript.ts (new), lib/live.ts, lib/contract.ts, lib/behavioral.ts, app/api/report/route.ts, components/ProblemRoom.tsx, components/BehavioralRoom.tsx, components/roundClock.ts, components/report/TranscriptSection.tsx, docs/CONTRACT.md, dev/hiring-check.mjs (F1-F3), dev/live-cue-check.mjs (3g-3i), dev/browser/drive-overtime.mjs (new).
+
+Validation: type-check, lint and all 23 CI suites passed. drive-overtime.mjs (Edge, Playwright fake clock, test Live client): 15 of 15, covering no cut-off at 10:00, the spoken cue, the goodbye ending, the 2-minute cap, the timing label and the report divider. Real Live model, two runs: after the overtime cue it said it was out of time and asked for questions, answered the candidate's question briefly, and ended with "That's all for today."

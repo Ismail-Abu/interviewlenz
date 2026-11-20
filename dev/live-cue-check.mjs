@@ -86,6 +86,7 @@ console.log("== 1. Prompt content");
     /warm-up/.test(b) && /tell me about a time/.test(b) && /personally/.test(b) && /hypothetically/.test(b) && /Do you have any questions for me\?/.test(b));
   assert("1e behavioral: still never mentions coding problems", /Never ask a coding or algorithm question/.test(b));
   assert("1f technical time cues: 25-minute hint nudge, 40-minute closing", /hints/.test(prompts.formatTechnicalTimeCue(25, false)) && /Closing/.test(prompts.formatTechnicalTimeCue(40, true)));
+  assert("1h behavioral 5-minute cue says keep going, never close early; instruction forbids self-timed wrap-up", /plenty of time/.test(beh.formatBehavioralTimeCue(5)) && !/Closing/.test(beh.formatBehavioralTimeCue(5)) && /Never decide on your own that time is running out/.test(b) && /one last question/.test(b));
   assert("1g behavioral time cues: closing at one minute, no new story", /Closing/.test(beh.formatBehavioralTimeCue(1)) && /Do not ask another story question/.test(beh.formatBehavioralTimeCue(1)));
 }
 
@@ -141,6 +142,20 @@ console.log("== 3. [QUIET] check-in");
   assert("3e no check-in while the mic is off", texts().length === 0);
   c.end();
   assert("3f end() stops the quiet watch", c.quietTimer === null);
+}
+
+console.log("== 3b. Spoken cue (time is up)");
+{
+  const { c, turns } = await connected("behavioral");
+  c.sendCue("[TIME] The scheduled time is up.", { speak: true });
+  const s = texts();
+  assert("3g a spoken cue is sent without the one-word 'Okay' request", s.length === 1 && s[0].tc && s[0].text === "[TIME] The scheduled time is up.", JSON.stringify(s));
+  const before = turns.length;
+  interviewerSays("We're at time. Do you have any questions for me?");
+  assert("3h ...and the interviewer's reply is heard and shown (not muted)", turns.length === before + 1);
+  const b = beh.formatBehavioralOvertimeCue();
+  assert("3i overtime cue: no more interview questions, invite questions, close with the fixed line", /Do not ask any more interview questions/.test(b) && /questions for you/.test(b) && b.includes("That's all for today."));
+  c.end();
 }
 
 console.log("== 4. Behavioral round");

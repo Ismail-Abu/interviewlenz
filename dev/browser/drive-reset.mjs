@@ -92,6 +92,8 @@ ok((await turnsShown()) === 0, "B2 coding starts at 0 turns", `turns=${await tur
 
 // C. Switching problem mid-interview starts over on the new problem.
 await startVoice();
+const onScreen = await p.locator("#problem-picker").inputValue();
+ok((await p.evaluate(() => window.__il.connects.at(-1).problem)) === onScreen, "B3 Start interview connects the voice on the problem shown on screen (never a click event)", JSON.stringify({ onScreen, connected: await p.evaluate(() => window.__il.connects.at(-1)) }));
 await emit({ id: "t1", speaker: "interviewer", text: "OLD-PROBLEM-CHARLIE question" });
 await p.waitForTimeout(300);
 const before = await p.evaluate(() => window.__il.connects.length);

@@ -138,5 +138,37 @@ console.log("== E. Route: behavioral report");
   assert("E3 no answer captured -> deterministic lean_no_hire, no model call needed", r.status === 200 && r.json.assessment?.recommendation === "lean_no_hire" && r.json.assessment.summary.length > 0);
 }
 
+console.log("== F. Candidate's question time is not graded");
+{
+  const story = "I personally profiled the checkout service, found an N plus one query, rewrote it as a join, and p95 latency dropped from four seconds to two hundred milliseconds which we confirmed on our dashboard.";
+  const session = { sessionId: "s4", attemptId: "a4", roundType: "behavioral", turns: [
+    { id: "t1", speaker: "interviewer", text: "Tell me about a time you fixed a slow system.", at: t(0) },
+    { id: "t2", speaker: "student", text: `${story} ${story}`, at: t(10) },
+    { id: "t3", speaker: "interviewer", text: "Thanks. We're at time. Do you have any questions for me?", at: t(20) },
+    { id: "t4", speaker: "student", text: "QUESTION-TIME what does a typical day look like for you?", at: t(25) },
+    { id: "t5", speaker: "interviewer", text: "Mostly coding and reviews. That's all for today.", at: t(30) },
+  ] };
+  globalThis.__GEN__.text = JSON.stringify({
+    findings: [
+      { category: "specificity", rating: "strong", summary: "Concrete.", evidence: [{ kind: "turn", turnId: "t2" }] },
+      { category: "reasoning", rating: "needs_work", summary: "Asked a vague question.", evidence: [{ kind: "turn", turnId: "t4" }] },
+    ],
+    nextStep: "x",
+    assessment: { recommendation: "lean_hire", summary: "s", strengths: [], concerns: [], toRaise: "t" },
+  });
+  const r = await post(session);
+  const prompt = globalThis.__GEN__.calls.at(-1).contents;
+  assert("F1 the evaluator sees the questions under a 'not evidence' header, without citable IDs", /questions for the interviewer at the end \(context only: NOT evidence/.test(prompt) && prompt.includes("QUESTION-TIME") && !/t4 \(candidate\)/.test(prompt), prompt.slice(-300));
+  const f = r.json.findings.find((x) => x.category === "reasoning");
+  assert("F2 a finding that cites a question-time turn loses that evidence", f && f.rating === "insufficient_evidence" && f.evidence.length === 0, JSON.stringify(f));
+  const coding = { sessionId: "s5", attemptId: "a5", problemId: "contains-duplicate",
+    turns: [{ id: "t1", speaker: "interviewer", text: "Any questions for me?", at: t(0) }, { id: "t2", speaker: "student", text: "QUESTION-TIME how big is the team?", at: t(5) }],
+    snapshots: [{ codeVersion: 2, source: SET, at: t(30) }], runs: [runV2(true)] };
+  globalThis.__GEN__.text = JSON.stringify({ ...strongModel, findings: [{ category: "spoken_reasoning", rating: "strong", summary: "x", evidence: [{ kind: "turn", turnId: "t2" }] }, ...strongModel.findings] });
+  const rc = await post(coding);
+  const sr = rc.json.findings.find((x) => x.category === "spoken_reasoning");
+  assert("F3 coding report: question-time turns are not citable either", sr && sr.evidence.length === 0 && !/t2 \(student\)/.test(globalThis.__GEN__.calls.at(-1).contents), JSON.stringify(sr));
+}
+
 console.log(fails ? `\n${fails} HIRING CHECK(S) FAILED` : "\nALL HIRING CHECKS PASSED");
 process.exit(fails ? 1 : 0);

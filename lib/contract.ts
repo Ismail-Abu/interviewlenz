@@ -212,7 +212,7 @@ export interface LiveClient {
   // Tell the interviewer something it should pace itself by (a [TIME] cue),
   // delivered at a safe boundary without interrupting the candidate. The
   // interviewer acts on it at its next natural turn. Optional (proposed).
-  sendCue?(text: string): void;
+  sendCue?(text: string, opts?: { speak?: boolean }): void;
   end(): void;
   onState(cb: (state: LiveState) => void): void;
   onTurn(cb: (turn: TranscriptTurn) => void): void;

@@ -6,7 +6,7 @@ import { ReadAloud } from "./ReadAloud";
 import { VoicePanel } from "./VoicePanel";
 import { Wordmark } from "./Logo";
 import { AudioVisualizer } from "./behavioral/AudioVisualizer";
-import { FINAL_WARN_AT_MS, WARN_AT_MS, describeClock, formatClock } from "./roundClock";
+import { FINAL_WARN_AT_MS, OVERTIME_MS, WARN_AT_MS, describeClock, formatClock } from "./roundClock";
 
 type VoiceProps = ComponentProps<typeof VoicePanel>;
 
@@ -19,10 +19,25 @@ interface Props {
   onHome: () => void;
   // Countdown for this attempt. It starts with the interview and finishes the
   // round at zero (ProblemRoom owns the clock and the auto-finish).
-  clock: { started: boolean; elapsedMs: number; limitMs: number };
+  // overtime: the limit has passed and the interviewer is closing with the
+  // candidate's questions (ProblemRoom ends it on the goodbye or the cap).
+  clock: { started: boolean; elapsedMs: number; limitMs: number; overtime?: boolean };
 }
 
 function Countdown({ clock }: { clock: Props["clock"] }) {
+  if (clock.overtime) {
+    const over = Math.max(0, clock.elapsedMs - clock.limitMs);
+    return (
+      <span
+        className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-3 py-1 font-mono text-sm font-semibold tabular-nums text-sky-800"
+        data-testid="round-clock"
+        role="timer"
+        aria-label={`Time is up. ${describeClock(over)} into question time, at most ${describeClock(OVERTIME_MS)}`}
+      >
+        <span aria-hidden="true">Your questions · +{formatClock(over)}</span>
+      </span>
+    );
+  }
   const left = Math.max(0, clock.limitMs - clock.elapsedMs);
   const tone = !clock.started
     ? "border-border bg-card text-muted-foreground"
@@ -58,8 +73,10 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish, onH
   // One message per stage, so a screen reader announces each change once.
   const warning = !clock.started
     ? null
-    : left <= FINAL_WARN_AT_MS
-      ? "Less than a minute left. Wrap up your answer; the round ends automatically at 0:00."
+    : clock.overtime
+      ? "Time is up. Ask the interviewer any questions you have; the round ends when they say goodbye, or in two minutes at most."
+      : left <= FINAL_WARN_AT_MS
+      ? "Less than a minute left. Wrap up your answer; then there is a short time for your questions."
       : left <= WARN_AT_MS
         ? "Two minutes left. Start bringing your answer to its result."
         : null;
@@ -185,8 +202,8 @@ export function BehavioralRoom({ voice, attemptNumber, focusLabel, onFinish, onH
             <strong className="font-semibold text-foreground">Interview Advice (STAR Method):</strong> Clearly describe
             the <strong>Situation</strong>, the <strong>Task</strong> at hand, your specific individual{" "}
             <strong>Actions</strong>, and the quantifiable <strong>Result</strong>. Click Finish whenever you have
-            completed your responses. You have {formatClock(clock.limitMs)} once the interview starts; the round ends and is
-            scored automatically when time runs out.
+            completed your responses. You have {formatClock(clock.limitMs)} once the interview starts, then up to
+            {formatClock(OVERTIME_MS)} for your own questions; the round ends and is scored when the interviewer says goodbye.
           </div>
         </footer>
       </main>

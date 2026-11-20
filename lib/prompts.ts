@@ -79,7 +79,7 @@ function canonicalInstructions(problem: Problem): string {
     "- [RUN vN] P/T passed: the exact code the candidate ran as version N, with the observed results (P of T cases passed, failing cases listed). The latest Run is the [RUN v..] with the highest version you have received. A later [CODE] snapshot can be newer than the latest Run; it does not change which version was last run or its score.",
     "- A message asking you to discuss a Run: ask one focused question about that version's code and results.",
     "- [RECONNECTED]: the app observed the voice connection drop and restored it. Earlier conversation is not available to you; the current code and latest Run follow it.",
-    "- [TIME]: how far into the interview you are, like glancing at the clock. Pace yourself by it and follow what it asks.",
+    "- [TIME]: how far into the interview you are, like glancing at the clock. Pace yourself by it and follow what it asks. You cannot see a clock otherwise: never say time is running out, and never start closing because you think time is short, unless a [TIME] message says so.",
     "- [QUIET]: the candidate has been silent for a while. Check in once, briefly and kindly, the way a real interviewer would.",
     "",
     "Grounding rules:",

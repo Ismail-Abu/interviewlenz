@@ -325,7 +325,7 @@ IDs stay `t1, t2, ...` and must be unique for the whole attempt. The counter is 
 
 ### sendCue (pacing; proposed November 19)
 
-`sendCue(text: string): void` (optional on `LiveClient`) gives the interviewer a [TIME] cue to pace itself by. The client delivers it only while the interviewer is waiting for an answer and the candidate has paused, mutes the one-word acknowledgement, and keeps only the newest undelivered cue. The wording lives in lib/prompts.ts (`formatTechnicalTimeCue`) and lib/behavioral.ts (`formatBehavioralTimeCue`).
+`sendCue(text: string): void` (optional on `LiveClient`) gives the interviewer a [TIME] cue to pace itself by. The client delivers it only while the interviewer is waiting for an answer and the candidate has paused, mutes the one-word acknowledgement, and keeps only the newest undelivered cue. The wording lives in lib/prompts.ts (`formatTechnicalTimeCue`) and lib/behavioral.ts (`formatBehavioralTimeCue`). With `{ speak: true }` (used when the behavioral time is up) the cue is not muted: the interviewer acts on it out loud at the next safe boundary.
 
 ### Hiring assessment (proposed November 19)
 
